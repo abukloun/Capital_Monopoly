@@ -2169,8 +2169,8 @@ html[lang="ru"] .capital-action-copy b{font-size:14px}html[lang="ru"] .capital-w
 <p class="menu-sub">ПОКУПАЙ · СТРОЙ · ТОРГУЙ · ПОБЕЖДАЙ</p>
 <div class="menu-btns" id="menuButtons">
 <button class="btn yes wide" id="btnPlay" onclick="window.Capital.play()" type="button">Играть с ботами</button>
-<button class="btn no wide" id="btnMultiplayer" disabled="" title="Скоро">Создать игру</button>
-<button class="btn no wide" id="btnJoin" disabled="" title="Скоро">Войти по коду</button>
+<button class="btn no wide" id="btnMultiplayer" type="button">Создать игру</button>
+<button class="btn no wide" id="btnJoin" type="button">Войти по коду</button>
 <button class="btn no wide" id="btnHow">Как играть</button>
 <button class="btn no wide" id="btnTutorial">🎓 Обучение</button>
 </div>
@@ -2441,6 +2441,7 @@ html,body{height:100vh!important;overflow:hidden!important;}
 /* CAPITAL — minimal developer / admin panel */
 #capitalDevRoot{position:fixed;left:14px;bottom:14px;z-index:10050;font-family:Inter,system-ui,sans-serif;color:#eef2f8}
 #capitalDevToggle{width:34px;height:34px;padding:0;border:1px solid rgba(255,255,255,.13);border-radius:10px;background:rgba(13,18,27,.72);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:#aeb8c9;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.28);font-size:16px;opacity:.58;transition:.18s ease}
+#capitalDevToggle{display:none!important}
 #capitalDevToggle:hover{opacity:1;transform:translateY(-1px);border-color:rgba(109,124,255,.5);color:#fff}
 #capitalDevPanel{display:none;width:285px;margin-bottom:8px;padding:12px;border:1px solid rgba(255,255,255,.12);border-radius:14px;background:rgba(12,17,25,.90);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);box-shadow:0 18px 55px rgba(0,0,0,.42)}
 #capitalDevPanel.open{display:block}
@@ -2463,6 +2464,10 @@ html,body{height:100vh!important;overflow:hidden!important;}
 @media(max-width:600px){#capitalDevRoot{left:8px;bottom:8px}#capitalDevPanel{width:min(285px,calc(100vw - 16px))}}
 </style>
 
+<style id="capital-mp-style">
+.capital-mp-modal{width:min(440px,92vw)!important}.capital-mp-code{font-size:34px;font-weight:1000;letter-spacing:.18em;text-align:center;padding:14px 10px;margin:12px 0;border:1px solid rgba(109,124,255,.28);border-radius:14px;background:rgba(109,124,255,.08);color:#fff}.capital-mp-modal .btn:disabled{opacity:.35;cursor:not-allowed}.capital-mp-bg{backdrop-filter:blur(8px)}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script id="capital-stable-core">
 (() => {
   "use strict";
@@ -2569,6 +2574,137 @@ html,body{height:100vh!important;overflow:hidden!important;}
   let soundEnabled = true;
   let audioCtx = null;
   let devDiceOverride = null;
+
+  /* ---------- Realtime multiplayer ---------- */
+  const MP_URL = "https://dnrmuzdguwfebchykwrv.supabase.co";
+  const MP_KEY = "sb_publishable_xl9iTLk9QMYv96_Rjjhn6Q_ObD6Lnlh";
+  const MP_ID_KEY = "capital_mp_client_id_v1";
+  const mp = {
+    active:false, host:false, room:"", clientId:localStorage.getItem(MP_ID_KEY)||("c_"+Math.random().toString(36).slice(2,10)),
+    channel:null, members:[], pendingStart:null, lastSnapshot:"", lastModalHtml:"", connected:false, publishTimer:null, auctionTimer:null
+  };
+  localStorage.setItem(MP_ID_KEY,mp.clientId);
+  function mpLocalPlayer(){return players.find(p=>p&&p.mpClientId===mp.clientId)||players.find(p=>p&&p.mpClientId===mp.clientId)||players[0]||null;}
+  function mpRandomCode(){let s="";const a="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";for(let i=0;i<6;i++)s+=a[Math.floor(Math.random()*a.length)];return s;}
+  function mpSend(payload){if(!mp.channel||!mp.connected)return;mp.channel.send({type:"broadcast",event:"capital-mp",payload}).catch(()=>{});}
+  function mpMembersSorted(){return [...mp.members].sort((a,b)=>(a.joinedAt||0)-(b.joinedAt||0)||String(a.clientId).localeCompare(String(b.clientId))).slice(0,8);}
+  function mpShowLobby(){
+    const members=mpMembersSorted();
+    const rows=members.map((m,i)=>`<div class="player-row" style="margin-bottom:6px"><div class="player-mini-piece" style="--piece-color:${PLAYER_COLORS[i]||PLAYER_COLORS[0]}"><span class="mini-head"></span><span class="mini-body"></span></div><div class="pname">${escapeHtml(m.name||"Player")}${m.clientId===mp.clientId?` <span style="color:#9db8a8">(${lang==="en"?"You":"вы"})</span>`:""}${m.host?` <span style="color:#f6c84e">HOST</span>`:""}</div><div class="pmoney">#${i+1}</div></div>`).join("");
+    modalRoot.innerHTML=`<div class="modal-bg capital-mp-bg"><div class="modal capital-mp-modal"><div style="font-size:11px;letter-spacing:.16em;color:#8d9ab0;font-weight:900">${lang==="en"?"MULTIPLAYER LOBBY":"МУЛЬТИПЛЕЕР"}</div><h3 style="margin:5px 0 4px">CAPITAL · ${escapeHtml(mp.room)}</h3><p>${lang==="en"?"Share this room code with your friends.":"Отправь этот код друзьям."}</p><div class="capital-mp-code">${escapeHtml(mp.room)}</div><div style="font-size:11px;color:#7f8da0;margin:12px 0 7px">${lang==="en"?"Players":"Игроки"} · ${members.length}/8</div><div>${rows||`<div class="auction-empty">${lang==="en"?"Waiting for players…":"Ожидание игроков…"}</div>`}</div><div class="modal-btns"><button class="btn yes" id="mpStart" ${mp.host&&members.length>=2?"":"disabled"}>${lang==="en"?"Start game":"Начать игру"}</button><button class="btn no" id="mpLeave">${lang==="en"?"Leave":"Выйти"}</button></div></div></div>`;
+    modalOpen=true;modalKind="mpLobby";
+    modalRoot.querySelector("#mpStart")?.addEventListener("click",mpStartGame);
+    modalRoot.querySelector("#mpLeave")?.addEventListener("click",mpLeaveRoom);
+  }
+  async function mpConnect(room,host,name){
+    if(!window.supabase){toast("Supabase не загрузился. Проверь интернет.","warn");return false;}
+    try{
+      if(mp.channel){try{await mp.channel.unsubscribe();}catch(e){}}
+      const client=window.supabase.createClient(MP_URL,MP_KEY);
+      mp.room=room;mp.host=!!host;mp.active=true;mp.connected=false;
+      mp.channel=client.channel("capital-room-"+room,{config:{broadcast:{self:true},presence:{key:mp.clientId}}});
+      mp.channel.on("broadcast",{event:"capital-mp"},({payload})=>mpHandle(payload));
+      mp.channel.on("presence",{event:"sync"},()=>{});
+      const status=await new Promise(resolve=>{mp.channel.subscribe(st=>{if(st==="SUBSCRIBED")resolve(true);if(st==="CHANNEL_ERROR"||st==="TIMED_OUT")resolve(false);});});
+      if(!status){mp.active=false;mp.channel=null;toast(lang==="en"?"Could not connect to the room.":"Не удалось подключиться к комнате.","warn");return false;}
+      mp.connected=true;
+      const member={clientId:mp.clientId,name:name||"Player",joinedAt:Date.now(),host:!!host};
+      if(host){mp.members=[member];mpSend({kind:"lobby",members:mp.members});mpShowLobby();}
+      else{mp.members=[];mpSend({kind:"join",member});}
+      return true;
+    }catch(e){console.error("CAPITAL multiplayer connect",e);mp.active=false;toast(lang==="en"?"Multiplayer connection failed.":"Ошибка подключения к мультиплееру.","warn");return false;}
+  }
+  function mpHandle(msg){
+    if(!msg||!msg.kind)return;
+    if(msg.kind==="join"&&mp.host){
+      if(!mp.members.some(m=>m.clientId===msg.member.clientId)&&mp.members.length<8)mp.members.push({...msg.member,host:false});
+      mp.members=mpMembersSorted();mpSend({kind:"lobby",members:mp.members});mpShowLobby();return;
+    }
+    if(msg.kind==="lobby"){
+      mp.members=Array.isArray(msg.members)?msg.members:[];mpShowLobby();return;
+    }
+    if(msg.kind==="start"){
+      mp.pendingStart=Array.isArray(msg.members)?msg.members:[];
+      mp.members=mp.pendingStart;
+      if(!mp.host){clearModal();modalOpen=false;modalKind=null;startGame();}
+      return;
+    }
+    if(msg.kind==="action"&&mp.host){mpExecuteAction(msg);return;}
+    if(msg.kind==="snapshot"&&!mp.host){mpApplySnapshot(msg.snapshot);return;}
+    if(msg.kind==="leave"&&mp.host){mp.members=mp.members.filter(m=>m.clientId!==msg.clientId);mpSend({kind:"lobby",members:mp.members});if(state!==STATES.GAME_OVER)mpShowLobby();}
+  }
+  function mpStartGame(){
+    if(!mp.host||mpMembersSorted().length<2)return;
+    mp.members=mpMembersSorted();mp.pendingStart=mp.members;mpSend({kind:"start",members:mp.members});clearModal();modalOpen=false;modalKind=null;startGame();
+  }
+  function mpLeaveRoom(){
+    if(mp.active)mpSend({kind:"leave",clientId:mp.clientId});
+    try{mp.channel?.unsubscribe();}catch(e){}
+    mp.channel=null;mp.active=false;mp.host=false;mp.connected=false;mp.room="";mp.members=[];mp.pendingStart=null;clearModal();modalOpen=false;modalKind=null;backToMenu();
+  }
+  function mpCreate(){
+    const name=(prompt(lang==="en"?"Your nickname:":"Ваш никнейм:",document.getElementById("nickInput")?.value||"Player")||"").trim().slice(0,16)||"Player";
+    mpConnect(mpRandomCode(),true,name);
+  }
+  function mpJoin(){
+    const room=(prompt(lang==="en"?"Room code:":"Код комнаты:","")||"").trim().toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6);
+    if(room.length!==6){toast(lang==="en"?"Enter a 6-character room code.":"Введи 6-значный код комнаты.","warn");return;}
+    const name=(prompt(lang==="en"?"Your nickname:":"Ваш никнейм:",document.getElementById("nickInput")?.value||"Player")||"").trim().slice(0,16)||"Player";
+    mpConnect(room,false,name);
+  }
+  function mpSnapshot(){
+    return {players:players.map(p=>({...p})),tiles:TILES.map(t=>({id:t.id,owner:t.owner,houses:t.houses||0,hotel:!!t.hotel,mortgaged:!!t.mortgaged})),turn,state,lastRollTotal,lastDice:[...lastDice],extraTurnPending,completedRounds,totalTurns,fastPace,modalKind:modalKind||null,modalHtml:modalRoot?.innerHTML||"",room:mp.room};
+  }
+  function mpPublishSnapshot(force=false){
+    if(!mp.active||!mp.host||!mp.connected)return;
+    if(force){if(mp.publishTimer){clearTimeout(mp.publishTimer);mp.publishTimer=null;}mpSend({kind:"snapshot",snapshot:mpSnapshot()});return;}
+    if(mp.publishTimer)return;
+    mp.publishTimer=setTimeout(()=>{mp.publishTimer=null;if(mp.active&&mp.host&&mp.connected)mpSend({kind:"snapshot",snapshot:mpSnapshot()});},120);
+  }
+  function mpApplySnapshot(s){
+    if(!s||!Array.isArray(s.players)||!Array.isArray(s.tiles))return;
+    players=s.players;turn=Number(s.turn)||0;state=s.state||STATES.WAITING_FOR_ROLL;lastRollTotal=Number(s.lastRollTotal)||0;lastDice=Array.isArray(s.lastDice)?s.lastDice:[1,1];extraTurnPending=!!s.extraTurnPending;completedRounds=Number(s.completedRounds)||0;totalTurns=Number(s.totalTurns)||0;fastPace=!!s.fastPace;
+    const map=new Map(s.tiles.map(t=>[Number(t.id),t]));TILES.forEach(t=>{const x=map.get(Number(t.id));if(x){t.owner=x.owner??null;t.houses=x.houses||0;t.hotel=!!x.hotel;t.mortgaged=!!x.mortgaged;}});
+    menuScreen.style.display="none";setupScreen.style.display="none";gameWrap.style.display="block";if(!document.querySelector("#gameWrap .board > .tile"))buildBoard();renderDice();renderTokens();renderPlayers();updateBadge();
+    const html=s.modalHtml||"";if(html!==mp.lastModalHtml){mp.lastModalHtml=html;modalRoot.innerHTML=html;modalOpen=!!html;modalKind=s.modalKind||null;}
+    if(!mp.host&&modalKind==="auction"){const timer=modalRoot.querySelector("#auctionTimer");if(timer){let n=parseInt(timer.textContent,10)||10;clearInterval(mp.auctionTimer);mp.auctionTimer=setInterval(()=>{if(!modalOpen||modalKind!=="auction"){clearInterval(mp.auctionTimer);return;}n=Math.max(0,n-1);timer.textContent=String(n);timer.classList.toggle("danger",n<=3);},1000);}}
+  }
+  function mpExecuteAction(msg){
+    const p=players.find(x=>x&&x.mpClientId===msg.playerId)||null;if(!p||p.bankrupt)return;
+    const a=msg.action||{};
+    if(a.type==="roll"){if(currentPlayer()===p)rollDice();return;}
+    if(a.type==="auctionBid"){if(activeAuction&&activeAuction.tile&&p){auctionPlaceBid(activeAuction,p,Number(a.amount));}return;}
+    if(a.type==="propertyAction"){
+      const t=TILES[Number(a.tileId)];if(!t||t.owner!==p.id)return;
+      if(a.action==="buildHouse"&&p.money>=HOUSE_COST[t.group]&&canBuildHouse(t)){p.money-=HOUSE_COST[t.group];t.houses=(t.houses||0)+1;}
+      else if(a.action==="buildHotel"&&p.money>=HOUSE_COST[t.group]&&canBuildHotel(t)){p.money-=HOUSE_COST[t.group];t.houses=0;t.hotel=true;}
+      else if(a.action==="sellHouse"&&(t.houses>0||t.hotel)){if(t.hotel){t.hotel=false;t.houses=4}else t.houses--;p.money+=HOUSE_COST[t.group]/2;}
+      else if(a.action==="mortgage"&&["prop","station","util"].includes(t.type)&&!t.mortgaged){t.mortgaged=true;p.money+=Math.round(t.price/2);}
+      else if(a.action==="unmortgage"&&t.mortgaged){const cost=Math.round(t.price*.55);if(p.money>=cost){p.money-=cost;t.mortgaged=false;}}
+      renderTokens();renderPlayers();saveGame();return;
+    }
+    const id=String(a.id||"");const el=document.getElementById(id);
+    if(!el)return;
+    if(a.value!=null&&id==="auctionBidInput")el.value=String(a.value);
+    el.click();
+  }
+  function mpProxyAction(action){if(mp.active&&!mp.host){mpSend({kind:"action",playerId:mp.clientId,action});return true;}return false;}
+  function mpInstallButtons(){
+    document.getElementById("btnMultiplayer")?.addEventListener("click",mpCreate);
+    document.getElementById("btnJoin")?.addEventListener("click",mpJoin);
+    document.addEventListener("click",e=>{
+      if(!mp.active||mp.host)return;
+      const b=e.target.closest?.("button,[role=button]");if(!b)return;
+      const id=b.id;
+      if(id==="mpLeave"){e.preventDefault();e.stopImmediatePropagation();mpLeaveRoom();return;}
+      if(id==="rollBtn"){e.preventDefault();e.stopImmediatePropagation();mpProxyAction({type:"roll"});return;}
+      if(id==="auctionBidStep"){e.preventDefault();e.stopImmediatePropagation();mpProxyAction({type:"auctionBid",amount:Number((Number(document.getElementById("auctionBidInput")?.value)||0))});return;}
+      if(id==="auctionBidCustom"){e.preventDefault();e.stopImmediatePropagation();mpProxyAction({type:"auctionBid",amount:Number(document.getElementById("auctionBidInput")?.value)||0});return;}
+      const map={mBuildHouse:"buildHouse",mBuildHotel:"buildHotel",mSellHouse:"sellHouse",mMortgage:"mortgage",mUnmortgage:"unmortgage"};
+      if(map[id]){e.preventDefault();e.stopImmediatePropagation();const tid=Number(b.closest(".capital-property-modal-bg")?.dataset?.tileId);if(Number.isFinite(tid))mpProxyAction({type:"propertyAction",action:map[id],tileId:tid});return;}
+      if(id){e.preventDefault();e.stopImmediatePropagation();const value=id==="auctionBidInput"?document.getElementById(id)?.value:null;mpProxyAction({type:"click",id,value});}
+    },true);
+  }
   /* ---------- Standalone beginner tutorial (learning only) ---------- */
   const TUTORIAL_KEY="capital_tutorial_done_v1";
   let tutorialActive=false;
@@ -3092,6 +3228,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
       box.appendChild(row);
       if(delta)showMoneyDelta(p,delta,row);
     });
+    if(mp.active&&mp.host)mpPublishSnapshot(false);
   }
   function updateBadge(){
     const badge=document.getElementById("turnBadge"),p=currentPlayer();
@@ -3618,9 +3755,9 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
   window.rollAndMove=(p,isJailRoll=false)=>{if(p&&players[turn]===p&&!modalOpen&&state!==STATES.GAME_OVER){if(state!==STATES.WAITING_FOR_ROLL)state=STATES.WAITING_FOR_ROLL;beginTurnRoll(p,isJailRoll);}};
 
   /* ---------- Actions / modals ---------- */
-  function clearModal(root=modalRoot){if(root)root.innerHTML="";if(root===modalRoot){modalOpen=false;modalKind=null;updateBadge();}}
+  function clearModal(root=modalRoot){if(root)root.innerHTML="";if(root===modalRoot){modalOpen=false;modalKind=null;updateBadge();if(mp.active&&mp.host)mpPublishSnapshot(true);}}
   function openModal(html,kind,root=modalRoot){
-    if(root===modalRoot&&modalOpen)return null;root.innerHTML=html;if(root===modalRoot){modalOpen=true;modalKind=kind;updateBadge();}return root.querySelector(".modal-bg");
+    if(root===modalRoot&&modalOpen)return null;root.innerHTML=html;if(root===modalRoot){modalOpen=true;modalKind=kind;updateBadge();if(mp.active&&mp.host)mpPublishSnapshot(true);}return root.querySelector(".modal-bg");
   }
   function closeHumanAction(p,action){
     if(!validTurn(p)||state!==STATES.TILE_ACTION)return;clearModal();if(typeof action==="function")action();else completeTileAction(p);
@@ -4002,6 +4139,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     auctionLogBid(p,bid);
     renderAuction(a);
     auctionScheduleBotReaction(a);
+    if(mp.active&&mp.host)mpPublishSnapshot(true);
     return true;
   }
 
@@ -4193,6 +4331,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     renderAuction(a);
     auctionStartTimer(a);
     auctionScheduleBotReaction(a);
+    if(mp.active&&mp.host)mpPublishSnapshot(true);
     return a;
   }
 
@@ -4250,7 +4389,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
       if(why)actions+=`<div style="grid-column:1/-1;padding:10px 12px;border-radius:11px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06);color:#8491a3;font-size:11px;text-align:center">${escapeHtml(why)}</div>`;
     }
     if(!actions)actions=`<div style="grid-column:1/-1;padding:10px 12px;border-radius:11px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06);color:#8491a3;font-size:11px;text-align:center">${owner&&owner.id!==me?.id?(lang==="en"?"This property belongs to another player.":"Эта недвижимость принадлежит другому игроку."):(lang==="en"?"No actions available right now.":"Сейчас действий нет.")}</div>`;
-    const bg=openModal(`<div class="modal-bg capital-property-modal-bg"><div class="modal capital-property-modal" style="--property-color:${color};--property-glow:${glow}"><div class="capital-property-hero"><div class="capital-property-kicker"><span class="capital-property-swatch" style="background:${color}"></span>${escapeHtml(propertyGroupLabel(t))}</div><div class="capital-property-title">${escapeHtml(tileLabel(t))}</div><div class="capital-property-price">$${t.price||0}</div><div class="capital-property-owner"><span class="capital-property-owner-dot" style="background:${ownerColor}"></span>${ownerName}${t.mortgaged?` · 🔒 ${T("mortgage")}`:""}</div></div><div class="capital-property-body"><div class="capital-property-stats"><div class="capital-property-stat"><span>${lang==="en"?"Purchase":"Цена"}</span><strong>$${t.price||0}</strong></div><div class="capital-property-stat"><span>${lang==="en"?"Current rent":"Текущая рента"}</span><strong>$${currentRent}</strong></div><div class="capital-property-stat"><span>${lang==="en"?"Buildings":"Застройка"}</span><strong>${escapeHtml(buildings)}</strong></div></div>${groupBlock}<div class="capital-property-actions">${actions}<button class="btn no" id="mClose" style="grid-column:1/-1">✕ ${T("close")}</button></div></div></div></div>` ,"property");
+    const bg=openModal(`<div class="modal-bg capital-property-modal-bg" data-tile-id="${t.id}"><div class="modal capital-property-modal" style="--property-color:${color};--property-glow:${glow}"><div class="capital-property-hero"><div class="capital-property-kicker"><span class="capital-property-swatch" style="background:${color}"></span>${escapeHtml(propertyGroupLabel(t))}</div><div class="capital-property-title">${escapeHtml(tileLabel(t))}</div><div class="capital-property-price">$${t.price||0}</div><div class="capital-property-owner"><span class="capital-property-owner-dot" style="background:${ownerColor}"></span>${ownerName}${t.mortgaged?` · 🔒 ${T("mortgage")}`:""}</div></div><div class="capital-property-body"><div class="capital-property-stats"><div class="capital-property-stat"><span>${lang==="en"?"Purchase":"Цена"}</span><strong>$${t.price||0}</strong></div><div class="capital-property-stat"><span>${lang==="en"?"Current rent":"Текущая рента"}</span><strong>$${currentRent}</strong></div><div class="capital-property-stat"><span>${lang==="en"?"Buildings":"Застройка"}</span><strong>${escapeHtml(buildings)}</strong></div></div>${groupBlock}<div class="capital-property-actions">${actions}<button class="btn no" id="mClose" style="grid-column:1/-1">✕ ${T("close")}</button></div></div></div></div>` ,"property");
     if(!bg)return;
     const refresh=()=>{modalOpen=false;openPropertyModal(tid);renderTokens();renderPlayers();saveGame();};
     const close=bg.querySelector("#mClose");if(close)close.onclick=()=>clearModal();
@@ -4330,7 +4469,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
   }
 
   function saveGame(){
-    try{localStorage.setItem("capital_save_v3",JSON.stringify({version:3,players,turn,lastRollTotal,completedRounds,totalTurns,fastPace,state:STATES.WAITING_FOR_ROLL,tiles:TILES.map(t=>({id:t.id,owner:t.owner,houses:t.houses||0,hotel:!!t.hotel,mortgaged:!!t.mortgaged}))}));return true;}catch(e){return false;}
+    try{localStorage.setItem("capital_save_v3",JSON.stringify({version:3,players,turn,lastRollTotal,completedRounds,totalTurns,fastPace,state:STATES.WAITING_FOR_ROLL,tiles:TILES.map(t=>({id:t.id,owner:t.owner,houses:t.houses||0,hotel:!!t.hotel,mortgaged:!!t.mortgaged}))}));if(mp.active&&mp.host)mpPublishSnapshot(true);return true;}catch(e){return false;}
   }
   function loadGame(){try{const raw=localStorage.getItem("capital_save_v3")||localStorage.getItem("capital_save_v2");if(!raw)return null;const data=JSON.parse(raw);return data&&Array.isArray(data.players)&&Array.isArray(data.tiles)?data:null;}catch(e){return null;}}
   window.saveGame=saveGame;window.loadGame=loadGame;
@@ -4344,14 +4483,24 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     const logEl=document.getElementById("eventlog");if(logEl)logEl.innerHTML="";
   }
 
+  function mpMembersSortedFrom(list){return [...(Array.isArray(list)?list:[])].sort((a,b)=>(a.joinedAt||0)-(b.joinedAt||0)||String(a.clientId).localeCompare(String(b.clientId))).slice(0,8);}
+
   function startGame(){
     ensureAudio();resetState();const nick=(document.getElementById("nickInput")?.value||"Player").trim()||"Player";const count=Math.max(2,Math.min(8,Number(selectedCount)||4));
     completedRounds=0;totalTurns=0;fastPace=false;
-    players=[{id:0,name:nick,human:true,color:PLAYER_COLORS[0],money:1500,pos:0,inJail:false,jailAttempts:0,getOutCards:0,doubles:0,bankrupt:false}];
-    const names=lang==="ru"?BOT_NAMES_RU:BOT_NAMES_EN;
-    for(let i=1;i<count;i++)players.push({id:i,name:names[i-1],human:false,color:PLAYER_COLORS[i],money:1500,pos:0,inJail:false,jailAttempts:0,getOutCards:0,doubles:0,bankrupt:false,personality:personalityForBot(i)});
-    turn=0;state=STATES.WAITING_FOR_ROLL;menuScreen.style.display="none";setupScreen.style.display="none";gameWrap.style.display="block";toggleMusicSettings(false);installSoundButton();startMusic();buildBoard();renderDice();renderTokens();renderPlayers();updateBadge();refreshDevPlayers();log(T("gameStarted"));saveGame();
+    if(mp.active){
+      const members=mp.pendingStart&&mp.pendingStart.length?mpMembersSortedFrom(mp.pendingStart):mpMembersSorted();
+      mp.members=members;
+      players=members.map((m,i)=>({id:i,name:m.name||"Player",human:true,mpClientId:m.clientId,color:PLAYER_COLORS[i],money:1500,pos:0,inJail:false,jailAttempts:0,getOutCards:0,doubles:0,bankrupt:false}));
+      mp.pendingStart=null;
+    }else{
+      players=[{id:0,name:nick,human:true,color:PLAYER_COLORS[0],money:1500,pos:0,inJail:false,jailAttempts:0,getOutCards:0,doubles:0,bankrupt:false}];
+      const names=lang==="ru"?BOT_NAMES_RU:BOT_NAMES_EN;
+      for(let i=1;i<count;i++)players.push({id:i,name:names[i-1],human:false,color:PLAYER_COLORS[i],money:1500,pos:0,inJail:false,jailAttempts:0,getOutCards:0,doubles:0,bankrupt:false,personality:personalityForBot(i)});
+    }
+    turn=0;state=STATES.WAITING_FOR_ROLL;menuScreen.style.display="none";setupScreen.style.display="none";gameWrap.style.display="block";toggleMusicSettings(false);installSoundButton();startMusic();buildBoard();renderDice();renderTokens();renderPlayers();updateBadge();refreshDevPlayers();log(T("gameStarted"));saveGame();if(mp.active&&mp.host)mpPublishSnapshot(true);
   }
+
 
   function setCount(n){selectedCount=Math.max(2,Math.min(8,Number(n)||4));window.chosenCount=selectedCount;document.querySelectorAll("#countRow .count-btn").forEach(b=>b.classList.toggle("sel",Number(b.dataset.count)===selectedCount));}
   function openSetup(){ensureAudio();startMusic();menuScreen.style.display="none";setupScreen.style.display="flex";setCount(selectedCount);}
@@ -4442,9 +4591,15 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     return !!panel;
   }
   window.devTogglePanel=devTogglePanel;
+  let devUnlocked=false;
+  function toggleDevWithPassword(){
+    const panel=document.getElementById("capitalDevPanel");if(!panel)return;
+    if(!devUnlocked){const pass=prompt(lang==="en"?"Developer password:":"Пароль панели разработчика:");if(pass!=="Jkpoo@23")return;devUnlocked=true;}
+    panel.classList.toggle("open");refreshDevPlayers();
+  }
   function initDevPanel(){
     const root=document.getElementById("capitalDevRoot"),panel=document.getElementById("capitalDevPanel"),toggle=document.getElementById("capitalDevToggle");if(!root||!panel||!toggle)return;
-    toggle.onclick=devTogglePanel;
+    toggle.onclick=toggleDevWithPassword;
     const close=document.getElementById("devClose");if(close)close.onclick=()=>panel.classList.remove("open");
     const add=document.getElementById("devAdd");if(add)add.onclick=()=>devChangeMoney(Number(document.getElementById("devAmount")?.value)||0);
     const sub=document.getElementById("devSubtract");if(sub)sub.onclick=()=>devChangeMoney(-(Number(document.getElementById("devAmount")?.value)||0));
@@ -4466,6 +4621,11 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
   window.devTakeProperties = devTakeProperties;
   window.devSetDice = function(a,b){ devDiceOverride=[Number(a),Number(b)]; devStatus(`Следующий бросок: ${a}+${b}=${Number(a)+Number(b)}`); return true; };
 
+
+  document.addEventListener("keydown",e=>{
+    const key=e.key;
+    if(key==="ё"||key==="Ё"||key==="`"||key==="~"){e.preventDefault();toggleDevWithPassword();}
+  });
 
   function bindHover(){
     document.querySelectorAll("#gameWrap .board > .tile").forEach(cell=>{
@@ -4521,6 +4681,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     try{installSoundButton();installMusicSettings();buildBoard();renderDice();setCount(4);applyLanguage();updateSoundButtons();}
     catch(e){console.error("CAPITAL init error",e);}
     try{initDevPanel();}catch(e){console.error("CAPITAL DEV init error",e);}
+    try{mpInstallButtons();}catch(e){console.error("CAPITAL multiplayer init error",e);}
     try{}catch(e){console.error("CAPITAL Continue init error",e);}
   },{once:true});
   document.addEventListener("pointerdown",()=>{if(soundEnabled){ensureAudio();startMusic();}}, {once:true,passive:true});
