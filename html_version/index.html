@@ -3521,8 +3521,8 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 </div>
 <div id="capitalMusicSettings" aria-label="Music settings">
   <div class="cap-music-head"><div class="cap-music-title" id="musicSettingsTitle">🎵 Фоновая музыка</div><button class="cap-music-close" id="musicSettingsClose" type="button" aria-label="Закрыть">✕</button></div>
-  <div class="cap-music-row"><span class="cap-music-label" id="musicVolumeLabel">Музыка</span><span class="cap-music-value" id="musicVolumeValue">10%</span></div>
-  <input id="capitalMusicRange" type="range" min="0" max="100" step="10" value="10" list="capitalMusicTicks" aria-label="Громкость фоновой музыки">
+  <div class="cap-music-row"><span class="cap-music-label" id="musicVolumeLabel">Музыка</span><span class="cap-music-value" id="musicVolumeValue">40%</span></div>
+  <input id="capitalMusicRange" type="range" min="0" max="100" step="10" value="40" list="capitalMusicTicks" aria-label="Громкость фоновой музыки">
   <div class="cap-music-row cap-sfx-row"><span class="cap-music-label" id="sfxVolumeLabel">Эффекты</span><span class="cap-music-value" id="sfxVolumeValue">70%</span></div>
   <input id="capitalSfxRange" type="range" min="0" max="100" step="10" value="70" list="capitalMusicTicks" aria-label="Громкость звуковых эффектов">
   <div class="cap-music-ticks" id="capitalMusicTicksLabels"><span>0</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span><span>60</span><span>70</span><span>80</span><span>90</span><span>100</span></div>
@@ -4977,18 +4977,32 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     sumGroup.position.set(0,1.5,0);
     sumGroup.visible=false;
     scene.add(sumGroup);
-    // A dark plate behind the digits. Without it the gold is hard to read when
-    // the camera drops low and a lit part of the board sits behind the number.
+    /* A soft dark halo behind the digits, so the gold stays readable when the
+       camera drops low and a lit part of the board lines up behind the number.
+       This was a hard-edged plane and it read as a black box sitting in the
+       middle of the board, so it is a radial gradient that fades to nothing at
+       the edges instead of ending in a visible rectangle. */
+    const haloCv=document.createElement("canvas");haloCv.width=128;haloCv.height=128;
+    const hctx=haloCv.getContext("2d");
+    const hgrd=hctx.createRadialGradient(64,64,4,64,64,64);
+    hgrd.addColorStop(0,"rgba(4,7,13,.82)");
+    hgrd.addColorStop(0.55,"rgba(4,7,13,.55)");
+    hgrd.addColorStop(1,"rgba(4,7,13,0)");
+    hctx.fillStyle=hgrd;hctx.fillRect(0,0,128,128);
+    const haloTex=new THREE.CanvasTexture(haloCv);haloTex.encoding=THREE.sRGBEncoding;
     const plate=new THREE.Mesh(
-      new THREE.PlaneGeometry(1.34,0.92),
-      new THREE.MeshBasicMaterial({color:0x04070d,transparent:true,opacity:0.62,depthWrite:false})
+      new THREE.PlaneGeometry(1.5,1.05),
+      new THREE.MeshBasicMaterial({map:haloTex,transparent:true,depthWrite:false,opacity:0.9})
     );
-    plate.position.z=-0.09;
+    plate.position.z=-0.1;
+    plate.renderOrder=-1;
     sumGroup.add(plate);
     cap3d.digitMat=digitMat;
     cap3d.sumGroup=sumGroup;
     cap3d.digitCache=new Map();
     cap3d.sumT=9;
+    // No roll has happened yet, so the board must not show a total.
+    cap3d.sumHasValue=false;
     cap3dBindControls();
     cap3dResize();
     cap3dFitCamera(true);
@@ -5228,13 +5242,28 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     });
     /* The dice targets follow the rolled values. The resting yaw is derived
        from the roll number rather than stored, so it is stable while the result
-       is on screen and still different between two identical rolls. */
+       is on screen and still different between two identical rolls.
+
+       lastDice starts as [1,1] purely as a placeholder, and lastRollTotal is 0
+       until a roll has actually resolved. Without that check the standing
+       total was built from the placeholder on load and the board opened showing
+       a confident "2" that nobody had rolled. */
+    const hasRolled=Number(lastRollTotal)>0;
+    if(!hasRolled){
+      cap3d.prevDiceKey=null;cap3d.prevDiceVals=null;
+      cap3dDiceSumDraw(true);
+      cap3d.dice.forEach(function(d){
+        d.mesh.position.copy(d.rest);
+        d.mesh.quaternion.copy(d.target);
+      });
+      return;
+    }
     const dk=lastDice[0]+"+"+lastDice[1]+"|"+state;
     if(force||dk!==cap3d.prevDiceKey){
       const rolled=lastDice[0]+"+"+lastDice[1]!==cap3d.prevDiceVals;
       if(rolled||force){
         cap3d.rollSeq=(cap3d.rollSeq||0)+1;
-        cap3dDiceSumDraw();
+        cap3dDiceSumDraw(false);
         cap3d.sumT=0;
       }
       cap3d.prevDiceKey=dk;
@@ -5296,14 +5325,20 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     return proto.clone(true);
   }
   /* Rebuilds the standing total. Called only when the rolled values change, so
-     the geometry work happens once per roll. */
-  function cap3dDiceSumDraw(){
+     the geometry work happens once per roll.
+
+     `cleared` is for the no-roll-yet state: nothing has been thrown, so the
+     board shows no number at all rather than a total invented from the [1,1]
+     placeholder. */
+  function cap3dDiceSumDraw(cleared){
     const grp=cap3d.sumGroup;
     if(!grp)return;
     while(grp.children.length>1)grp.remove(grp.children[grp.children.length-1]);
+    if(cleared){cap3d.sumHasValue=false;return;}
     const a=Math.max(1,Math.min(6,Number(lastDice[0])||1));
     const b=Math.max(1,Math.min(6,Number(lastDice[1])||1));
     const s=String(a+b);
+    cap3d.sumHasValue=true;
     const h=0.62,gap=h*0.8;
     const width=(s.length-1)*gap;
     for(let i=0;i<s.length;i++){
@@ -5602,7 +5637,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
      the scene's light like a solid object rather than a sticker. */
   function cap3dDiceSumTick(dt,reduced){
     const grp=cap3d.sumGroup;
-    if(!grp||!players.length){if(grp)grp.visible=false;return;}
+    if(!grp||!players.length||!cap3d.sumHasValue){if(grp)grp.visible=false;return;}
     grp.visible=true;
     // Cylindrical billboard: keep it upright, swing only the yaw.
     try{
@@ -6189,12 +6224,19 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
      Multiplayer always runs at normal speed so every screen stays in step. */
   const PREFS_KEY="capital.prefs.v1";
   let gameSpeed="normal";
-  try{if(JSON.parse(localStorage.getItem(PREFS_KEY)||"{}").speed==="fast")gameSpeed="fast";}catch(e){}
+  let prefsSaved={};
+  try{prefsSaved=JSON.parse(localStorage.getItem(PREFS_KEY)||"{}")||{};}catch(e){prefsSaved={};}
+  if(prefsSaved.speed==="fast")gameSpeed="fast";
+  function savePrefs(){
+    // One key for the whole settings object, so music volume and speed cannot
+    // clobber each other by each writing only their own field.
+    try{localStorage.setItem(PREFS_KEY,JSON.stringify({speed:gameSpeed,music:musicVolume,sfx:sfxVolume}));}catch(e){}
+  }
   function isFast(){return gameSpeed==="fast"&&!mp.active;}
   function auctionSeconds(){return isFast()?7:10;}
   function setGameSpeed(v){
     gameSpeed=v==="fast"?"fast":"normal";
-    try{localStorage.setItem(PREFS_KEY,JSON.stringify({speed:gameSpeed}));}catch(e){}
+    savePrefs();
     renderSpeedUI();
   }
   function renderSpeedUI(){
@@ -6281,8 +6323,15 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
 
   /* ---------- Sound + external music ---------- */
   let musicEl=null;
-  let musicVolume=0.10;
+  // 40% by default. At 10% the theme was effectively inaudible under the sound
+  // effects, so the menu read as silent on first load.
+  const cap3dDefaultMusicVolume=0.40;
+  let musicVolume=cap3dDefaultMusicVolume;
   let sfxVolume=0.70;
+  // A saved choice wins over the default, so someone who turns the music down
+  // does not have it turned back up on their next visit.
+  if(typeof prefsSaved.music==="number"&&prefsSaved.music>=0&&prefsSaved.music<=1)musicVolume=prefsSaved.music;
+  if(typeof prefsSaved.sfx==="number"&&prefsSaved.sfx>=0&&prefsSaved.sfx<=1)sfxVolume=prefsSaved.sfx;
   function ensureAudio(){
     if(!soundEnabled)return null;
     try{
@@ -6301,7 +6350,53 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     const m=ensureMusic();if(!m)return;
     m.volume=musicVolume;
     const promise=m.play();
-    if(promise&&typeof promise.catch==="function")promise.catch(()=>{});
+    if(promise&&typeof promise.then==="function"){
+      promise.then(function(){
+        // Only now is autoplay genuinely unlocked for this page.
+        musicAutoplayUnlocked=true;
+        armMusicUnlock();
+      }).catch(function(){
+        // Blocked until a gesture. Keep a listener armed so the theme starts on
+        // the player's first interaction instead of never.
+        armMusicUnlock();
+      });
+    }
+  }
+  /* Browsers refuse to start audio before a user gesture, so "play music in the
+     menu automatically" cannot be done by calling play() on load alone. The
+     theme is attempted immediately, and the first pointer, key or touch anywhere
+     starts it for real. The listeners detach themselves once the music is
+     actually running, so this is not a permanent handler.
+
+     Previously this was a one-shot pointerdown listener registered at the very
+     end of the file. It worked only if the first click landed somewhere that
+     did not stop propagation, and it never covered keyboard or touch, so on
+     some machines the menu stayed silent for good. */
+  let musicAutoplayUnlocked=false,musicUnlockArmed=false;
+  function musicStartFromGesture(){
+    const m=ensureMusic();
+    if(m&&!m.paused){musicAutoplayUnlocked=true;armMusicUnlock();return;}
+    ensureAudio();
+    startMusic();
+  }
+  function armMusicUnlock(){
+    if(musicUnlockArmed||musicAutoplayUnlocked)return;
+    if(!soundEnabled||musicVolume<=0)return;
+    musicUnlockArmed=true;
+    const opts={passive:true};
+    const off=function(){
+      document.removeEventListener("pointerdown",off,true);
+      document.removeEventListener("keydown",off,true);
+      document.removeEventListener("touchend",off,true);
+      document.removeEventListener("click",off,true);
+      musicUnlockArmed=false;
+      musicStartFromGesture();
+    };
+    // capture:true so a control that stops propagation cannot swallow it.
+    document.addEventListener("pointerdown",off,true);
+    document.addEventListener("keydown",off,true);
+    document.addEventListener("touchend",off,true);
+    document.addEventListener("click",off,true);
   }
   function stopMusic(){
     /* Intentionally persistent: music continues across menu, setup, game and result screens. */
@@ -6381,12 +6476,12 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
   }
   function setSfxVolume(value){
     const v=Math.max(0,Math.min(100,Math.round(Number(value)/10)*10));
-    sfxVolume=v/100;updateMusicVolumeUI();
+    sfxVolume=v/100;updateMusicVolumeUI();savePrefs();
   }
   function setMusicVolume(value){
     const v=Math.max(0,Math.min(100,Math.round(Number(value)/10)*10));
     musicVolume=v/100;
-    updateMusicVolumeUI();
+    updateMusicVolumeUI();savePrefs();
     if(soundEnabled && musicVolume>0){ensureAudio();const m=ensureMusic();if(m && m.paused)startMusic();}
   }
   function toggleMusicSettings(force){
@@ -8506,6 +8601,9 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     document.querySelectorAll("#gameWrap .cap-hover-main,#gameWrap .cap-hover-group,#gameWrap .cap-hover-dim").forEach(e=>e.classList.remove("cap-hover-main","cap-hover-group","cap-hover-dim"));
     TILES.forEach(t=>{if(["prop","station","util"].includes(t.type)){t.owner=null;t.houses=0;t.hotel=false;t.mortgaged=false;}});
     players=[];turn=0;state=STATES.WAITING_FOR_ROLL;extraTurnPending=false;lastRollTotal=0;lastDice=[1,1];previousMoney=new Map();gameLog=[];renderDice();updateBadge();
+    // Drop the standing total and the previous roll's facing, so a new game does
+    // not open with the last game's number still on the board.
+    try{cap3d.prevDiceKey=null;cap3d.prevDiceVals=null;cap3dDiceSumDraw(true);}catch(_){}
     const logEl=document.getElementById("eventlog");if(logEl)logEl.innerHTML="";
   }
 
@@ -8811,7 +8909,10 @@ document.addEventListener("keydown",e=>{
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",capitalInit,{once:true});
   else capitalInit();
-  document.addEventListener("pointerdown",()=>{if(soundEnabled){ensureAudio();startMusic();}}, {once:true,passive:true});
+  /* Try the theme immediately, and keep a gesture listener armed until the
+     browser actually lets it play. See armMusicUnlock for why this is not a
+     one-shot pointerdown handler. */
+  try{ensureAudio();startMusic();armMusicUnlock();}catch(_){}
 })();
 </script>
 <div id="capitalDevRoot" aria-label="Developer tools">
