@@ -1321,16 +1321,6 @@ body{
 
 /* ── capital-richup-motion-final ── */
 /* Richup-inspired motion / feedback layer */
-#gameWrap .board > .tile .token{
-  transition:transform .25s cubic-bezier(.34,1.56,.64,1),top .25s ease,left .25s ease,box-shadow .2s ease!important;
-  will-change:transform,top,left;
-}
-#gameWrap .board > .tile .token.step-bounce{animation:capitalTokenStep .32s cubic-bezier(.34,1.56,.64,1)}
-@keyframes capitalTokenStep{
-  0%{transform:translateY(0) scale(1)}
-  45%{transform:translateY(-7px) scale(1.08)}
-  100%{transform:translateY(0) scale(1)}
-}
 /* Saturated group strips with soft glow */
 #gameWrap .tile .stripe{
   position:relative!important;
@@ -1591,16 +1581,6 @@ body{
   border-radius:2px;
 }
 .player-row .dot{display:none!important}
-@keyframes capitalPieceStep{
-  0%{transform:translate(var(--piece-x,0),var(--piece-y,0)) translateY(0) rotate(0) scale(1)}
-  35%{transform:translate(var(--piece-x,0),var(--piece-y,0)) translateY(-7px) rotate(-4deg) scale(1.04)}
-  70%{transform:translate(var(--piece-x,0),var(--piece-y,0)) translateY(-2px) rotate(3deg) scale(1.01)}
-  100%{transform:translate(var(--piece-x,0),var(--piece-y,0)) translateY(0) rotate(0) scale(1)}
-}
-.player-piece.step-bounce{animation:capitalPieceStep .34s cubic-bezier(.2,.8,.2,1) both}
-@media (prefers-reduced-motion:reduce){
-  .player-piece.step-bounce{animation:none!important}
-}
 
 /* ── capital-russian-ui-polish ── */
 html[lang="ru"] #gameWrap .eventlog li{line-height:1.38!important;font-size:12px!important}
@@ -2905,9 +2885,6 @@ html[lang="ru"] #gameWrap .board > .tile.corner .parking-corner-label span{
   transform-origin:50% 100%!important;
   margin:0 -2px!important;
 }
-/* Keep the moving piece's existing animation exactly as defined in the HTML. */
-#gameWrap .board > .tile .player-piece.step-bounce{margin-left:0!important;margin-right:0!important}
-
 /* ── capital-v22-ui ── */
 /* CAPITAL v22 — interface pass. Placed last so it wins over the older layers above. */
 /* ---------- Board grid: tiles may shrink below their text width (fixes phone overflow) ---------- */
@@ -3838,8 +3815,8 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   let fastPace = false;
   let movingPlayerId = null;
   let movingPieceEl = null;
-  // Tile count of the move currently being animated, so the 2D walker can pace
-  // its hop per step. Set by animateMove, read by animatePieceTo.
+  // Tile count of the move currently being animated, so the 2D walker builds
+  // one waypoint per tile. Set by animateMove, read by animatePieceTo.
   let moveStepCount = 1;
   let mpAuthoritativeMovement = null;
   let mpRemoteMovement = null;
@@ -4334,30 +4311,42 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     movingPlayerId=p.id;
     movingPieceEl=el;
     boardEl.appendChild(el);
-    renderTokens(p.id);
-    const from=remoteMovementPoint(fromPos),target=remoteMovementPoint(toPos);
-    if(!from||!target){el.remove();movingPlayerId=null;movingPieceEl=null;return;}
+    renderTokens();
+    const from=remoteMovementPoint(fromPos);
+    if(!from){el.remove();movingPlayerId=null;movingPieceEl=null;return;}
+    // Walk the same polyline the host walks, tile by tile. This used to ease a
+    // straight line from `from` to `target`, which cut diagonally across the
+    // board, so on a remote client the piece visibly left the perimeter.
     el.dataset.x=String(from.x);el.dataset.y=String(from.y);
-    el.style.setProperty("transform",`translate3d(${from.x}px,${from.y}px,0) scale(1)`,'important');
+    el.style.setProperty("transform",`translate3d(${from.x}px,${from.y}px,0)`,'important');
+    // A zero-tile move (host sent one) must not walk at all: clamping to a
+    // minimum of 1 step here would move the piece onto the next tile.
+    const steps=((toPos-fromPos)%40+40)%40;
+    const path=steps>0?tokenWalkPath(fromPos,steps,from.x,from.y):null;
+    const target=path?path.last:from;
+    const started=Date.now();
     // Start from local reception time. Using the host timestamp made a
     // 450ms movement arrive already finished whenever network latency was high.
-    const started=Date.now();
-    const duration=Math.max(1,Number(m.duration)||450);
+    const duration=path?Math.max(1,Number(m.duration)||tokenWalkDuration(steps)):0;
     const rm={id:String(m.id),el,p,from,to:target,started,duration,raf:null,done:false};
     mpRemoteMovement=rm;
+    // No walkable path (missing geometry, or a zero-tile move): settle the piece
+    // on the destination and report the movement as finished, so the turn can
+    // continue instead of leaving a frozen piece on the board.
+    if(!path){
+      el.style.setProperty("transform",`translate3d(${target.x}px,${target.y}px,0)`,'important');
+      rm.done=true;rm.raf=null;return;
+    }
     const frame=()=>{
       if(mpRemoteMovement!==rm||!el.isConnected)return;
       const elapsed=Math.max(0,Date.now()-started);
       const t=Math.min(1,elapsed/duration);
-      const e=1-Math.pow(1-t,4);
-      const hop=Math.sin(Math.PI*t)*-8;
-      const x=from.x+(target.x-from.x)*e;
-      const y=from.y+(target.y-from.y)*e+hop;
-      const scale=1+Math.sin(Math.PI*t)*.055;
-      el.dataset.x=String(x);el.dataset.y=String(y);
-      el.style.setProperty("transform",`translate3d(${x}px,${y}px,0) scale(${scale})`,'important');
+      const e=t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+      const pt=tokenWalkAt(path,e*path.length);
+      el.dataset.x=String(pt.x);el.dataset.y=String(pt.y);
+      el.style.setProperty("transform",`translate3d(${pt.x}px,${pt.y}px,0)`,'important');
       if(t<1){rm.raf=requestAnimationFrame(frame);return;}
-      el.style.setProperty("transform",`translate3d(${target.x}px,${target.y}px,0) scale(1)`,'important');
+      el.style.setProperty("transform",`translate3d(${target.x}px,${target.y}px,0)`,'important');
       rm.done=true;rm.raf=null;
     };
     rm.raf=requestAnimationFrame(frame);
@@ -5217,8 +5206,9 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
           done();return;
         }
         const path=[];for(let k=1;k<=moveSteps;k++)path.push((fromPos+k)%40);
-        const pace=(typeof isFast==="function"&&isFast())?0.6:1;
-        const total=Math.min(2400*pace,Math.max(420*pace,300*pace+moveSteps*135*pace));
+        // Shared with the 2D walker, so a move takes the same wall-clock time in
+        // both views. This used to be a second, hand-copied copy of the formula.
+        const total=tokenWalkDuration(moveSteps);
         const cur=slot.vis;
         if(!cur.init){const b=cap3dBoardXZ(fromPos);cur.x=b.x;cur.z=b.z;cur.init=true;}
         cur.tx=finishAt.x;cur.tz=finishAt.z;
@@ -6202,7 +6192,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
   }
   function renderDice(){setDie(document.getElementById("d1"),lastDice[0]);setDie(document.getElementById("d2"),lastDice[1]);}
 
-  function renderTokens(activePlayerId=null){
+  function renderTokens(){
     if(boardEl){
       const activeMoving=(movingPieceEl&&movingPieceEl.isConnected&&movingPlayerId!=null)?movingPieceEl:null;
       boardEl.querySelectorAll(".moving-piece").forEach(el=>{if(el!==activeMoving)el.remove();});
@@ -6225,8 +6215,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
       const index=occupied.get(p.pos)||0;
       occupied.set(p.pos,index+1);
       const d=document.createElement("div");
-      const isMovingPlayer=activePlayerId!=null && String(p.id)===String(activePlayerId);
-      d.className="player-piece"+(isMovingPlayer?" step-bounce":"")+(players[turn]===p&&state!==STATES.GAME_OVER?" is-turn":"");
+      d.className="player-piece"+(players[turn]===p&&state!==STATES.GAME_OVER?" is-turn":"");
       d.dataset.playerId=p.id;
       d.dataset.index=String(index);
       d.style.setProperty("--piece-color",p.color);
@@ -6234,7 +6223,6 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
       d.title=playerLabel(p);
       d.innerHTML=`<span class="piece-shadow"></span><span class="piece-base"></span><span class="piece-body"><span class="piece-tie"></span></span><span class="piece-head"><span class="piece-eye left"></span><span class="piece-eye right"></span></span>`;
       e.appendChild(d);
-      if(isMovingPlayer)setTimeout(()=>d.classList.remove("step-bounce"),340);
     });
     TILES.forEach(t=>{
       if(!["prop","station","util"].includes(t.type))return;const el=document.getElementById("tile-"+t.id);if(!el)return;
@@ -6697,6 +6685,43 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     const p=tokenPts&&tokenPts.get(id);
     return p?{x:p.x,y:p.y}:null;
   }
+  /* ---------- shared 2D walk path ----------
+     Local moves and remote (multiplayer) moves walk the board the same way, so
+     both build the path here instead of each easing a straight line between
+     two tiles. A straight line on a Monopoly board cuts diagonally through the
+     middle, which is what made the piece leave the perimeter it is supposed to
+     follow. Returns null if the geometry for any waypoint is missing, so the
+     caller can fall back to snapping rather than animating into nowhere. */
+  function tokenWalkPath(fromPos,steps,startX,startY){
+    const nodes=[{x:startX,y:startY}];
+    for(let k=1;k<=steps;k++){
+      const pt=tokenPoint((fromPos+k)%40);
+      if(!pt)return null;
+      nodes.push(pt);
+    }
+    // Arc-length table: the ease is applied to distance travelled, not per
+    // segment, so the piece never stalls on a tile corner or races through one.
+    const cum=[0];
+    for(let s=1;s<nodes.length;s++)cum.push(cum[s-1]+Math.hypot(nodes[s].x-nodes[s-1].x,nodes[s].y-nodes[s-1].y));
+    return {nodes,cum,length:cum[cum.length-1],last:nodes[nodes.length-1]};
+  }
+  // Position at distance d along a walk path. Writes x/y only: the piece glides
+  // with no per-tile hop and no squash, so a long roll reads as one smooth
+  // slide. Landing feedback is the destination tile's own cap-landed pulse.
+  function tokenWalkAt(path,d){
+    let si=0;
+    while(si<path.cum.length-2&&path.cum[si+1]<d)si++;
+    const segLen=Math.max(1e-6,path.cum[si+1]-path.cum[si]);
+    const f=Math.min(1,Math.max(0,(d-path.cum[si])/segLen));
+    const a=path.nodes[si],b=path.nodes[si+1];
+    return {x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f};
+  }
+  // One duration for every 2D move, local or remote, so a piece never arrives
+  // early or late depending on who is animating it.
+  function tokenWalkDuration(steps){
+    const pace=isFast()?.6:1;
+    return Math.min(2400*pace,Math.max(420*pace,(300+Math.max(1,steps)*135)*pace));
+  }
   /* Tile-by-tile 2D movement.
 
      This used to ease a single straight line from the starting tile to the
@@ -6712,59 +6737,35 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
      keeps the travel speed even, so the piece never stalls on a tile corner
      and never races through one.
 
-     The hop is per tile segment rather than per whole move, so it returns to
-     zero on every tile the way a footstep does, and the piece squashes on
-     landing. Timing mirrors cap3dAnimateMove3D so a move takes the same
-     wall-clock time in both views. */
+     Timing mirrors cap3dAnimateMove3D so a move takes the same wall-clock
+     time in both views, and the piece glides: no per-tile hop, no squash.
+     Those were the last differences between the two views, and keeping them
+     cost a visible stutter on every roll — the piece pulsed once per tile
+     while sliding, which read as a limp rather than a walk. Landing feedback
+     is the destination tile's own cap-landed pulse, which is unaffected. */
   function animatePieceTo(tileId,done){
     if(!movingPieceEl){done?.();return;}
     const fromX=parseFloat(movingPieceEl.dataset.x||"0");
     const fromY=parseFloat(movingPieceEl.dataset.y||"0");
     const steps=Math.max(1,moveStepCount);
     const fromPos=((Number(movingPieceEl.dataset.fromPos)||0)%40+40)%40;
+    const path=tokenWalkPath(fromPos,steps,fromX,fromY);
+    if(!path){done?.();return;}
+    const last=path.last,L=path.length;
+    if(!(L>0.5)){movingPieceEl.style.setProperty("transform",`translate3d(${last.x}px,${last.y}px,0)`,"important");movingPieceEl.dataset.x=String(last.x);movingPieceEl.dataset.y=String(last.y);done?.();return;}
 
-    // Waypoints: current visual position, then the centre of every tile the
-    // piece lands on, ending on the exact slot the 3D view would settle into.
-    const nodes=[{x:fromX,y:fromY}];
-    for(let k=1;k<=steps;k++){
-      const pt=tokenPoint((fromPos+k)%40);
-      if(!pt){done?.();return;}
-      nodes.push({x:pt.x,y:pt.y});
-    }
-
-    // Arc-length table: constant speed along the polyline. Easing is applied to
-    // distance travelled, not per segment, so velocity never drops to zero at a
-    // tile boundary.
-    const cum=[0];
-    for(let s=1;s<nodes.length;s++)cum.push(cum[s-1]+Math.hypot(nodes[s].x-nodes[s-1].x,nodes[s].y-nodes[s-1].y));
-    const L=cum[cum.length-1];
-    const last=nodes[nodes.length-1];
-    if(!(L>0.5)){movingPieceEl.style.setProperty("transform",`translate3d(${last.x}px,${last.y}px,0) scale(1)`,"important");movingPieceEl.dataset.x=String(last.x);movingPieceEl.dataset.y=String(last.y);done?.();return;}
-
-    const pace=isFast()?.6:1;
     // Same curve as cap3dAnimateMove3D, so both views move at the same pace.
-    const duration=Math.min(2400*pace,Math.max(420*pace,(300+steps*135)*pace));
-    const reduced=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const duration=tokenWalkDuration(steps);
     const t0=performance.now();
     const ease=t=>t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
 
     const frame=ts=>{
       if(!movingPieceEl||!movingPieceEl.isConnected){done?.();return;}
       const t=Math.min(1,(ts-t0)/duration);
-      const d=ease(t)*L;
-      let si=0;
-      while(si<cum.length-2&&cum[si+1]<d)si++;
-      const segLen=Math.max(1e-6,cum[si+1]-cum[si]);
-      const f=Math.min(1,Math.max(0,(d-cum[si])/segLen));
-      const a=nodes[si],b=nodes[si+1];
-      const x=a.x+(b.x-a.x)*f,y=a.y+(b.y-a.y)*f;
-      // One hop per tile: it starts and ends at the tile centre and peaks in
-      // between, so the beat reads as a footstep instead of one long bob.
-      const hop=reduced?0:Math.sin(Math.PI*f)*-5;
-      const scale=reduced?1:1+Math.sin(Math.PI*f)*.05;
-      movingPieceEl.style.setProperty("transform",`translate3d(${x}px,${y+hop}px,0) scale(${scale})`,"important");
+      const pt=tokenWalkAt(path,ease(t)*L);
+      movingPieceEl.style.setProperty("transform",`translate3d(${pt.x}px,${pt.y}px,0)`,"important");
       if(t<1){scheduleFrame(frame);return;}
-      movingPieceEl.style.setProperty("transform",`translate3d(${last.x}px,${last.y}px,0) scale(1)`,"important");
+      movingPieceEl.style.setProperty("transform",`translate3d(${last.x}px,${last.y}px,0)`,"important");
       movingPieceEl.dataset.x=String(last.x);movingPieceEl.dataset.y=String(last.y);
       done?.();
     };
@@ -6781,17 +6782,20 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     moveStepCount=Math.max(1,moveSteps);
     movingPlayerId=p.id;
     const mpMoveId=`${runId}-${p.id}-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
-    mpAuthoritativeMovement={id:mpMoveId,playerId:p.mpClientId||null,playerIndex:p.id,fromPos,steps:moveSteps,toPos:finalPos,duration:450,startedAt:Date.now()};
+    // Tell clients how long this move really takes. A hardcoded 450ms made every
+    // remote piece land long before the host's own piece, which is most visible
+    // now that a 12-tile move takes ~1.9s instead of a single 450ms slide.
+    mpAuthoritativeMovement={id:mpMoveId,playerId:p.mpClientId||null,playerIndex:p.id,fromPos,steps:moveSteps,toPos:finalPos,duration:Math.round(tokenWalkDuration(moveSteps)),startedAt:Date.now()};
     movingPieceEl=makeMovingPiece(p);
     boardEl.appendChild(movingPieceEl);
     const startPoint=tokenPoint(fromPos),targetPoint=tokenPoint(finalPos);
     if(!startPoint||!targetPoint){clearMovingPiece();return;}
     // The walk path is rebuilt from the tile the piece left, so remember it.
     movingPieceEl.dataset.fromPos=String(fromPos);
-    movingPieceEl.style.setProperty("transform",`translate3d(${startPoint.x}px,${startPoint.y}px,0) scale(1)`,"important");
+    movingPieceEl.style.setProperty("transform",`translate3d(${startPoint.x}px,${startPoint.y}px,0)`,"important");
     movingPieceEl.dataset.x=String(startPoint.x);
     movingPieceEl.dataset.y=String(startPoint.y);
-    renderTokens(p.id);
+    renderTokens();
     if(mp.active&&mp.host){
       mpRealtimeEvent("PLAYER_MOVED",{movement:{...mpAuthoritativeMovement,startedAt:Date.now()}});
       mpPublishSnapshot(true);
@@ -7818,7 +7822,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
   function moveByCard(p,card){
     if(card.moveBy){
       p.pos=((p.pos+card.moveBy)%40+40)%40;
-      renderTokens(p.id);renderPlayers();
+      renderTokens();renderPlayers();
       log(`${playerLabel(p)} попадает на «${tileLabel(TILES[p.pos])}».`);
       onTileLand(p);
       return;
