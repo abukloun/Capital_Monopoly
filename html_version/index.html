@@ -4643,6 +4643,16 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
      Clicks in 3D call the SAME functions as 2D (openPropertyModal). */
   const BOARD_VIEW_KEY="capital.view.v1";
   let cap3d={ready:false,loading:false,failed:false,running:false,raf:0,renderer:null,scene:null,camera:null,raycaster:null,pointerNDC:null,tmpV:null,tiles:new Map(),tokens:new Map(),dice:[],hitMeshes:[],hovered:-1,lastTileSig:new Map(),lastTokSig:new Map(),prevStateKey:"",prevDiceKey:"",cam:{theta:Math.PI*0.25,phi:0.88,radius:17,tTheta:Math.PI*0.25,tPhi:0.88,tRadius:17,target:null},drag:null,pinch:0,centerSlot:null,ro:null,spin:0,userZoom:false,halfH:14,tHalfH:14,vw:0,vh:0,hudH:0,FILL:0.85,boardDiag:8.42};
+  // Evaluated once: matchMedia() constructs + evaluates on every call, so it
+  // must never run per frame (perf audit).
+  let cap3dReducedMotion=false;
+  try{
+    const cap3dRMQ=window.matchMedia("(prefers-reduced-motion: reduce)");
+    cap3dReducedMotion=!!(cap3dRMQ&&cap3dRMQ.matches);
+    const cap3dRMUpdate=function(e){cap3dReducedMotion=!!(e&&e.matches);};
+    if(cap3dRMQ&&cap3dRMQ.addEventListener)cap3dRMQ.addEventListener("change",cap3dRMUpdate);
+    else if(cap3dRMQ&&cap3dRMQ.addListener)cap3dRMQ.addListener(cap3dRMUpdate);
+  }catch(_){}
   function cap3dBoardXZ(id){const pos=gridPos(Number(id)||0);return {x:(pos.c-6)*1.04,z:(pos.r-6)*1.04};}
   function cap3dEnsureThree(){
     if(window.THREE&&window.THREE.Scene)return Promise.resolve(window.THREE);
@@ -4882,6 +4892,9 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     const aspect=h>0?w/h:1,hh=cap3d.halfH||14;
     const frac=h>0?(cap3d.hudH||0)/h:0;
     const d=hh*frac;
+    const key=w+"x"+h+"|"+hh.toFixed(4)+"|"+frac.toFixed(4);
+    if(key===cap3d._frustumKey)return;
+    cap3d._frustumKey=key;
     cap3d.camera.left=-hh*aspect;cap3d.camera.right=hh*aspect;
     cap3d.camera.top=hh-d;cap3d.camera.bottom=-hh-d;
     cap3d.camera.updateProjectionMatrix();
@@ -5012,6 +5025,8 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       }
     });
     const counts=new Map();
+    const posAlive=new Map();
+    players.forEach(function(pl){if(pl&&!pl.bankrupt)posAlive.set(pl.pos,(posAlive.get(pl.pos)||0)+1);});
     players.forEach(function(pl){
       if(!pl)return;
       let slot=cap3d.tokens.get(pl.id);
@@ -5019,10 +5034,8 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       const aliveP=!pl.bankrupt;
       slot.group.visible=aliveP&&players.length>0;
       if(!aliveP)return;
-      try{
-        slot.body.material.color.set(pl.color||"#f4c95d");
-        slot.cap.material.color.set(pl.color||"#f4c95d");
-      }catch(_){}
+      const col=pl.color||"#f4c95d";
+      if(slot._col!==col){slot._col=col;try{slot.body.material.color.set(col);slot.cap.material.color.set(col);}catch(_){}}
       const key=String(playerLabel(pl))+"|"+(pl.color||"");
       if(force||cap3d.lastTokSig.get(pl.id)!==key){
         cap3d.lastTokSig.set(pl.id,key);
@@ -5038,7 +5051,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
         }catch(_){}
       }
       const idx=counts.get(pl.pos)||0;counts.set(pl.pos,idx+1);
-      const totalHere=players.filter(function(q){return q&&!q.bankrupt&&q.pos===pl.pos;}).length||1;
+      const totalHere=posAlive.get(pl.pos)||1;
       const ang=(totalHere<=1)?0:(idx/totalHere)*Math.PI*2;
       const rad=totalHere<=1?0:0.23;
       const base=cap3dBoardXZ(((Number(pl.pos)||0)%40+40)%40);
@@ -5089,7 +5102,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       };
       try{
         const slot=cap3d.tokens.get(p.id);
-        const reduced=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const reduced=cap3dReducedMotion;
         if(!slot||!slot.group||!slot.vis){done();return;}
         slot.group.visible=true;
         const finishAt=cap3dMoverTarget(p,finalPos);
@@ -5147,13 +5160,109 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       }catch(_){done();}
     });
   }
+  /* ---------- CAPITAL 3D FX LAYER (experimental, fully reversible) ----------
+     Visual-only effects. Each effect reads game state and animates 3D objects;
+     none writes game state or changes timing/logic. Wrapped entry points ALWAYS
+     run the original game function first, unchanged — the 3D effect is appended
+     afterwards and can never precede confirmation.
+     To remove this entire experiment: git reset --hard stable-3d-before-polish
+     (2D, rules, movement, multiplayer and Supabase are never touched here.) */
+  const cap3dFx={floaters:[],pulse:null,enabled:true};
+  function cap3dFxPruneFloaters(){
+    while(cap3dFx.floaters.length>4){
+      const f=cap3dFx.floaters.shift();
+      try{if(f.spr.parent)f.spr.parent.remove(f.spr);}catch(_){}
+      try{f.tex.dispose();}catch(_){}
+      try{f.mat.dispose();}catch(_){}
+    }
+  }
+  function cap3dFxFloat(pl,amount){
+    if(!cap3dFx.enabled)return;
+    if(boardView!=="3d"||!cap3d.ready||!cap3d.scene||!pl||!amount)return;
+    try{
+      const slot=cap3d.tokens.get(pl.id);
+      const at=slot&&slot.group?slot.group.position:{x:0,z:0};
+      const cv=document.createElement("canvas");cv.width=256;cv.height=96;
+      const ctx=cv.getContext("2d");
+      const txt=(amount>0?"+$":"−$")+Math.abs(Math.round(amount));
+      ctx.font="800 46px Inter,system-ui,sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";
+      ctx.lineWidth=7;ctx.strokeStyle="rgba(4,7,12,.9)";ctx.strokeText(txt,128,50);
+      ctx.fillStyle=amount>0?"#5ee3a0":"#ff8a96";ctx.fillText(txt,128,50);
+      const tex=new THREE.CanvasTexture(cv);tex.encoding=THREE.sRGBEncoding;
+      const mat=new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false});
+      const spr=new THREE.Sprite(mat);spr.scale.set(1.5,0.56,1);
+      spr.position.set(at.x,1.35,at.z);
+      cap3d.scene.add(spr);
+      cap3dFx.floaters.push({spr:spr,tex:tex,mat:mat,t0:performance.now(),life:1400});
+      cap3dFxPruneFloaters();
+    }catch(_){}
+  }
+  function cap3dFxPurchase(p,t){
+    if(!cap3dFx.enabled)return;
+    if(boardView!=="3d"||!cap3d.ready||!t)return;
+    try{
+      const entry=cap3d.tiles.get(Number(t.id));
+      if(!entry||!entry.ring)return;
+      cap3dFx.pulse={entry:entry,t0:performance.now(),life:900};
+    }catch(_){}
+  }
+  function cap3dFxTick(now,dt){
+    if(!cap3dFx.enabled)return;
+    if(boardView!=="3d"||!cap3d.ready||!cap3d.scene)return;
+    const reduced=cap3dReducedMotion;
+    try{
+      for(let i=cap3dFx.floaters.length-1;i>=0;i--){
+        const f=cap3dFx.floaters[i];
+        const k=(now-f.t0)/f.life;
+        if(k>=1){
+          try{if(f.spr.parent)f.spr.parent.remove(f.spr);}catch(_){}
+          try{f.tex.dispose();}catch(_){}
+          try{f.mat.dispose();}catch(_){}
+          cap3dFx.floaters.splice(i,1);continue;
+        }
+        f.spr.position.y+=dt*0.85;
+        f.mat.opacity=1-k*k;
+      }
+      const pu=cap3dFx.pulse;
+      if(pu&&pu.entry){
+        const k=(now-pu.t0)/pu.life;
+        if(k>=1){try{pu.entry.ring.scale.set(1,1,1);}catch(_){}cap3dFx.pulse=null;}
+        else{
+          const s=1+Math.sin(Math.PI*Math.min(1,k))*0.3;
+          try{pu.entry.ring.scale.set(s,s,1);}catch(_){}
+        }
+      }
+      if(!reduced){
+        const cur=players[turn];
+        if(cur&&!cur.bankrupt){
+          const slot=cap3d.tokens.get(cur.id);
+          if(slot&&slot.group&&slot.group.visible&&!slot.animating){
+            slot.group.position.y+=Math.sin(now/1000*2.1)*0.012;
+          }
+        }
+      }
+    }catch(_){}
+  }
+  // Confirmation hooks: original logic first, 3D effect after. Never reversed.
+  const __capFxOrigAcquired=showPropertyAcquiredFx;
+  showPropertyAcquiredFx=function(p,t){__capFxOrigAcquired(p,t);try{cap3dFxPurchase(p,t);}catch(_){}};
+  const __capFxOrigActionEvent=showActionEvent;
+  showActionEvent=function(kind,p,ev){
+    __capFxOrigActionEvent(kind,p,ev);
+    try{
+      if(boardView!=="3d"||!cap3d.ready)return;
+      const amt=ev&&ev.amount;
+      if(!amt)return;
+      if(kind==="rent"||kind==="tax"||kind==="go"||kind==="cardmoney"||kind==="jailfee")cap3dFxFloat(p,amt);
+    }catch(_){}
+  };
   function cap3dLoop(ts){
     if(!cap3d.running)return;
     cap3d.raf=requestAnimationFrame(cap3dLoop);
     try{
       if(boardView!=="3d"||!gameWrap||gameWrap.style.display==="none")return;
       const dt=Math.min(0.05,cap3d.lastTs?(ts-cap3d.lastTs)/1000:0.016);cap3d.lastTs=ts;
-      const reduced=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const reduced=cap3dReducedMotion;
       const c=cap3d.cam;
       const k=reduced?1:Math.min(1,dt*7);
       c.theta+=(c.tTheta-c.theta)*k;c.phi+=(c.tPhi-c.phi)*k;
@@ -5176,6 +5285,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
         slot.group.position.set(v.x,0.15+hop,v.z);
         if(slot.glow.visible&&!reduced)slot.glow.material.emissiveIntensity=0.65+Math.sin(t*4)*0.3;
       });
+      cap3dFxTick(ts,dt);
       const rolling=(state===STATES.ROLLING);
       cap3d.dice.forEach(function(d,i){
         if(!cap3d.scene)return;
@@ -5183,9 +5293,12 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
         d.mesh.visible=show;
         if(!show)return;
         if(rolling&&!reduced){
-          d.mesh.position.set(d.rest.x+Math.sin(t*7+i*2)*0.25,1.1+Math.abs(Math.sin(t*5+i))*0.5,d.rest.z+Math.cos(t*6+i)*0.25);
-          d.mesh.rotation.x+=dt*(6+i*2);d.mesh.rotation.y+=dt*(7-i*2);d.mesh.rotation.z+=dt*3;
+          if(!d.wasRolling){d.wasRolling=true;d.rollT0=ts;}
+          const b=cap3dFx.enabled?Math.min(1,(ts-d.rollT0)/200):1,lift=b*b;
+          d.mesh.position.set(d.rest.x+Math.sin(t*7+i*2)*0.25*lift,d.rest.y+(1.1-d.rest.y)*lift+Math.abs(Math.sin(t*5+i))*0.5*lift,d.rest.z+Math.cos(t*6+i)*0.25*lift);
+          d.mesh.rotation.x+=dt*(6+i*2)*lift;d.mesh.rotation.y+=dt*(7-i*2)*lift;d.mesh.rotation.z+=dt*3*lift;
         }else{
+          d.wasRolling=false;
           d.mesh.position.lerp(d.rest,Math.min(1,dt*4));
           d.mesh.quaternion.slerp(d.target,Math.min(1,dt*(reduced?10:3.2)));
         }
@@ -5285,7 +5398,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     }catch(_){}
     try{cap3dApplyVisibility();if(boardView==="3d")cap3dStart();}catch(_){}
   }
-  window.toggleBoardView=toggleBoardView;window.setBoardView=setBoardView;window.Cap3d={sync:function(){try{cap3dSync(true);}catch(_){}}};
+  window.toggleBoardView=toggleBoardView;window.setBoardView=setBoardView;window.Cap3d={sync:function(){try{cap3dSync(true);}catch(_){}},setFx:function(on){cap3dFx.enabled=!!on;return cap3dFx.enabled;}};
   /* ---------- Multiplayer trading (human-to-human, host-authoritative) ---------- */
   let mpLastTradeId=null;
   function mpTradeTiles(ids){return (Array.isArray(ids)?ids:[]).map(id=>TILES[Number(id)]).filter(t=>t&&["prop","station","util"].includes(t.type));}
