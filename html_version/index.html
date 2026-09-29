@@ -6697,42 +6697,75 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     const p=tokenPts&&tokenPts.get(id);
     return p?{x:p.x,y:p.y}:null;
   }
-  /* Step-by-step 2D movement, mirroring the 3D tile-by-tile path.
-     The piece now walks one tile at a time with a per-step ease and a small
-     hop, instead of sliding corner to corner in one 450ms tween, so a 7-step
-     roll reads as a walk rather than a jump. Every frame only writes a
-     compositor transform: positions come from the cached map, never from
-     getBoundingClientRect. */
+  /* Tile-by-tile 2D movement.
+
+     This used to ease a single straight line from the starting tile to the
+     destination: `x = fromX + (target.x-fromX)*ease(t)`. On a Monopoly board
+     that line cuts diagonally through the middle of the board, so the piece
+     ignored the perimeter it is supposed to walk and slid across open space.
+     The per-step hop hid some of it, but the piece still visibly left the
+     board's edge, which is what made 2D look broken next to 3D.
+
+     3D walks real waypoints: it builds a point per tile and moves along that
+     polyline at constant speed. This now does the same. Waypoints come from
+     the cached token map, so no layout is forced, and an arc-length table
+     keeps the travel speed even, so the piece never stalls on a tile corner
+     and never races through one.
+
+     The hop is per tile segment rather than per whole move, so it returns to
+     zero on every tile the way a footstep does, and the piece squashes on
+     landing. Timing mirrors cap3dAnimateMove3D so a move takes the same
+     wall-clock time in both views. */
   function animatePieceTo(tileId,done){
-    const target=tokenPoint(tileId);
-    if(!target||!movingPieceEl){done?.();return;}
+    if(!movingPieceEl){done?.();return;}
     const fromX=parseFloat(movingPieceEl.dataset.x||"0");
     const fromY=parseFloat(movingPieceEl.dataset.y||"0");
-    const start=performance.now();
-    // Match the 3D feel: fast enough to stay snappy in normal play, quicker
-    // when the player selects fast pace.
-    const perStep=isFast()?52:78;
-    // Walk the shortest way round, consistent with the tile sequence the game
-    // already computed, so the piece never appears to go backwards.
     const steps=Math.max(1,moveStepCount);
-    const duration=perStep*steps;
+    const fromPos=((Number(movingPieceEl.dataset.fromPos)||0)%40+40)%40;
+
+    // Waypoints: current visual position, then the centre of every tile the
+    // piece lands on, ending on the exact slot the 3D view would settle into.
+    const nodes=[{x:fromX,y:fromY}];
+    for(let k=1;k<=steps;k++){
+      const pt=tokenPoint((fromPos+k)%40);
+      if(!pt){done?.();return;}
+      nodes.push({x:pt.x,y:pt.y});
+    }
+
+    // Arc-length table: constant speed along the polyline. Easing is applied to
+    // distance travelled, not per segment, so velocity never drops to zero at a
+    // tile boundary.
+    const cum=[0];
+    for(let s=1;s<nodes.length;s++)cum.push(cum[s-1]+Math.hypot(nodes[s].x-nodes[s-1].x,nodes[s].y-nodes[s-1].y));
+    const L=cum[cum.length-1];
+    const last=nodes[nodes.length-1];
+    if(!(L>0.5)){movingPieceEl.style.setProperty("transform",`translate3d(${last.x}px,${last.y}px,0) scale(1)`,"important");movingPieceEl.dataset.x=String(last.x);movingPieceEl.dataset.y=String(last.y);done?.();return;}
+
+    const pace=isFast()?.6:1;
+    // Same curve as cap3dAnimateMove3D, so both views move at the same pace.
+    const duration=Math.min(2400*pace,Math.max(420*pace,(300+steps*135)*pace));
     const reduced=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const t0=performance.now();
+    const ease=t=>t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+
     const frame=ts=>{
       if(!movingPieceEl||!movingPieceEl.isConnected){done?.();return;}
-      const t=Math.min(1,(ts-start)/duration);
-      // Position along the whole path, eased globally so the piece accelerates
-      // out of the first tile and settles onto the last one.
-      const e=1-Math.pow(1-t,3);
-      const x=fromX+(target.x-fromX)*e;
-      const y=fromY+(target.y-fromY)*e;
-      // Hop and squash per step rather than across the whole move, so each tile
-      // the piece lands on gets its own beat.
-      const hop=reduced?0:Math.sin(Math.PI*t*steps)*-6*(1-t*0.55);
-      const scale=reduced?1:1+Math.sin(Math.PI*t*steps)*.05*(1-t*0.4);
+      const t=Math.min(1,(ts-t0)/duration);
+      const d=ease(t)*L;
+      let si=0;
+      while(si<cum.length-2&&cum[si+1]<d)si++;
+      const segLen=Math.max(1e-6,cum[si+1]-cum[si]);
+      const f=Math.min(1,Math.max(0,(d-cum[si])/segLen));
+      const a=nodes[si],b=nodes[si+1];
+      const x=a.x+(b.x-a.x)*f,y=a.y+(b.y-a.y)*f;
+      // One hop per tile: it starts and ends at the tile centre and peaks in
+      // between, so the beat reads as a footstep instead of one long bob.
+      const hop=reduced?0:Math.sin(Math.PI*f)*-5;
+      const scale=reduced?1:1+Math.sin(Math.PI*f)*.05;
       movingPieceEl.style.setProperty("transform",`translate3d(${x}px,${y+hop}px,0) scale(${scale})`,"important");
       if(t<1){scheduleFrame(frame);return;}
-      movingPieceEl.style.setProperty("transform",`translate3d(${target.x}px,${target.y}px,0) scale(1)`,"important");
-      movingPieceEl.dataset.x=String(target.x);movingPieceEl.dataset.y=String(target.y);
+      movingPieceEl.style.setProperty("transform",`translate3d(${last.x}px,${last.y}px,0) scale(1)`,"important");
+      movingPieceEl.dataset.x=String(last.x);movingPieceEl.dataset.y=String(last.y);
       done?.();
     };
     scheduleFrame(frame);
@@ -6753,6 +6786,8 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     boardEl.appendChild(movingPieceEl);
     const startPoint=tokenPoint(fromPos),targetPoint=tokenPoint(finalPos);
     if(!startPoint||!targetPoint){clearMovingPiece();return;}
+    // The walk path is rebuilt from the tile the piece left, so remember it.
+    movingPieceEl.dataset.fromPos=String(fromPos);
     movingPieceEl.style.setProperty("transform",`translate3d(${startPoint.x}px,${startPoint.y}px,0) scale(1)`,"important");
     movingPieceEl.dataset.x=String(startPoint.x);
     movingPieceEl.dataset.y=String(startPoint.y);
