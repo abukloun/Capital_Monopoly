@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Dependencies / build (none today — pure static, but keep ready)
+node_modules/
+.vercel/
+
+# Local env
+.env
+.env.local
+*.local
