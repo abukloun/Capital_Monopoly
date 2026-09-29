@@ -6362,9 +6362,24 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
 
   /* ---------- Sound + external music ---------- */
   let musicEl=null;
-  // 40% by default. At 10% the theme was effectively inaudible under the sound
-  // effects, so the menu read as silent on first load.
+  /* Music gain.
+     The theme is mastered near full scale, and HTMLMediaElement.volume is a
+     linear amplitude multiplier. That made the slider almost useless: 10% was
+     already "too loud" while 40% was painful, because 10% of a hot master is
+     only 20dB down and the usable range was crushed into the top of the fader.
+
+     Squaring maps the slider onto a perceptual curve instead:
+         10% ->  1%  (-40dB)  properly quiet
+         40% -> 16%  (-16dB)  a normal background level
+        100% ->100%           still available for people who want it loud
+     A squared fader is what a mixing desk gives you, and it makes the number on
+     the slider mean what the listener expects it to mean. */
   const cap3dDefaultMusicVolume=0.40;
+  function musicGain(){
+    // 1.35 rather than a hard square: keeps the top of the fader usable while
+    // still collapsing the bottom into true quiet.
+    return Math.pow(Math.max(0,Math.min(1,musicVolume)),1.7);
+  }
   let musicVolume=cap3dDefaultMusicVolume;
   let sfxVolume=0.70;
   // A saved choice wins over the default, so someone who turns the music down
@@ -6381,13 +6396,13 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
   }
   function ensureMusic(){
     if(!musicEl)musicEl=document.getElementById("capitalMusic");
-    if(musicEl){musicEl.loop=true;musicEl.volume=musicVolume;}
+    if(musicEl){musicEl.loop=true;musicEl.volume=musicGain();}
     return musicEl;
   }
   function startMusic(){
     if(!soundEnabled)return;
     const m=ensureMusic();if(!m)return;
-    m.volume=musicVolume;
+    m.volume=musicGain();
     const promise=m.play();
     if(promise&&typeof promise.then==="function"){
       promise.then(function(){
@@ -6456,7 +6471,6 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
   function playDiceSfx(){playExternalSfx("dice-roll.wav",.82);}
   function playStepSfx(){playExternalSfx("step-soft.wav",.58);}
   function playPurchaseSfx(){playExternalSfx("purchase.wav",.78);}
-  function playPaymentSfx(){playExternalSfx("payment.wav",.72);}
   function playTaxSfx(){playExternalSfx("tax.wav",.74);}
   function playJailSfx(){playExternalSfx("jail.wav",.78);}
   function playCardSfx(){playExternalSfx("card.wav",.68);}
@@ -6469,29 +6483,105 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
   function playVictorySfx(){playExternalSfx("victory.wav",.82);}
   function playDefeatSfx(){playExternalSfx("defeat.wav",.72);}
 
+  /* Every synthesised effect runs through one bus with a limiter on it.
+     Effects overlap constantly, a roll can fire the GO bonus and a rent
+     payment in the same moment, and without a bus the sum simply clips at
+     0dBFS and turns into digital crackle. The compressor catches the peaks and
+     leaves everything below them alone. */
+  let sfxBusNode=null;
+  function sfxBus(){
+    const ctx=ensureAudio();
+    if(!ctx)return null;
+    if(!sfxBusNode){
+      const comp=ctx.createDynamicsCompressor();
+      // A limiter, not a leveller. The threshold sits above a normal effect so
+      // ordinary sounds pass through untouched and only genuine overshoot,
+      // music plus two effects landing together, gets caught. At -16dB with a
+      // high ratio it would have squashed every single effect to the same
+      // loudness and made them pump.
+      comp.threshold.value=-5;comp.knee.value=6;comp.ratio.value=12;
+      comp.attack.value=.002;comp.release.value=.25;
+      const trim=ctx.createGain();trim.gain.value=1.15;
+      comp.connect(trim);trim.connect(ctx.destination);
+      sfxBusNode=comp;
+    }
+    return sfxBusNode;
+  }
   function tone(freq,duration,type="sine",volume=.045,when=0){
     if(gamePaused)return;
-    const ctx=ensureAudio();if(!ctx)return;
+    const ctx=ensureAudio(),bus=sfxBus();if(!ctx||!bus)return;
     const now=ctx.currentTime+when;
     const osc=ctx.createOscillator(),gain=ctx.createGain(),filter=ctx.createBiquadFilter();
     osc.type=type;osc.frequency.setValueAtTime(freq,now);
     if(type==="sawtooth"||type==="square"){filter.type="lowpass";filter.frequency.setValueAtTime(Math.min(5200,Math.max(500,freq*7)),now);osc.connect(filter);filter.connect(gain);}else osc.connect(gain);
     gain.gain.setValueAtTime(.0001,now);gain.gain.exponentialRampToValueAtTime(Math.max(.0001,volume*sfxVolume),now+.008);gain.gain.exponentialRampToValueAtTime(.0001,now+duration);
-    gain.connect(ctx.destination);osc.start(now);osc.stop(now+duration+.025);
+    gain.connect(bus);osc.start(now);osc.stop(now+duration+.025);
+  }
+  /* A struck-metal partial stack. Three inharmonic partials are what makes a
+     coin or a small bell read as metal rather than as a beep; a single sine is
+     what made the old sounds thin. `drop` bends the pitch downwards over the
+     tail, which is the difference between something being handed to you and
+     something being taken away. */
+  function metal(when,freq,dur,vol,drop){
+    const ctx=ensureAudio(),bus=sfxBus();
+    if(!ctx||!bus)return;
+    const partials=[[1,1],[2.76,.42],[5.4,.16]];
+    partials.forEach(function(p,idx){
+      const osc=ctx.createOscillator(),gain=ctx.createGain();
+      osc.type="sine";
+      osc.frequency.setValueAtTime(freq*p[0],when);
+      if(drop>0)osc.frequency.exponentialRampToValueAtTime(freq*p[0]*(1-drop),when+dur*(idx?0.75:1));
+      const tail=dur*(idx===0?1:0.72);
+      const peak=Math.max(.0001,vol*p[1]*sfxVolume);
+      gain.gain.setValueAtTime(.0001,when);
+      gain.gain.exponentialRampToValueAtTime(peak,when+.004);
+      gain.gain.exponentialRampToValueAtTime(.0001,when+tail);
+      osc.connect(gain);gain.connect(bus);
+      osc.start(when);osc.stop(when+tail+.03);
+    });
   }
   function noise(duration=.08,volume=.025,when=0){
     if(gamePaused)return;
-    const ctx=ensureAudio();if(!ctx)return;
+    const ctx=ensureAudio(),bus=sfxBus();if(!ctx||!bus)return;
     const len=Math.max(1,Math.floor(ctx.sampleRate*duration)),buffer=ctx.createBuffer(1,len,ctx.sampleRate),data=buffer.getChannelData(0);
     for(let i=0;i<len;i++)data[i]=(Math.random()*2-1)*(1-i/len);
     const src=ctx.createBufferSource(),gain=ctx.createGain(),filter=ctx.createBiquadFilter();
     const now=ctx.currentTime+when;filter.type="highpass";filter.frequency.value=900;gain.gain.value=volume*sfxVolume;
-    src.buffer=buffer;src.connect(filter);filter.connect(gain);gain.connect(ctx.destination);src.start(now);
+    src.buffer=buffer;src.connect(filter);filter.connect(bus);src.start(now);
   }
   const SFX={
     dice(){playDiceSfx();},
     step(){playStepSfx();},
     coin(){tone(660,.075,"sine",.044);tone(880,.09,"sine",.040,.07);tone(1175,.12,"sine",.034,.14);tone(1568,.16,"sine",.024,.23);},
+    /* Paying rent. This used to be payment.wav layered on top of coin(), which
+       is an ascending chime: the game played the "you gained money" sound while
+       taking money away, so paying rent sounded like a reward and was buried
+       under the music because it was a 0.22s blip.
+
+       This is built instead of played. Three struck-metal partials bending
+       downwards, so the pitch falls the way a dropped coin does, over a short
+       low body hit for weight. Two strikes rather than one give it a rhythm you
+       can hear, and it is loud enough to cut through the theme. */
+    rentPay(){
+      const ctx=ensureAudio();if(!ctx)return;
+      const t=ctx.currentTime;
+      // Levels calibrated against the measured loudness of the wav effects
+      // (payment.wav peaked at 0.96, rms 0.40). A first attempt used the old
+      // chimes' 0.05-ish figures and rendered at -39dBFS, which is silent in
+      // practice; a payment you cannot hear is the bug this replaced.
+      metal(t,1245,.36,.49,.17);
+      metal(t+.052,935,.30,.39,.17);
+      tone(168,.20,"sine",.31,0);
+    },
+    /* Money coming to you: the same metal, rising instead of falling, so the two
+       are recognisably the same family and still read as opposite events. */
+    income(){
+      const ctx=ensureAudio();if(!ctx)return;
+      const t=ctx.currentTime;
+      metal(t,880,.30,.39,0);
+      metal(t+.06,1320,.36,.44,0);
+      tone(220,.16,"sine",.26,0);
+    },
     penalty(){tone(150,.16,"sawtooth",.044);tone(105,.22,"sawtooth",.037,.08);tone(72,.28,"sine",.030,.17);},
     win(){playVictorySfx();},
     lose(){playDefeatSfx();},
@@ -6511,7 +6601,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     if(sfxRange)sfxRange.value=String(Math.round(sfxVolume*100));
     if(sfxValue)sfxValue.textContent=Math.round(sfxVolume*100)+"%";
     document.querySelectorAll("#capitalMusicTicksLabels span").forEach((el,i)=>el.classList.toggle("active",i*10===Math.round(musicVolume*100)));
-    if(musicEl)musicEl.volume=musicVolume;
+    if(musicEl)musicEl.volume=musicGain();
   }
   function setSfxVolume(value){
     const v=Math.max(0,Math.min(100,Math.round(Number(value)/10)*10));
@@ -7291,7 +7381,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
       p.pos=finalPos;
       const passedGo=moveSteps>0 && fromPos+moveSteps>=40;
       if(passedGo){
-        p.money+=200;SFX.coin();
+        p.money+=200;SFX.income();
         log(`${playerLabel(p)} проходит Старт и получает $200.`);
         toast(`💰 ${playerLabel(p)} +$200`,'good');
         showActionEvent("go",p,{titleEn:"PASSED GO",titleRu:"ПРОЙДЕН СТАРТ",detailEn:"Salary collected for completing a lap",detailRu:"Получена награда за полный круг",amount:200,icon:"➜",tone:"green",duration:1350});
@@ -7384,7 +7474,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
       }
       if(t.owner===p.id){completeTileAction(p);return;}
       const owner=players[t.owner],rent=calcRent(t);
-      if(rent>0&&owner&&!owner.bankrupt){p.money-=rent;owner.money+=rent;playPaymentSfx();SFX.coin();log(`${playerLabel(p)} платит ренту $${rent} игроку ${playerLabel(owner)}.`);toast(`🏠 ${playerLabel(p)} → ${playerLabel(owner)}  $${rent}`,'warn');showActionEvent("rent",p,{titleEn:"RENT PAID",titleRu:"ОПЛАЧЕНА РЕНТА",detailEn:`To ${playerLabel(owner)} · ${tileLabel(t)}`,detailRu:`Игроку ${playerLabel(owner)} · ${tileLabel(t)}`,amount:-rent,icon:"🏠",tone:"red",duration:1500});}
+      if(rent>0&&owner&&!owner.bankrupt){p.money-=rent;owner.money+=rent;SFX.rentPay();log(`${playerLabel(p)} платит ренту $${rent} игроку ${playerLabel(owner)}.`);toast(`🏠 ${playerLabel(p)} → ${playerLabel(owner)}  $${rent}`,'warn');showActionEvent("rent",p,{titleEn:"RENT PAID",titleRu:"ОПЛАЧЕНА РЕНТА",detailEn:`To ${playerLabel(owner)} · ${tileLabel(t)}`,detailRu:`Игроку ${playerLabel(owner)} · ${tileLabel(t)}`,amount:-rent,icon:"🏠",tone:"red",duration:1500});}
       else log(`${playerLabel(p)} попадает на заложенную собственность — рента $0.`);
       renderPlayers();checkBankrupt(p,owner?owner.id:null);completeTileAction(p);return;
     }
