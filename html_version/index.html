@@ -3847,12 +3847,19 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   let audioCtx = null;
   let devDiceOverride = null;
   let gameLog = [];
-  let authoritativeModalHtml = "";
+  /* Authoritative turn-dialog STATE, never markup.
+     The host used to ship its own modalRoot.innerHTML to every guest, which
+     meant any unescaped value that reached that DOM (a nickname, a card text,
+     a tile name) executed as HTML in all other players' browsers. The host now
+     sends only the small set of facts needed to rebuild the dialog, and each
+     client renders it with the same builder the host would have used, escaping
+     locally in its own language. */
+  let authoritativeModalData = null;
 
   /* ---------- Realtime multiplayer ---------- */
   const mp = {
     active:false, host:false, room:"", clientId:("c_"+Math.random().toString(36).slice(2,10)),
-    channel:null, members:[], pendingStart:null, lastSnapshot:"", lastModalHtml:"", connected:false, publishTimer:null, auctionTimer:null, snapshotSeq:0, lastAppliedSeq:0, pendingSnapshotSeq:0, realtimeStateSeq:0, lastRealtimeStateSeq:0, syncTimer:null
+    channel:null, members:[], pendingStart:null, lastSnapshot:"", lastModalSig:"", connected:false, publishTimer:null, auctionTimer:null, snapshotSeq:0, lastAppliedSeq:0, pendingSnapshotSeq:0, realtimeStateSeq:0, lastRealtimeStateSeq:0, syncTimer:null
   };
   function mpLocalPlayer(){return players.find(p=>p&&p.mpClientId===mp.clientId)||null;}
   function mpIsLocalPlayer(p){return !!(p&&mp.active&&p.mpClientId===mp.clientId);}
@@ -4108,7 +4115,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       mpTeardownTransport();
       mp.room=code;mp.host=!!host;mp.localName=(name||"Player").trim().slice(0,16)||"Player";
       if(!restoreSession||!mp.joinedAt)mp.joinedAt=Date.now();
-      mp.active=true;mp.connected=false;mp.snapshotSeq=0;mp.lastAppliedSeq=0;mp.pendingSnapshotSeq=0;mp.realtimeStateSeq=0;mp.lastRealtimeStateSeq=0;mpEventSeq=0;mp.lastModalHtml="";mp.authoritativeModalHtml="";mpPendingTrade=null;mpLastTradeId=null;mp.members=host?[{clientId:mp.clientId,name:mp.localName,host:true,joinedAt:mp.joinedAt}]:[];
+      mp.active=true;mp.connected=false;mp.snapshotSeq=0;mp.lastAppliedSeq=0;mp.pendingSnapshotSeq=0;mp.realtimeStateSeq=0;mp.lastRealtimeStateSeq=0;mpEventSeq=0;mp.lastModalSig="";mpPendingTrade=null;mpLastTradeId=null;mp.members=host?[{clientId:mp.clientId,name:mp.localName,host:true,joinedAt:mp.joinedAt}]:[];
       mpPersistSession();
       await mpSubscribeChannel();
       if(host){
@@ -4276,7 +4283,8 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       tiles:TILES.map(t=>({id:t.id,owner:t.owner,houses:t.houses||0,hotel:!!t.hotel,mortgaged:!!t.mortgaged})),
       turn,state,lastRollTotal,lastDice:[...lastDice],extraTurnPending,completedRounds,totalTurns,fastPace,
       modalKind:(sharedModal||turnBoundModal)?(modalKind||null):null,
-      modalHtml:(modalKind!=="auction"&&(sharedModal||turnBoundModal))?(authoritativeModalHtml||modalRoot?.innerHTML||""):"",
+      // State only, never host markup. See authoritativeModalData.
+      modalData:(modalKind!=="auction"&&(sharedModal||turnBoundModal))?authoritativeModalData:null,
       modalOwnerClientId:turnPlayer?.mpClientId||null,
       movement:mpAuthoritativeMovement?{...mpAuthoritativeMovement}:null,
       logHistory:gameLog.slice(-80),
@@ -4399,7 +4407,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
         const at=TILES[Number(s.auction.tileId)];
         if(at){
           activeAuction={tile:at,turnPlayer:players.find(x=>x&&x.id===s.auction.turnPlayerId)||currentPlayer(),currentBid:Number(s.auction.currentBid)||0,highestBidder:s.auction.highestBidder==null?null:Number(s.auction.highestBidder),closed:false,endsAt:performance.now()+Math.max(0,Number(s.auction.remainingMs)||0),lastBidAt:performance.now(),history:Array.isArray(s.auction.history)?s.auction.history:[],bots:[],botTimers:new Set(),rafIds:new Set()};
-          modalRoot.innerHTML="";modalOpen=false;modalKind=null;mp.lastModalHtml="";
+          modalRoot.innerHTML="";modalOpen=false;modalKind=null;mp.lastModalSig="";
           renderAuction(activeAuction);
           const timer=modalRoot.querySelector("#auctionTimer");
           if(timer){clearInterval(mp.auctionTimer);mp.auctionTimer=setInterval(()=>{if(!activeAuction||activeAuction.closed||!modalOpen||modalKind!=="auction"){clearInterval(mp.auctionTimer);return;}const left=Math.max(0,activeAuction.endsAt-performance.now());const sec=Math.ceil(left/1000);timer.textContent=String(sec);timer.classList.toggle("danger",sec<=3);},120);}
@@ -4417,25 +4425,77 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     // Guests build their own game-over screen (their own place, working buttons)
     // instead of copying the host's HTML, whose buttons are not bound here.
     if(!mp.host&&s.modalKind==="gameover"){
-      if(modalKind!=="gameover"){mp.lastModalHtml="";const a=alive();showGameOver(a.length===1?a[0]:([...a].sort((x,y)=>(y.money||0)-(x.money||0))[0]||null));}
+      if(modalKind!=="gameover"){mp.lastModalSig="";const a=alive();showGameOver(a.length===1?a[0]:([...a].sort((x,y)=>(y.money||0)-(x.money||0))[0]||null));}
       return;
     }
     if(!s.auction){
-      const html=shouldShowModal?(s.modalHtml||""):"";
-      if(html!==mp.lastModalHtml || (!html&&modalOpen&&modalKind!=="auction")){
-        mp.lastModalHtml=html;
+      // Rebuild the dialog locally from the host's state. No host markup is
+      // inserted into this document at any point.
+      const data=shouldShowModal?(s.modalData||null):null;
+      const sig=data?mpModalSig(data):"";
+      if(sig!==mp.lastModalSig || (!sig&&modalOpen&&modalKind!=="auction")){
+        mp.lastModalSig=sig;
+        const html=data?mpRenderModal(data):"";
         modalRoot.innerHTML=html;
         modalOpen=!!html;
-        modalKind=shouldShowModal?(s.modalKind||null):null;
+        modalKind=html?(data.kind||s.modalKind||null):null;
         mpBindRemoteModalActions();
       }
     }
     if(!mp.host&&s.auction){modalKind="auction";modalOpen=true;}
-    if(!s.auction&&modalKind==="auction"){activeAuction=null;clearInterval(mp.auctionTimer);modalRoot.innerHTML="";modalOpen=false;modalKind=null;mp.lastModalHtml="";}
+    if(!s.auction&&modalKind==="auction"){activeAuction=null;clearInterval(mp.auctionTimer);modalRoot.innerHTML="";modalOpen=false;modalKind=null;mp.lastModalSig="";}
     mpPendingTrade=s.trade?{...s.trade,giveTileIds:[...(s.trade.giveTileIds||[])],getTileIds:[...(s.trade.getTileIds||[])]}:null;
     try{refreshDevPlayers();}catch(_){}
     try{syncActionPanel();}catch(_){}
     if(!mp.host)syncMpTradeModal();
+  }
+  /* ---- Remote turn dialogs: render from state, never from host markup ----
+     mpRenderModal rebuilds a dialog with this client's own language and its own
+     escapeHtml calls, using the same builder the host would have used. The
+     builder re-reads live state (prices, money, jail cards) rather than being
+     told a price by the host, so a lying host cannot display a fabricated
+     dialog to anyone. */
+  function mpModalSig(d){
+    if(!d)return "";
+    const t=d.kind==="buy"?TILES[Number(d.tileId)]:null;
+    const p=players.find(x=>x&&x.id===Number(d.playerId))||currentPlayer();
+    return [d.kind,d.tileId,d.deck,d.index,p?p.money:"",p?p.getOutCards:""].join("|");
+  }
+  function mpRenderModal(d){
+    try{
+      const kind=d&&d.kind;
+      if(kind==="jail"){
+        const p=currentPlayer();
+        if(!p)return "";
+        return `<div class="modal-bg"><div class="modal"><h3>🔒 ${lang==="en"?"You're in Jail":"Вы в тюрьме"}</h3><p>${lang==="en"?"Choose how to leave.":"Выберите способ выхода."}</p><div class="modal-btns" style="flex-wrap:wrap"><button class="btn yes" id="jRoll">🎲 ${lang==="en"?"Roll for double":"Бросить на дубль"}</button><button class="btn no" id="jPay" ${p.money<50?"disabled":""}>💵 $50</button>${p.getOutCards?`<button class="btn no" id="jCard">🎟 ${lang==="en"?"Get Out Free":"Выйти бесплатно"}</button>`:""}</div></div></div>`;
+      }
+      if(kind==="buy"){
+        const t=TILES[Number(d.tileId)];
+        if(!t||t.owner!=null)return "";
+        const p=players.find(x=>x&&x.id===Number(d.playerId))||currentPlayer();
+        if(!p)return "";
+        const isProp=t.type==="prop";
+        const color=GROUP_UI[t.group]||"#6d7cff";
+        const glow=(GROUP_UI[t.group]||"#6d7cff")+"55";
+        const progress=isProp?propertyGroupProgress(t,p.id):{owned:0,total:0,complete:false};
+        const groupLine=isProp?`${progress.owned} / ${progress.total} ${lang==="en"?"properties in group":"в группе"}`:"";
+        const houseCost=isProp?HOUSE_COST[t.group]:0;
+        const rentLine=isProp?`<div class="capital-monopoly-card"><div class="capital-monopoly-head"><span>${lang==="en"?"MONOPOLY PROGRESS":"ПРОГРЕСС МОНОПОЛИИ"}</span><strong>${escapeHtml(groupLine)}</strong></div><div class="capital-monopoly-track"><div class="capital-monopoly-fill" style="--property-color:${color};--property-glow:${glow};width:${progress.total?Math.round(progress.owned/progress.total*100):0}%"></div></div></div>${propertyRentLadderHtml(t)}`:"";
+        const extra=isProp?`<div class="capital-property-stats"><div class="capital-property-stat"><span>${lang==="en"?"Base rent":"Базовая рента"}</span><strong>$${t.rent}</strong></div><div class="capital-property-stat"><span>${lang==="en"?"Monopoly rent":"Рента монополии"}</span><strong>$${t.rent*2}</strong></div><div class="capital-property-stat"><span>${lang==="en"?"House cost":"Дом"}</span><strong>$${houseCost}</strong></div></div>`:`<div class="capital-property-stats"><div class="capital-property-stat"><span>${lang==="en"?"Purchase":"Покупка"}</span><strong>$${t.price}</strong></div><div class="capital-property-stat"><span>${lang==="en"?"Current rent":"Текущая рента"}</span><strong>$${calcRent(t)}</strong></div><div class="capital-property-stat"><span>${lang==="en"?"Type":"Тип"}</span><strong>${escapeHtml(propertyGroupLabel(t))}</strong></div></div>`;
+        return `<div class="modal-bg capital-property-modal-bg" data-action-close="1" data-tile-id="${t.id}"><div class="modal capital-property-modal" style="--property-color:${color};--property-glow:${glow}"><div class="capital-property-hero"><div class="capital-property-kicker"><span class="capital-property-swatch" style="background:${color}"></span>${escapeHtml(propertyGroupLabel(t))}</div><div class="capital-property-title">${escapeHtml(tileLabel(t))}</div><div class="capital-property-price">$${t.price}</div><div class="capital-property-owner"><span class="capital-property-owner-dot" style="background:${color}"></span>${lang==="en"?"Available to buy":"Свободно для покупки"}</div></div><div class="capital-property-body">${extra}${rentLine}<div class="capital-property-actions"><button class="btn yes capital-property-buy capital-primary-action" id="buyYes" ${p.money<t.price?"disabled":""}>💰 ${lang==="en"?`Buy for $${t.price}`:`Купить за $${t.price}`}</button><button class="btn no capital-property-auction" id="buyNo">${lang==="en"?"↳ Skip purchase → auction":"↳ Не покупать → аукцион"}</button><button class="btn no" id="buyClose">✕ ${T("close")}</button></div><p class="capital-property-note">${lang==="en"?"If you skip a free property, it immediately goes to a live auction. Every bid resets the timer.":"Если отказаться от свободной недвижимости, она сразу отправляется на живой аукцион. Каждая ставка сбрасывает таймер."}</p></div></div></div>`;
+      }
+      if(kind==="card"){
+        const table=d.deck==="chance"?CHANCE_CARDS:CHEST_CARDS;
+        const raw=table[Number(d.index)];
+        if(!raw)return "";
+        const card={...raw,deck:d.deck,index:Number(d.index)};
+        const p=players.find(x=>x&&x.id===Number(d.playerId))||currentPlayer();
+        if(!p)return "";
+        const deckName=d.deck==="chance"?T("chance"):T("chest");
+        return `<div class="modal-bg"><div class="modal capital-card-modal capital-card-${d.deck==="chance"?"chance":"chest"}"><div class="capital-card-kicker">${d.deck==="chance"?"❓":"📦"} ${escapeHtml(deckName)}</div><p class="capital-card-text">${escapeHtml(cardLabel(card))}</p>${cardAmountHtml(card,p)}<div class="modal-btns"><button class="btn yes" id="cardOk">${T("ok")}</button></div></div></div>`;
+      }
+    }catch(e){console.warn("CAPITAL remote modal render failed",e);}
+    return "";
   }
   function mpBindRemoteModalActions(){
     if(mp.host||!mp.active)return;
@@ -6946,9 +7006,9 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
   window.rollAndMove=(p,isJailRoll=false)=>{if(p&&players[turn]===p&&(!mp.active||(mp.host&&mpIsLocalPlayer(p)))&&!modalOpen&&state!==STATES.GAME_OVER){if(state!==STATES.WAITING_FOR_ROLL)state=STATES.WAITING_FOR_ROLL;beginTurnRoll(p,isJailRoll);}};
 
   /* ---------- Actions / modals ---------- */
-  function clearModal(root=modalRoot){if(root)root.innerHTML="";if(root===modalRoot){authoritativeModalHtml="";if(modalKind==="card")mpPendingCard=null;modalOpen=false;modalKind=null;updateBadge();}}
+  function clearModal(root=modalRoot){if(root)root.innerHTML="";if(root===modalRoot){authoritativeModalData=null;if(modalKind==="card")mpPendingCard=null;modalOpen=false;modalKind=null;updateBadge();}}
   function openModal(html,kind,root=modalRoot){
-    if(root===modalRoot&&modalOpen)return null;if(root===modalRoot)authoritativeModalHtml="";root.innerHTML=html;if(root===modalRoot){modalOpen=true;modalKind=kind;updateBadge();}return root.querySelector(".modal-bg");
+    if(root===modalRoot&&modalOpen)return null;if(root===modalRoot)authoritativeModalData=null;root.innerHTML=html;if(root===modalRoot){modalOpen=true;modalKind=kind;updateBadge();}return root.querySelector(".modal-bg");
   }
   function closeHumanAction(p,action){
     if(!validTurn(p)||state!==STATES.TILE_ACTION)return;clearModal();if(typeof action==="function")action();else completeTileAction(p);
@@ -6958,9 +7018,13 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     const remoteTurn=mp.active&&mp.host&&!mpIsLocalPlayer(p);
     const jailHtml=`<div class="modal-bg"><div class="modal"><h3>🔒 ${lang==="en"?"You're in Jail":"Вы в тюрьме"}</h3><p>${lang==="en"?"Choose how to leave.":"Выберите способ выхода."}</p><div class="modal-btns" style="flex-wrap:wrap"><button class="btn yes" id="jRoll">🎲 ${lang==="en"?"Roll for double":"Бросить на дубль"}</button><button class="btn no" id="jPay" ${p.money<50?"disabled":""}>💵 $50</button>${p.getOutCards?`<button class="btn no" id="jCard">🎟 ${lang==="en"?"Get Out Free":"Выйти бесплатно"}</button>`:""}</div></div></div>`;
     if(remoteTurn){
-      authoritativeModalHtml=jailHtml;modalRoot.innerHTML="";modalOpen=false;modalKind="jail";updateBadge();mpPublishSnapshot(true);return;
+      // Facts only: the guest rebuilds the dialog with its own language and
+      // its own escaping. p.money/getOutCards are read from the player's
+      // already-applied state on the guest, so nothing is sent here.
+      authoritativeModalData={kind:"jail"};
+      modalRoot.innerHTML="";modalOpen=false;modalKind="jail";updateBadge();mpPublishSnapshot(true);return;
     }
-    authoritativeModalHtml="";
+    authoritativeModalData=null;
     const root=openModal(jailHtml,"jail");
     if(!root)return;
     root.querySelector("#jRoll").onclick=()=>{if(remoteTurn)return;clearModal();beginTurnRoll(p,true);};
@@ -7034,9 +7098,9 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     // but must NOT display that modal to the host. The actual player receives
     // the same HTML in the next snapshot and sees it locally.
     if(remoteTurn){
-      // Keep the authoritative modal only in memory. Never put it into the
-      // host DOM: otherwise the host sees the remote player's purchase dialog.
-      authoritativeModalHtml=buyModalHtml;
+      // Keep the authoritative dialog as state only. Never host markup: the
+      // host must not render this locally, and the guest renders its own.
+      authoritativeModalData={kind:"buy",tileId:Number(t.id),playerId:p.id};
       modalRoot.innerHTML="";
       modalOpen=false;
       modalKind="buy";
@@ -7044,7 +7108,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
       mpPublishSnapshot(true);
       return;
     }
-    authoritativeModalHtml="";
+    authoritativeModalData=null;
     const bg=openModal(buyModalHtml,"buy");
     if(!bg)return;
     if(tutorialActive&&tutorialStep<=2)tutorialShow(2,bg.querySelector("#buyYes"));
@@ -7643,8 +7707,14 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     if(mp.active&&mp.host&&p.human)mpPendingCard={playerId:p.id,card};
     const cardHtml=`<div class="modal-bg"><div class="modal capital-card-modal capital-card-${kind}"><div class="capital-card-kicker">${kind==="chance"?"❓":"📦"} ${escapeHtml(deckName)}</div><p class="capital-card-text">${escapeHtml(cardLabel(card))}</p>${cardAmountHtml(card,p)}<div class="modal-btns"><button class="btn yes" id="cardOk">${T("ok")}</button></div></div></div>`;
     const remoteTurn=mp.active&&mp.host&&!mpIsLocalPlayer(p);
-    if(remoteTurn){authoritativeModalHtml=cardHtml;modalRoot.innerHTML="";modalOpen=false;modalKind="card";updateBadge();mpPublishSnapshot(true);return;}
-    authoritativeModalHtml="";
+    if(remoteTurn){
+      // The card travels as a deck name plus index into the shared CHANCE /
+      // CHEST tables, never as the host's rendered text. The guest looks the
+      // card up locally, so its own language and escaping are used.
+      authoritativeModalData={kind:"card",deck:kind,index:Number(card.index),playerId:p.id};
+      modalRoot.innerHTML="";modalOpen=false;modalKind="card";updateBadge();mpPublishSnapshot(true);return;
+    }
+    authoritativeModalData=null;
     const bg=openModal(cardHtml,"card");
     if(!bg)return;bg.querySelector("#cardOk").onclick=()=>{clearModal();applyCard(p,card);};
     bg.querySelector("#cardOk").focus();
@@ -7984,7 +8054,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     pausedByUser=false;syncPause();renderPauseUI();
     // A live auction keeps its own timers; left running it would close dialogs in the next game.
     if(activeAuction){activeAuction.closed=true;auctionCancelTimers(activeAuction);activeAuction=null;}
-    clearInterval(mp.auctionTimer);mpPendingCard=null;authoritativeModalHtml="";mpPendingTrade=null;mpLastTradeId=null;
+    clearInterval(mp.auctionTimer);mpPendingCard=null;authoritativeModalData=null;mp.lastModalSig="";mpPendingTrade=null;mpLastTradeId=null;
     if(toastStack){toastStack.remove();toastStack=null;}clearActionEventQueue();if(modalRoot)modalRoot.innerHTML="";if(howModalRoot)howModalRoot.innerHTML="";if(tooltip)tooltip.classList.remove("show");tutorialClearFocus();document.getElementById("capitalTutorial")?.remove();tutorialActive=false;tutorialStep=0;
     document.querySelectorAll("#gameWrap .cap-hover-main,#gameWrap .cap-hover-group,#gameWrap .cap-hover-dim").forEach(e=>e.classList.remove("cap-hover-main","cap-hover-group","cap-hover-dim"));
     TILES.forEach(t=>{if(["prop","station","util"].includes(t.type)){t.owner=null;t.houses=0;t.hotel=false;t.mortgaged=false;}});
