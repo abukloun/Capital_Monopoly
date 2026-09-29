@@ -4966,15 +4966,29 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
         squashT:9,squashS:0,ringT:9,ringS:0,flashT:9,flashS:0
       });
     }
-    /* The total, drawn on the board right above the dice. The dice themselves
-       now show their own value face up, but the board is viewed at an angle
-       from far away, so the sum is spelled out as well: two 3s read as 6
-       without the player having to add them up from across the table. */
-    const sumCv=document.createElement("canvas");sumCv.width=512;sumCv.height=256;
-    const sumTex=new THREE.CanvasTexture(sumCv);sumTex.encoding=THREE.sRGBEncoding;
-    const sumSpr=new THREE.Sprite(new THREE.SpriteMaterial({map:sumTex,transparent:true,depthTest:false,opacity:0}));
-    sumSpr.scale.set(1.9,0.95,1);sumSpr.position.set(0,1.55,0);sumSpr.visible=false;scene.add(sumSpr);
-    cap3d.sumCv=sumCv;cap3d.sumCtx=sumCv.getContext("2d");cap3d.sumTex=sumTex;cap3d.sumSpr=sumSpr;cap3d.sumT=9;
+    /* The total, standing over the board as real geometry rather than a sprite.
+       A sprite is a billboard: it is always flat and faces the camera dead on,
+       which reads as a sticker pasted over the scene no matter how good the
+       artwork is. Building the digits out of capsules instead means they catch
+       the scene's own light, cast a shadow, and show their sides as the camera
+       swings around the board. */
+    const digitMat=new THREE.MeshStandardMaterial({color:0xf6d365,roughness:0.24,metalness:0.9,emissive:0xf6d365,emissiveIntensity:0.22});
+    const sumGroup=new THREE.Group();
+    sumGroup.position.set(0,1.5,0);
+    sumGroup.visible=false;
+    scene.add(sumGroup);
+    // A dark plate behind the digits. Without it the gold is hard to read when
+    // the camera drops low and a lit part of the board sits behind the number.
+    const plate=new THREE.Mesh(
+      new THREE.PlaneGeometry(1.34,0.92),
+      new THREE.MeshBasicMaterial({color:0x04070d,transparent:true,opacity:0.62,depthWrite:false})
+    );
+    plate.position.z=-0.09;
+    sumGroup.add(plate);
+    cap3d.digitMat=digitMat;
+    cap3d.sumGroup=sumGroup;
+    cap3d.digitCache=new Map();
+    cap3d.sumT=9;
     cap3dBindControls();
     cap3dResize();
     cap3dFitCamera(true);
@@ -5235,25 +5249,72 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       });
     }
   }
-  /* Paints the total above the dice: the two faces that were thrown, and the
-     sum they add up to. */
+  /* Digit shapes as polylines in a unit box, y up. Each entry is a list of
+     strokes, each stroke a list of points. Curves are approximated by short
+     segments and the capsules at the joints overlap, so a corner reads as
+     round rather than as a kink. This is a display face, not a typeface: it
+     only has to be unambiguous from across the table. */
+  const cap3dDigitStrokes={
+    "0":[[[0.5,0.94],[0.7,0.9],[0.79,0.72],[0.79,0.28],[0.7,0.1],[0.5,0.06],[0.3,0.1],[0.21,0.28],[0.21,0.72],[0.3,0.9],[0.5,0.94]]],
+    "1":[[[0.5,0.06],[0.5,0.94]],[[0.29,0.74],[0.5,0.94]]],
+    "2":[[[0.22,0.78],[0.29,0.91],[0.47,0.95],[0.66,0.91],[0.76,0.77],[0.71,0.59],[0.5,0.4],[0.22,0.08],[0.81,0.08]]],
+    "3":[[[0.24,0.86],[0.45,0.95],[0.67,0.91],[0.77,0.77],[0.65,0.6],[0.45,0.53],[0.7,0.47],[0.8,0.3],[0.73,0.12],[0.5,0.05],[0.26,0.13]]],
+    "4":[[[0.67,0.06],[0.67,0.94]],[[0.67,0.94],[0.2,0.35]],[[0.2,0.35],[0.87,0.35]]],
+    "5":[[[0.76,0.92],[0.28,0.92]],[[0.28,0.92],[0.24,0.57]],[[0.24,0.57],[0.5,0.63],[0.72,0.55],[0.8,0.34],[0.72,0.12],[0.46,0.05],[0.24,0.15]]],
+    "6":[[[0.72,0.9],[0.44,0.95],[0.26,0.74],[0.2,0.4],[0.3,0.12],[0.56,0.05],[0.76,0.2],[0.74,0.44],[0.52,0.56],[0.3,0.48],[0.2,0.3]]],
+    "7":[[[0.2,0.92],[0.8,0.92],[0.42,0.06]],[[0.34,0.5],[0.63,0.5]]],
+    "8":[[[0.5,0.52],[0.31,0.6],[0.27,0.78],[0.41,0.9],[0.59,0.9],[0.73,0.78],[0.69,0.6],[0.5,0.52],[0.26,0.42],[0.22,0.24],[0.4,0.08],[0.6,0.08],[0.78,0.24],[0.74,0.42],[0.5,0.52]]],
+    "9":[[[0.28,0.1],[0.56,0.05],[0.74,0.26],[0.8,0.6],[0.7,0.88],[0.44,0.95],[0.24,0.8],[0.26,0.56],[0.48,0.44],[0.7,0.52],[0.8,0.7]]]
+  };
+  function cap3dDigit(ch,h){
+    const THREE=window.THREE;
+    const strokes=cap3dDigitStrokes[ch];
+    if(!strokes)return null;
+    const key=ch+"|"+h;
+    let proto=cap3d.digitCache&&cap3d.digitCache.get(key);
+    if(!proto){
+      const g=new THREE.Group();
+      const r=h*0.072;
+      strokes.forEach(function(poly){
+        for(let i=0;i<poly.length-1;i++){
+          const a=poly[i],b=poly[i+1];
+          const dx=(b[0]-a[0])*h,dy=(b[1]-a[1])*h;
+          const len=Math.hypot(dx,dy);
+          if(len<1e-5)continue;
+          const cap=new THREE.Mesh(new THREE.CapsuleGeometry(r,len,4,10),cap3d.digitMat);
+          cap.position.set((a[0]+b[0])/2*h,(a[1]+b[1])/2*h,0);
+          // A capsule is built along +Y, so rotate +Y onto the stroke direction.
+          cap.rotation.z=Math.atan2(dy,dx)-Math.PI/2;
+          cap.castShadow=true;
+          g.add(cap);
+        }
+      });
+      proto=g;
+      if(cap3d.digitCache)cap3d.digitCache.set(key,proto);
+    }
+    // clone() shares geometry and material, so repeat digits cost nothing.
+    return proto.clone(true);
+  }
+  /* Rebuilds the standing total. Called only when the rolled values change, so
+     the geometry work happens once per roll. */
   function cap3dDiceSumDraw(){
-    const ctx=cap3d.sumCtx;
-    if(!ctx)return;
-    const cv=cap3d.sumCv;
+    const grp=cap3d.sumGroup;
+    if(!grp)return;
+    while(grp.children.length>1)grp.remove(grp.children[grp.children.length-1]);
     const a=Math.max(1,Math.min(6,Number(lastDice[0])||1));
     const b=Math.max(1,Math.min(6,Number(lastDice[1])||1));
-    ctx.clearRect(0,0,cv.width,cv.height);
-    ctx.textAlign="center";ctx.textBaseline="middle";
-    ctx.font="700 46px 'Trebuchet MS',system-ui,sans-serif";
-    ctx.fillStyle="rgba(226,236,255,.82)";
-    ctx.fillText(a+"  +  "+b,cv.width/2,86);
-    ctx.font="800 148px 'Trebuchet MS',system-ui,sans-serif";
-    ctx.lineWidth=12;ctx.strokeStyle="rgba(4,7,13,.92)";
-    ctx.strokeText(String(a+b),cv.width/2,190);
-    ctx.fillStyle="#f6d365";
-    ctx.fillText(String(a+b),cv.width/2,190);
-    try{cap3d.sumTex.needsUpdate=true;}catch(_){}
+    const s=String(a+b);
+    const h=0.62,gap=h*0.8;
+    const width=(s.length-1)*gap;
+    for(let i=0;i<s.length;i++){
+      const d=cap3dDigit(s.charAt(i),h);
+      if(!d)continue;
+      d.position.x=i*gap-width/2;
+      grp.add(d);
+    }
+    // Widen the plate to fit a two-digit total.
+    const plate=grp.children[0];
+    if(plate&&plate.isMesh)plate.scale.set(s.length>1?1.62:1,1,1);
   }
   /* 3D tile-by-tile movement (renderer only). Reads game state, writes only its
      own visual slot. Resolves strictly on rAF animation completion — the game
@@ -5536,32 +5597,27 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 
     if(p>=1)d.mode="idle";
   }
-  /* The sum readout: pops in when the result lands, then dims to a quiet
-     persistent hint so it never competes with the board. */
+  /* The standing total: it turns to face the camera around the vertical axis,
+     so it is readable from every angle but still shows its sides and catches
+     the scene's light like a solid object rather than a sticker. */
   function cap3dDiceSumTick(dt,reduced){
-    const spr=cap3d.sumSpr;
-    if(!spr||!players.length){if(spr)spr.visible=false;return;}
-    // Under reduced motion the total still has to be readable, so it appears at
-    // a fixed size instead of popping in.
-    if(reduced){
-      spr.visible=true;
-      spr.material.opacity=0.9;
-      spr.scale.set(1.9,0.95,1);
-      return;
-    }
+    const grp=cap3d.sumGroup;
+    if(!grp||!players.length){if(grp)grp.visible=false;return;}
+    grp.visible=true;
+    // Cylindrical billboard: keep it upright, swing only the yaw.
+    try{
+      const cam=cap3d.camera;
+      if(cam)grp.rotation.y=Math.atan2(cam.position.x-grp.position.x,cam.position.z-grp.position.z);
+    }catch(_){}
+    if(reduced){grp.scale.set(1,1,1);return;}
     cap3d.sumT+=dt;
-    spr.visible=true;
     if(cap3d.sumT<0.4){
       const u=cap3dDicePop(cap3d.sumT/0.4);
-      spr.scale.set(1.9*u,0.95*u,1);
-      spr.material.opacity=Math.min(1,cap3d.sumT/0.18);
-    }else if(cap3d.sumT<2.2){
-      spr.material.opacity=1;
-      spr.scale.set(1.9,0.95,1);
+      grp.scale.set(u,u,u);
     }else{
-      const u=Math.min(1,(cap3d.sumT-2.2)/1.2);
-      spr.material.opacity=1-u*0.45;
-      spr.scale.set(1.9,0.95,1);
+      // A slow breath, so the number keeps a little life without pulsing.
+      const s=1+Math.sin(cap3d.sumT*2)*0.015;
+      grp.scale.set(s,s,s);
     }
   }
   /* ---------- CAPITAL 3D FX LAYER (experimental, fully reversible) ----------
