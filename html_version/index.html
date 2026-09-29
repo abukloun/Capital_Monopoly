@@ -5671,12 +5671,44 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       try{f.mat.dispose();}catch(_){}
     }
   }
+  /* Money floaters.
+     A single turn can raise two of them at once: passing GO pays +200 and
+     landing on someone's property charges rent, and both fire within the same
+     tile action. They used to spawn at the same height and rise at the same
+     speed, so the two numbers drew on top of each other and neither could be
+     read.
+
+     Each floater is now placed in the first free slot of a small stack above the
+     piece, and nudged sideways a little, so two numbers in one turn sit at
+     different heights and different horizontal offsets. A slot is only reused
+     once whatever occupied it has gone. */
+  const cap3dFxFloaterSlots=[
+    {y:1.35,x:0},{y:1.95,x:0.34},{y:2.55,x:-0.34},{y:3.15,x:0}
+  ];
+  function cap3dFxPickSlot(now){
+    const live=cap3dFx.floaters;
+    for(let i=0;i<cap3dFxFloaterSlots.length;i++){
+      let taken=false;
+      for(let j=0;j<live.length;j++){
+        if(live[j].slot===i&&(now-live[j].t0)/live[j].life<1){taken=true;break;}
+      }
+      if(!taken)return i;
+    }
+    // Everything is busy, which needs four amounts in one turn. Wrap to the
+    // oldest rather than stacking on top of a number that is still readable.
+    let oldest=0;
+    for(let j=1;j<live.length;j++)if(live[j].t0<live[oldest].t0)oldest=j;
+    return live[oldest].slot;
+  }
   function cap3dFxFloat(pl,amount){
     if(!cap3dFx.enabled)return;
     if(boardView!=="3d"||!cap3d.ready||!cap3d.scene||!pl||!amount)return;
     try{
       const slot=cap3d.tokens.get(pl.id);
       const at=slot&&slot.group?slot.group.position:{x:0,z:0};
+      const now=performance.now();
+      const idx=cap3dFxPickSlot(now);
+      const place=cap3dFxFloaterSlots[idx];
       const cv=document.createElement("canvas");cv.width=256;cv.height=96;
       const ctx=cv.getContext("2d");
       const txt=(amount>0?"+$":"−$")+Math.abs(Math.round(amount));
@@ -5686,9 +5718,11 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       const tex=new THREE.CanvasTexture(cv);tex.encoding=THREE.sRGBEncoding;
       const mat=new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false});
       const spr=new THREE.Sprite(mat);spr.scale.set(1.5,0.56,1);
-      spr.position.set(at.x,1.35,at.z);
+      spr.position.set(at.x+place.x,place.y,at.z);
       cap3d.scene.add(spr);
-      cap3dFx.floaters.push({spr:spr,tex:tex,mat:mat,t0:performance.now(),life:1400});
+      // A new floater eases into its slot rather than appearing there, so the
+      // stack reads as numbers stacking up instead of two things blinking in.
+      cap3dFx.floaters.push({spr:spr,tex:tex,mat:mat,t0:now,life:1400,slot:idx,x0:at.x+place.x,y0:place.y});
       cap3dFxPruneFloaters();
     }catch(_){}
   }
@@ -5715,8 +5749,13 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
           try{f.mat.dispose();}catch(_){}
           cap3dFx.floaters.splice(i,1);continue;
         }
-        f.spr.position.y+=dt*0.85;
-        f.mat.opacity=1-k*k;
+        // Rise, and ease in from just below the assigned slot, so a number never
+        // appears at a height another one is already using.
+        f.rise=(f.rise||0)+dt*0.85;
+        const enter=Math.min(1,k/0.18);
+        const ease=1-Math.pow(1-enter,3);
+        f.spr.position.y=f.y0+f.rise-(1-ease)*0.55;
+        f.mat.opacity=Math.min(1,ease)*(1-k*k);
       }
       const pu=cap3dFx.pulse;
       if(pu&&pu.entry){
