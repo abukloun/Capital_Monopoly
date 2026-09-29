@@ -3523,8 +3523,8 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   <div class="cap-music-head"><div class="cap-music-title" id="musicSettingsTitle">🎵 Фоновая музыка</div><button class="cap-music-close" id="musicSettingsClose" type="button" aria-label="Закрыть">✕</button></div>
   <div class="cap-music-row"><span class="cap-music-label" id="musicVolumeLabel">Музыка</span><span class="cap-music-value" id="musicVolumeValue">40%</span></div>
   <input id="capitalMusicRange" type="range" min="0" max="100" step="10" value="40" list="capitalMusicTicks" aria-label="Громкость фоновой музыки">
-  <div class="cap-music-row cap-sfx-row"><span class="cap-music-label" id="sfxVolumeLabel">Эффекты</span><span class="cap-music-value" id="sfxVolumeValue">70%</span></div>
-  <input id="capitalSfxRange" type="range" min="0" max="100" step="10" value="70" list="capitalMusicTicks" aria-label="Громкость звуковых эффектов">
+  <div class="cap-music-row cap-sfx-row"><span class="cap-music-label" id="sfxVolumeLabel">Эффекты</span><span class="cap-music-value" id="sfxVolumeValue">55%</span></div>
+  <input id="capitalSfxRange" type="range" min="0" max="100" step="10" value="55" list="capitalMusicTicks" aria-label="Громкость звуковых эффектов">
   <div class="cap-music-ticks" id="capitalMusicTicksLabels"><span>0</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span><span>60</span><span>70</span><span>80</span><span>90</span><span>100</span></div>
   <div class="cap-music-hint" id="musicSettingsHint">Музыка настраивается отдельно от звуковых эффектов.</div>
 </div>
@@ -4977,26 +4977,14 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     sumGroup.position.set(0,1.5,0);
     sumGroup.visible=false;
     scene.add(sumGroup);
-    /* A soft dark halo behind the digits, so the gold stays readable when the
-       camera drops low and a lit part of the board lines up behind the number.
-       This was a hard-edged plane and it read as a black box sitting in the
-       middle of the board, so it is a radial gradient that fades to nothing at
-       the edges instead of ending in a visible rectangle. */
-    const haloCv=document.createElement("canvas");haloCv.width=128;haloCv.height=128;
-    const hctx=haloCv.getContext("2d");
-    const hgrd=hctx.createRadialGradient(64,64,4,64,64,64);
-    hgrd.addColorStop(0,"rgba(4,7,13,.82)");
-    hgrd.addColorStop(0.55,"rgba(4,7,13,.55)");
-    hgrd.addColorStop(1,"rgba(4,7,13,0)");
-    hctx.fillStyle=hgrd;hctx.fillRect(0,0,128,128);
-    const haloTex=new THREE.CanvasTexture(haloCv);haloTex.encoding=THREE.sRGBEncoding;
-    const plate=new THREE.Mesh(
-      new THREE.PlaneGeometry(1.5,1.05),
-      new THREE.MeshBasicMaterial({map:haloTex,transparent:true,depthWrite:false,opacity:0.9})
-    );
-    plate.position.z=-0.1;
-    plate.renderOrder=-1;
-    sumGroup.add(plate);
+    /* No backing plate and no cast shadow behind the total.
+       Both were added to keep the gold readable, and both were reported as a
+       dark smear beside the number: the halo was a gradient rather than an even
+       backdrop, and the capsules cast a real shadow that the key light threw to
+       one side, so it sat next to the digits rather than behind them. The
+       digits are emissive gold over an already dark board and read fine without
+       either. The digit geometry, size, position, gold colour and metal
+       material are untouched; only the dark shapes around them are gone. */
     cap3d.digitMat=digitMat;
     cap3d.sumGroup=sumGroup;
     cap3d.digitCache=new Map();
@@ -5314,7 +5302,11 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
           cap.position.set((a[0]+b[0])/2*h,(a[1]+b[1])/2*h,0);
           // A capsule is built along +Y, so rotate +Y onto the stroke direction.
           cap.rotation.z=Math.atan2(dy,dx)-Math.PI/2;
-          cap.castShadow=true;
+          // No shadow. The key light is at (7,13,5), so a cast shadow landed
+          // beside the number rather than behind it, and read as a dark smear
+          // against the board. The digits still receive the same light and
+          // material, so the gold and the metal are unchanged.
+          cap.castShadow=false;
           g.add(cap);
         }
       });
@@ -5333,7 +5325,10 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   function cap3dDiceSumDraw(cleared){
     const grp=cap3d.sumGroup;
     if(!grp)return;
-    while(grp.children.length>1)grp.remove(grp.children[grp.children.length-1]);
+    // The group now holds only digits, the backing plate having been removed.
+    // This used to keep children[0] and was correct while that was the plate;
+    // leaving the first digit behind would duplicate it on every roll.
+    while(grp.children.length)grp.remove(grp.children[grp.children.length-1]);
     if(cleared){cap3d.sumHasValue=false;return;}
     const a=Math.max(1,Math.min(6,Number(lastDice[0])||1));
     const b=Math.max(1,Math.min(6,Number(lastDice[1])||1));
@@ -5347,9 +5342,6 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       d.position.x=i*gap-width/2;
       grp.add(d);
     }
-    // Widen the plate to fit a two-digit total.
-    const plate=grp.children[0];
-    if(plate&&plate.isMesh)plate.scale.set(s.length>1?1.62:1,1,1);
   }
   /* 3D tile-by-tile movement (renderer only). Reads game state, writes only its
      own visual slot. Resolves strictly on rAF animation completion — the game
@@ -6375,13 +6367,27 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
      A squared fader is what a mixing desk gives you, and it makes the number on
      the slider mean what the listener expects it to mean. */
   const cap3dDefaultMusicVolume=0.40;
+  const cap3dDefaultSfxVolume=0.55;
+  /* One fader curve for both sliders.
+     The music side got the perceptual curve first; the effects side was left
+     linear, which is why 30% on the effects slider was reported as deafening
+     while the same 30% on music was reasonable. Linear 30% is -10dB of
+     amplitude, and every wav effect is mastered to a 0.96 peak, so 30% played
+     the effects at -13.5dBFS, on top of the theme. Same number, wildly
+     different result, because one fader was curved and the other was not. */
+  function faderCurve(v){return Math.pow(Math.max(0,Math.min(1,v)),1.7);}
   function musicGain(){
     // 1.35 rather than a hard square: keeps the top of the fader usable while
     // still collapsing the bottom into true quiet.
-    return Math.pow(Math.max(0,Math.min(1,musicVolume)),1.7);
+    return faderCurve(musicVolume);
   }
+  /* Effects sit under the music in a normal mix rather than over it. The
+     constant is the calibration: the effect files are hot masters, so without
+     it even a moderate slider value puts transients above the theme. */
+  const cap3dSfxCalibration=0.7;
+  function sfxGain(){return faderCurve(sfxVolume)*cap3dSfxCalibration;}
   let musicVolume=cap3dDefaultMusicVolume;
-  let sfxVolume=0.70;
+  let sfxVolume=cap3dDefaultSfxVolume;
   // A saved choice wins over the default, so someone who turns the music down
   // does not have it turned back up on their next visit.
   if(typeof prefsSaved.music==="number"&&prefsSaved.music>=0&&prefsSaved.music<=1)musicVolume=prefsSaved.music;
@@ -6464,7 +6470,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     try{
       let base=externalSfxCache.get(file);
       if(!base){base=new Audio("audio/"+file);base.preload="auto";externalSfxCache.set(file,base);}
-      const el=base.cloneNode(true);el.volume=Math.max(0,Math.min(1,volume*sfxVolume));el.currentTime=0;
+      const el=base.cloneNode(true);el.volume=Math.max(0,Math.min(1,volume*sfxGain()));el.currentTime=0;
       const pr=el.play();if(pr&&pr.catch)pr.catch(()=>{});
     }catch(e){}
   }
@@ -6514,7 +6520,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     const osc=ctx.createOscillator(),gain=ctx.createGain(),filter=ctx.createBiquadFilter();
     osc.type=type;osc.frequency.setValueAtTime(freq,now);
     if(type==="sawtooth"||type==="square"){filter.type="lowpass";filter.frequency.setValueAtTime(Math.min(5200,Math.max(500,freq*7)),now);osc.connect(filter);filter.connect(gain);}else osc.connect(gain);
-    gain.gain.setValueAtTime(.0001,now);gain.gain.exponentialRampToValueAtTime(Math.max(.0001,volume*sfxVolume),now+.008);gain.gain.exponentialRampToValueAtTime(.0001,now+duration);
+    gain.gain.setValueAtTime(.0001,now);gain.gain.exponentialRampToValueAtTime(Math.max(.0001,volume*sfxGain()),now+.008);gain.gain.exponentialRampToValueAtTime(.0001,now+duration);
     gain.connect(bus);osc.start(now);osc.stop(now+duration+.025);
   }
   /* A struck-metal partial stack. Three inharmonic partials are what makes a
@@ -6532,7 +6538,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
       osc.frequency.setValueAtTime(freq*p[0],when);
       if(drop>0)osc.frequency.exponentialRampToValueAtTime(freq*p[0]*(1-drop),when+dur*(idx?0.75:1));
       const tail=dur*(idx===0?1:0.72);
-      const peak=Math.max(.0001,vol*p[1]*sfxVolume);
+      const peak=Math.max(.0001,vol*p[1]*sfxGain());
       gain.gain.setValueAtTime(.0001,when);
       gain.gain.exponentialRampToValueAtTime(peak,when+.004);
       gain.gain.exponentialRampToValueAtTime(.0001,when+tail);
@@ -6546,7 +6552,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     const len=Math.max(1,Math.floor(ctx.sampleRate*duration)),buffer=ctx.createBuffer(1,len,ctx.sampleRate),data=buffer.getChannelData(0);
     for(let i=0;i<len;i++)data[i]=(Math.random()*2-1)*(1-i/len);
     const src=ctx.createBufferSource(),gain=ctx.createGain(),filter=ctx.createBiquadFilter();
-    const now=ctx.currentTime+when;filter.type="highpass";filter.frequency.value=900;gain.gain.value=volume*sfxVolume;
+    const now=ctx.currentTime+when;filter.type="highpass";filter.frequency.value=900;gain.gain.value=volume*sfxGain();
     src.buffer=buffer;src.connect(filter);filter.connect(bus);src.start(now);
   }
   const SFX={
