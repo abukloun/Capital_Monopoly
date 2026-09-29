@@ -5076,12 +5076,13 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     TILES.forEach(function(t){
       const entry=cap3d.tiles.get(t.id);if(!entry)return;
       const sig=cap3dTileSig(t);
+      // A forced resync (view switch, 3D start) must not replay growth for a
+      // skyline that is already standing. Clearing the marker below makes the
+      // first sync of the new pass take the "stand up at full size" branch.
+      if(force)entry.built=null;
       if(force||cap3d.lastTileSig.get(t.id)!==sig){
         cap3d.lastTileSig.set(t.id,sig);
         try{cap3dTileTopTexture(t);}catch(_){}
-        // A forced resync (view switch, 3D start) must not replay the growth
-        // animation for a skyline that was already standing.
-        if(force)entry.built=null;
         const owner=(t.owner!=null&&players[t.owner]&&!players[t.owner].bankrupt)?players[t.owner]:null;
         entry.ring.visible=!!owner;
         if(owner)entry.ring.material.color.set(owner.color||"#f4c95d");
@@ -5097,26 +5098,28 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
         const ox=p.x!==0?p.x/Math.max(0.001,Math.hypot(p.x,p.z)):0;
         const oz=p.z!==0?p.z/Math.max(0.001,Math.hypot(p.x,p.z)):0;
         const tx=oz!==0?oz:1,tz=ox!==0?-ox:0;
-        // Only a newly appeared building animates. entry.built tracks the level
-        // that has already played its grow, so re-renders never restart it and
-        // an existing skyline does not bounce on every state sync.
-        const grew=entry.built==null||lvl>entry.built;
-        if(grew)cap3dGrowTrack(entry,lvl,cap3dReducedMotion);
-        entry.built=lvl;
         entry.houses.forEach(function(hg,k){
           const on=lvl>=1&&lvl<=4&&k<lvl;
           hg.visible=on;
-          if(on){
-            hg.position.set(ox*0.3+tx*(k-1.5)*0.19,0.24,oz*0.3+tz*(k-1.5)*0.19);
-            if(grew&&!cap3dReducedMotion)hg.scale.set(0.01,0.01,0.01);
-            else if(!hg.scale.x||hg.scale.x<1)hg.scale.set(1,1,1);
-          }
+          if(on)hg.position.set(ox*0.3+tx*(k-1.5)*0.19,0.24,oz*0.3+tz*(k-1.5)*0.19);
         });
         entry.hotel.visible=(lvl===5);
-        if(lvl===5){
-          entry.hotel.position.set(ox*0.28,0.32,oz*0.28);
-          if(grew&&!cap3dReducedMotion)entry.hotel.scale.set(0.01,0.01,0.01);
-          else if(!entry.hotel.scale.x||entry.hotel.scale.x<1)entry.hotel.scale.set(1,1,1);
+        if(lvl===5)entry.hotel.position.set(ox*0.28,0.32,oz*0.28);
+        // Compare against the level whose buildings have finished appearing.
+        // Anything else (a monopoly completing, a trade elsewhere) must not
+        // disturb a grow that is already running, so the only trigger is a
+        // strictly higher level than the one last settled.
+        if(lvl>entry.built){
+          cap3dGrowStart(entry,lvl);
+          entry.built=lvl;
+        }else if(lvl<entry.built){
+          // Buildings were sold or mortgaged. Cancel any running grow so a
+          // half-scaled house cannot survive, and let the next build animate.
+          entry.grow=null;entry.built=lvl;cap3dGrowSettle(entry);
+        }else if(entry.built==null){
+          // First sync for this tile, or a forced resync: stand the skyline up
+          // at full size without replaying the animation.
+          entry.built=lvl;entry.grow=null;cap3dGrowSettle(entry);
         }
       }
     });
@@ -5358,37 +5361,40 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
      on meshes that cap3dSync already decided to show, never game state and
      never visibility. Skipped entirely under prefers-reduced-motion, where
      cap3dSync sets scale to 1 directly. */
-  const cap3dGrow={scales:new Map(),t0:0,life:340};
-  function cap3dGrowReset(){
-    cap3dGrow.scales.forEach(function(s){try{s.group.scale.set(1,1,1);}catch(_){}});
-    cap3dGrow.scales.clear();
+  const cap3dGrow={life:340};
+  /* Each entry keeps its own grow state, so a new house starting cannot disturb
+     one that is already mid-animation. `from` is the level the buildings
+     currently sit at, and is advanced to `to` when the animation ends. */
+  function cap3dGrowStart(entry,lvl){
+    if(!entry)return;
+    if(cap3dReducedMotion){entry.grow=null;cap3dGrowSettle(entry);return;}
+    const list=[];
+    if(lvl>=1&&lvl<=4)entry.houses.forEach(function(hg){if(hg.visible)list.push(hg);});
+    else if(lvl===5&&entry.hotel.visible)list.push(entry.hotel);
+    if(!list.length){entry.grow=null;cap3dGrowSettle(entry);return;}
+    list.forEach(function(g){g.scale.set(0.01,0.01,0.01);});
+    entry.grow={t0:0,to:lvl};
   }
-  function cap3dGrowTick(now,dt){
+  function cap3dGrowSettle(entry){
+    const set=function(g){try{g.scale.set(1,1,1);}catch(_){}};
+    if(entry.houses)entry.houses.forEach(set);
+    if(entry.hotel)set(entry.hotel);
+  }
+  function cap3dGrowTick(now){
     if(!cap3d.ready||!cap3d.scene)return;
     if(cap3dReducedMotion)return;
-    if(cap3dGrow.scales.size===0){if(!cap3dGrow.t0)cap3dGrow.t0=now;return;}
-    if(!cap3dGrow.t0)cap3dGrow.t0=now;
-    const k=Math.min(1,(now-cap3dGrow.t0)/cap3dGrow.life);
-    // easeOutBack: a small overshoot so the building lands with a little weight
-    const e=1+2.2*Math.pow(k-1,3)+1.2*Math.pow(k-1,2);
-    cap3dGrow.scales.forEach(function(s){
-      if(s.elapsed)s.elapsed+=dt*1000;
-      const kk=s.elapsed==null?k:Math.min(1,s.elapsed/cap3dGrow.life);
-      const ee=1+2.2*Math.pow(kk-1,3)+1.2*Math.pow(kk-1,2);
-      try{s.group.scale.set(Math.max(0.01,ee),Math.max(0.01,ee),Math.max(0.01,ee));}catch(_){}
+    cap3d.tiles.forEach(function(entry){
+      const gr=entry&&entry.grow;if(!gr)return;
+      if(!gr.t0)gr.t0=now;
+      const k=Math.min(1,(now-gr.t0)/cap3dGrow.life);
+      // easeOutBack: a small overshoot so the building lands with some weight
+      const e=1+2.2*Math.pow(k-1,3)+1.2*Math.pow(k-1,2);
+      const s=Math.max(0.01,e);
+      const apply=function(g){try{g.scale.set(s,s,s);}catch(_){}};
+      if(gr.to>=1&&gr.to<=4)entry.houses.forEach(function(hg){if(hg.visible)apply(hg);});
+      else if(gr.to===5)apply(entry.hotel);
+      if(k>=1){cap3dGrowSettle(entry);entry.grow=null;}
     });
-    if(k>=1)cap3dGrowReset();
-  }
-  /* Register a building for growth. Called from the sync path where a level
-     increase is detected, so nothing is created per frame. */
-  function cap3dGrowTrack(entry,lvl,reduced){
-    if(!entry||!lvl)return;
-    if(reduced)return;
-    const list=[];
-    if(lvl>=1&&lvl<=4)entry.houses.slice(0,lvl).forEach(function(hg){list.push(hg);});
-    else if(lvl===5)list.push(entry.hotel);
-    list.forEach(function(g){cap3dGrow.scales.set(g,{group:g,elapsed:null});});
-    if(list.length)cap3dGrow.t0=0;
   }
   function cap3dLoop(ts){
     if(!cap3d.running)return;
@@ -5427,7 +5433,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
         try{entry.crown.scale.set(s,s,1);}catch(_){}
       });
       cap3dFxTick(ts,dt);
-      cap3dGrowTick(ts,dt);
+      cap3dGrowTick(ts);
       const rolling=(state===STATES.ROLLING);
       cap3d.dice.forEach(function(d,i){
         if(!cap3d.scene)return;
@@ -5503,7 +5509,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     cap3d.raf=0;
     // Drop any in-flight growth so returning to 2D mid-animation does not
     // leave a house stuck at scale 0.01 when 3D is switched back on.
-    try{cap3dGrowReset();}catch(_){}
+    try{cap3d.tiles.forEach(function(entry){if(entry){entry.grow=null;cap3dGrowSettle(entry);}});}catch(_){}
   }
   function setBoardView(v){
     boardView=(v==="3d")?"3d":"2d";
