@@ -4815,6 +4815,14 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       g.add(mesh);
       let strip=null;
       if(t.type==="prop"){strip=new THREE.Mesh(stripGeo,new THREE.MeshStandardMaterial({color:GROUP_UI[t.group]||"#7183ff",roughness:0.4,metalness:0.3,emissive:(GROUP_UI[t.group]||"#7183ff"),emissiveIntensity:0.12}));strip.position.set(0,0.18,-0.36);g.add(strip);}
+      // Monopoly marker: a gold crown ring around the whole tile. Only ever
+      // visible when this tile's group is fully owned by one player.
+      const crown=new THREE.Mesh(new THREE.TorusGeometry(0.4,0.028,10,44),new THREE.MeshStandardMaterial({color:0xf4c95d,emissive:0xf4c95d,emissiveIntensity:0.85,roughness:0.32,metalness:0.7}));
+      crown.rotation.x=-Math.PI/2;crown.position.y=0.185;crown.visible=false;g.add(crown);
+      // Monopoly pad: raises the tile so a completed group is visible even from
+      // a low camera angle where the ring sits edge-on.
+      const pad=new THREE.Mesh(new THREE.BoxGeometry(0.86,0.07,0.86),new THREE.MeshStandardMaterial({color:0xf4c95d,emissive:0x6b5417,emissiveIntensity:0.4,roughness:0.4,metalness:0.55}));
+      pad.position.y=0.165;pad.visible=false;pad.receiveShadow=true;g.add(pad);
       const ring=new THREE.Mesh(ringGeo,new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.35,metalness:0.4,emissive:0xffffff,emissiveIntensity:0.25}));
       ring.rotation.x=-Math.PI/2;ring.position.y=0.17;ring.visible=false;g.add(ring);
       const cover=new THREE.Mesh(coverGeo,new THREE.MeshStandardMaterial({color:0x39465c,roughness:0.9,metalness:0,transparent:true,opacity:0.55}));
@@ -4830,7 +4838,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       hotel.visible=false;g.add(hotel);
       scene.add(g);
       cap3d.hitMeshes.push(mesh);
-      cap3d.tiles.set(t.id,{group:g,mesh:mesh,ring:ring,cover:cover,houses:houses,hotel:hotel,cv:topCv,ctx:topCtx,tex:tex});
+      cap3d.tiles.set(t.id,{group:g,mesh:mesh,ring:ring,cover:cover,houses:houses,hotel:hotel,crown:crown,pad:pad,cv:topCv,ctx:topCtx,tex:tex,built:0});
       cap3dTileTopTexture(t);
     });
     for(let i=0;i<8;i++){
@@ -4996,7 +5004,12 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       openPropertyModal(id);
     }catch(_){}
   }
-  function cap3dTileSig(t){return (t.owner==null?"-":t.owner)+"|"+(t.houses||0)+"|"+(t.hotel?1:0)+"|"+(t.mortgaged?1:0)+"|"+lang;}
+  function cap3dTileSig(t){
+    // Monopoly status is part of the signature: a group can complete or break
+    // (trading away the last tile) without owner/houses changing.
+    const mono=t.type==="prop"&&t.owner!=null&&hasMonopoly(t.owner,t.group)?1:0;
+    return (t.owner==null?"-":t.owner)+"|"+(t.houses||0)+"|"+(t.hotel?1:0)+"|"+(t.mortgaged?1:0)+"|"+mono+"|"+lang;
+  }
   function cap3dSync(force){
     if(!cap3d.ready||!cap3d.scene)return;
     const THREE=window.THREE;
@@ -5006,22 +5019,45 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       if(force||cap3d.lastTileSig.get(t.id)!==sig){
         cap3d.lastTileSig.set(t.id,sig);
         try{cap3dTileTopTexture(t);}catch(_){}
+        // A forced resync (view switch, 3D start) must not replay the growth
+        // animation for a skyline that was already standing.
+        if(force)entry.built=null;
         const owner=(t.owner!=null&&players[t.owner]&&!players[t.owner].bankrupt)?players[t.owner]:null;
         entry.ring.visible=!!owner;
         if(owner)entry.ring.material.color.set(owner.color||"#f4c95d");
         entry.cover.visible=!!t.mortgaged;
+        // Monopoly state drives the crown + pad. A group can be completed by a
+        // purchase or by a trade, and broken by trading the last tile away, so
+        // this is recomputed from live state every time the signature changes.
+        const mono=(t.type==="prop"&&t.owner!=null&&!owner?.bankrupt&&hasMonopoly(t.owner,t.group))||false;
+        if(entry.crown)entry.crown.visible=mono;
+        if(entry.pad)entry.pad.visible=mono;
         const lvl=t.type==="prop"?((t.hotel)?5:Math.min(4,t.houses||0)):0;
         const p=cap3dBoardXZ(t.id);
         const ox=p.x!==0?p.x/Math.max(0.001,Math.hypot(p.x,p.z)):0;
         const oz=p.z!==0?p.z/Math.max(0.001,Math.hypot(p.x,p.z)):0;
         const tx=oz!==0?oz:1,tz=ox!==0?-ox:0;
+        // Only a newly appeared building animates. entry.built tracks the level
+        // that has already played its grow, so re-renders never restart it and
+        // an existing skyline does not bounce on every state sync.
+        const grew=entry.built==null||lvl>entry.built;
+        if(grew)cap3dGrowTrack(entry,lvl,cap3dReducedMotion);
+        entry.built=lvl;
         entry.houses.forEach(function(hg,k){
           const on=lvl>=1&&lvl<=4&&k<lvl;
           hg.visible=on;
-          if(on)hg.position.set(ox*0.3+tx*(k-1.5)*0.19,0.24,oz*0.3+tz*(k-1.5)*0.19);
+          if(on){
+            hg.position.set(ox*0.3+tx*(k-1.5)*0.19,0.24,oz*0.3+tz*(k-1.5)*0.19);
+            if(grew&&!cap3dReducedMotion)hg.scale.set(0.01,0.01,0.01);
+            else if(!hg.scale.x||hg.scale.x<1)hg.scale.set(1,1,1);
+          }
         });
         entry.hotel.visible=(lvl===5);
-        if(lvl===5)entry.hotel.position.set(ox*0.28,0.32,oz*0.28);
+        if(lvl===5){
+          entry.hotel.position.set(ox*0.28,0.32,oz*0.28);
+          if(grew&&!cap3dReducedMotion)entry.hotel.scale.set(0.01,0.01,0.01);
+          else if(!entry.hotel.scale.x||entry.hotel.scale.x<1)entry.hotel.scale.set(1,1,1);
+        }
       }
     });
     const counts=new Map();
@@ -5256,6 +5292,44 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       if(kind==="rent"||kind==="tax"||kind==="go"||kind==="cardmoney"||kind==="jailfee")cap3dFxFloat(p,amt);
     }catch(_){}
   };
+  /* ---------- 3D building growth + monopoly pulse (visual only) ----------
+     cap3dSync scales a newly built house/hotel down to almost nothing; this
+     tick eases it back to full size. Purely visual: it writes only `.scale`
+     on meshes that cap3dSync already decided to show, never game state and
+     never visibility. Skipped entirely under prefers-reduced-motion, where
+     cap3dSync sets scale to 1 directly. */
+  const cap3dGrow={scales:new Map(),t0:0,life:340};
+  function cap3dGrowReset(){
+    cap3dGrow.scales.forEach(function(s){try{s.group.scale.set(1,1,1);}catch(_){}});
+    cap3dGrow.scales.clear();
+  }
+  function cap3dGrowTick(now,dt){
+    if(!cap3d.ready||!cap3d.scene)return;
+    if(cap3dReducedMotion)return;
+    if(cap3dGrow.scales.size===0){if(!cap3dGrow.t0)cap3dGrow.t0=now;return;}
+    if(!cap3dGrow.t0)cap3dGrow.t0=now;
+    const k=Math.min(1,(now-cap3dGrow.t0)/cap3dGrow.life);
+    // easeOutBack: a small overshoot so the building lands with a little weight
+    const e=1+2.2*Math.pow(k-1,3)+1.2*Math.pow(k-1,2);
+    cap3dGrow.scales.forEach(function(s){
+      if(s.elapsed)s.elapsed+=dt*1000;
+      const kk=s.elapsed==null?k:Math.min(1,s.elapsed/cap3dGrow.life);
+      const ee=1+2.2*Math.pow(kk-1,3)+1.2*Math.pow(kk-1,2);
+      try{s.group.scale.set(Math.max(0.01,ee),Math.max(0.01,ee),Math.max(0.01,ee));}catch(_){}
+    });
+    if(k>=1)cap3dGrowReset();
+  }
+  /* Register a building for growth. Called from the sync path where a level
+     increase is detected, so nothing is created per frame. */
+  function cap3dGrowTrack(entry,lvl,reduced){
+    if(!entry||!lvl)return;
+    if(reduced)return;
+    const list=[];
+    if(lvl>=1&&lvl<=4)entry.houses.slice(0,lvl).forEach(function(hg){list.push(hg);});
+    else if(lvl===5)list.push(entry.hotel);
+    list.forEach(function(g){cap3dGrow.scales.set(g,{group:g,elapsed:null});});
+    if(list.length)cap3dGrow.t0=0;
+  }
   function cap3dLoop(ts){
     if(!cap3d.running)return;
     cap3d.raf=requestAnimationFrame(cap3dLoop);
@@ -5285,7 +5359,15 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
         slot.group.position.set(v.x,0.15+hop,v.z);
         if(slot.glow.visible&&!reduced)slot.glow.material.emissiveIntensity=0.65+Math.sin(t*4)*0.3;
       });
+      // Monopoly crown breathes slowly so a completed group is findable at a
+      // glance without being loud. Skipped under reduced motion.
+      if(!reduced)cap3d.tiles.forEach(function(entry){
+        if(!entry.crown||!entry.crown.visible)return;
+        const s=1+Math.sin(t*2.2)*0.045;
+        try{entry.crown.scale.set(s,s,1);}catch(_){}
+      });
       cap3dFxTick(ts,dt);
+      cap3dGrowTick(ts,dt);
       const rolling=(state===STATES.ROLLING);
       cap3d.dice.forEach(function(d,i){
         if(!cap3d.scene)return;
@@ -5359,6 +5441,9 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     cap3d.running=false;
     if(cap3d.raf)try{cancelAnimationFrame(cap3d.raf);}catch(_){}
     cap3d.raf=0;
+    // Drop any in-flight growth so returning to 2D mid-animation does not
+    // leave a house stuck at scale 0.01 when 3D is switched back on.
+    try{cap3dGrowReset();}catch(_){}
   }
   function setBoardView(v){
     boardView=(v==="3d")?"3d":"2d";
