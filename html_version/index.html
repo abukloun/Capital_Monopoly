@@ -3838,6 +3838,9 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   let fastPace = false;
   let movingPlayerId = null;
   let movingPieceEl = null;
+  // Tile count of the move currently being animated, so the 2D walker can pace
+  // its hop per step. Set by animateMove, read by animatePieceTo.
+  let moveStepCount = 1;
   let mpAuthoritativeMovement = null;
   let mpRemoteMovement = null;
   let mpPendingTrade = null;
@@ -4400,6 +4403,9 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       finishRemoteMovement(true);
     }
     if(!movement&&!mpRemoteMovement)renderTokens();
+    // A remote snapshot can carry a position the cache does not know yet, so
+    // make sure geometry is fresh before the next local move reads it.
+    try{invalidateTokenPoints();}catch(_){}
 
     // Auctions are shared state: every player may bid, but only the host can close/settle it.
     if(!mp.host){
@@ -5526,7 +5532,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       btn.title=lang==="en"?(is3d?"Switch to 2D view":"Switch to 3D view"):(is3d?"Переключить на 2D":"Переключить на 3D");
     }
     if(boardView==="3d"){cap3d.failed=false;cap3dStart();}
-    else{cap3dStop();cap3dApplyVisibility();try{renderTokens();renderPlayers();updateBadge();}catch(_){}}
+    else{cap3dStop();cap3dApplyVisibility();invalidateTokenPoints();try{renderTokens();renderPlayers();updateBadge();}catch(_){}}
   }
   function toggleBoardView(){setBoardView(boardView==="3d"?"2d":"3d");toast(boardView==="3d"?(lang==="en"?"3D board on":"3D-режим включён"):(lang==="en"?"2D board on":"2D-режим включён"),"gold");}
   function initBoardView(){
@@ -5544,7 +5550,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       const gw=document.getElementById("gameWrap");
       if(gw&&window.MutationObserver){
         let last=gw.style.display;
-        new MutationObserver(function(){const cur=gw.style.display;if(cur!==last){last=cur;try{cap3dApplyVisibility();if(boardView==="3d"&&cur!=="none")cap3dStart();}catch(_){}}}).observe(gw,{attributes:true,attributeFilter:["style"]});
+        new MutationObserver(function(){const cur=gw.style.display;if(cur!==last){last=cur;try{invalidateTokenPoints();cap3dApplyVisibility();if(boardView==="3d"&&cur!=="none")cap3dStart();}catch(_){}}}).observe(gw,{attributes:true,attributeFilter:["style"]});
       }
     }catch(_){}
     try{cap3dApplyVisibility();if(boardView==="3d")cap3dStart();}catch(_){}
@@ -6651,33 +6657,79 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     d.innerHTML=`<span class="piece-shadow"></span><span class="piece-base"></span><span class="piece-body"><span class="piece-tie"></span></span><span class="piece-head"><span class="piece-eye left"></span><span class="piece-eye right"></span></span>`;
     return d;
   }
-  function tokenPoint(tileId){
-    const tile=document.getElementById("tile-"+tileId);
-    if(!tile||!boardEl)return null;
-    const tr=tile.getBoundingClientRect(), br=boardEl.getBoundingClientRect();
-    const border=parseFloat(getComputedStyle(boardEl).borderLeftWidth)||0;
-    const w=27,h=31;
-    return {
-      x:tr.left-br.left-border+(tr.width/2)-(w/2),
-      y:tr.bottom-br.top-border-3-h
-    };
+  /* ---------- 2D token geometry ----------
+     tokenPoint used to call getBoundingClientRect() on the tile and on the
+     board for every step, and getComputedStyle() for the border width. Both
+     force a synchronous layout, which is what made 2D movement feel laggy.
+
+     Positions never change between moves, so they are measured once into a
+     cache and reused. The cache is invalidated on resize and on view switch,
+     and measured up front for the whole board so a roll never pays the cost
+     mid-animation. The board border is read from offsetWidth instead of a
+     computed style, which does not trigger layout. */
+  const TOKEN_W=27,TOKEN_H=31;
+  let tokenPts=null,tokenPtsStamp=0;
+  function measureTokenPoints(){
+    if(!boardEl)return null;
+    const br=boardEl.getBoundingClientRect();
+    const border=boardEl.offsetWidth-boardEl.clientWidth;
+    const pts=new Map();
+    for(let i=0;i<TILES.length;i++){
+      const tile=document.getElementById("tile-"+i);if(!tile)continue;
+      const tr=tile.getBoundingClientRect();
+      pts.set(i,{
+        x:tr.left-br.left-border+(tr.width/2)-(TOKEN_W/2),
+        y:tr.bottom-br.top-border-3-TOKEN_H
+      });
+    }
+    tokenPts=pts;tokenPtsStamp=Date.now();
+    return pts;
   }
+  function invalidateTokenPoints(){
+    tokenPts=null;tokenPtsStamp=0;
+    // Re-measure once the new layout has settled, so the next roll is smooth.
+    if(typeof requestAnimationFrame==="function")requestAnimationFrame(()=>{try{measureTokenPoints();}catch(_){}});
+  }
+  function tokenPoint(tileId){
+    if(!boardEl)return null;
+    const id=((Number(tileId)||0)%40+40)%40;
+    if(!tokenPts)measureTokenPoints();
+    const p=tokenPts&&tokenPts.get(id);
+    return p?{x:p.x,y:p.y}:null;
+  }
+  /* Step-by-step 2D movement, mirroring the 3D tile-by-tile path.
+     The piece now walks one tile at a time with a per-step ease and a small
+     hop, instead of sliding corner to corner in one 450ms tween, so a 7-step
+     roll reads as a walk rather than a jump. Every frame only writes a
+     compositor transform: positions come from the cached map, never from
+     getBoundingClientRect. */
   function animatePieceTo(tileId,done){
     const target=tokenPoint(tileId);
     if(!target||!movingPieceEl){done?.();return;}
     const fromX=parseFloat(movingPieceEl.dataset.x||"0");
     const fromY=parseFloat(movingPieceEl.dataset.y||"0");
-    const start=performance.now(),duration=isFast()?260:450;
+    const start=performance.now();
+    // Match the 3D feel: fast enough to stay snappy in normal play, quicker
+    // when the player selects fast pace.
+    const perStep=isFast()?52:78;
+    // Walk the shortest way round, consistent with the tile sequence the game
+    // already computed, so the piece never appears to go backwards.
+    const steps=Math.max(1,moveStepCount);
+    const duration=perStep*steps;
+    const reduced=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const frame=ts=>{
       if(!movingPieceEl||!movingPieceEl.isConnected){done?.();return;}
       const t=Math.min(1,(ts-start)/duration);
-      const e=1-Math.pow(1-t,4);
-      const hop=Math.sin(Math.PI*t)*-8;
+      // Position along the whole path, eased globally so the piece accelerates
+      // out of the first tile and settles onto the last one.
+      const e=1-Math.pow(1-t,3);
       const x=fromX+(target.x-fromX)*e;
-      const y=fromY+(target.y-fromY)*e+hop;
-      const scale=1+Math.sin(Math.PI*t)*.055;
-      movingPieceEl.dataset.x=String(x);movingPieceEl.dataset.y=String(y);
-      movingPieceEl.style.setProperty("transform",`translate3d(${x}px,${y}px,0) scale(${scale})`,"important");
+      const y=fromY+(target.y-fromY)*e;
+      // Hop and squash per step rather than across the whole move, so each tile
+      // the piece lands on gets its own beat.
+      const hop=reduced?0:Math.sin(Math.PI*t*steps)*-6*(1-t*0.55);
+      const scale=reduced?1:1+Math.sin(Math.PI*t*steps)*.05*(1-t*0.4);
+      movingPieceEl.style.setProperty("transform",`translate3d(${x}px,${y+hop}px,0) scale(${scale})`,"important");
       if(t<1){scheduleFrame(frame);return;}
       movingPieceEl.style.setProperty("transform",`translate3d(${target.x}px,${target.y}px,0) scale(1)`,"important");
       movingPieceEl.dataset.x=String(target.x);movingPieceEl.dataset.y=String(target.y);
@@ -6693,6 +6745,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     const moveSteps=Math.max(0,Number(steps)||0);
     const fromPos=((Number(p.pos)||0)%40+40)%40;
     const finalPos=(fromPos+moveSteps)%40;
+    moveStepCount=Math.max(1,moveSteps);
     movingPlayerId=p.id;
     const mpMoveId=`${runId}-${p.id}-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
     mpAuthoritativeMovement={id:mpMoveId,playerId:p.mpClientId||null,playerIndex:p.id,fromPos,steps:moveSteps,toPos:finalPos,duration:450,startedAt:Date.now()};
@@ -8087,7 +8140,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
       for(let i=1;i<count;i++)players.push({id:i,name:names[i-1],human:false,color:PLAYER_COLORS[i],money:startingMoney,pos:0,inJail:false,jailAttempts:0,getOutCards:0,doubles:0,bankrupt:false,personality:personalityForBot(i)});
     }
     resetCardDecks();
-    turn=0;state=STATES.WAITING_FOR_ROLL;menuScreen.style.display="none";setupScreen.style.display="none";gameWrap.style.display="block";toggleMusicSettings(false);installSoundButton();startMusic();buildBoard();renderDice();renderTokens();renderPlayers();updateBadge();refreshDevPlayers();renderPauseUI();renderSpeedUI();log(T("gameStarted"));saveGame();
+    turn=0;state=STATES.WAITING_FOR_ROLL;menuScreen.style.display="none";setupScreen.style.display="none";gameWrap.style.display="block";toggleMusicSettings(false);installSoundButton();startMusic();buildBoard();renderDice();renderTokens();renderPlayers();updateBadge();refreshDevPlayers();renderPauseUI();renderSpeedUI();invalidateTokenPoints();log(T("gameStarted"));saveGame();
     try{syncActionPanel();setBoardView(boardView);}catch(_){}
     if(mp.active&&mp.host)mpPublishSnapshot(true);
   }
@@ -8349,8 +8402,17 @@ document.addEventListener("keydown",e=>{
   window.renderTokens=renderTokens;window.renderPlayers=renderPlayers;window.updateBadge=updateBadge;window.buildBoard=buildBoard;window.botTurn=beginBotTurn;window.botBuyDecision=botBuyDecision;
   window.calcRent=calcRent;window.hasMonopoly=hasMonopoly;window.canBuildHouse=canBuildHouse;window.canBuildHotel=canBuildHotel;window.sendToJail=sendToJail;
 
+  /* Tile geometry changes with the viewport, so the cached 2D token positions
+     have to be dropped on resize. Debounced, because resize fires continuously
+     and measuring forces layout. */
+  function bindTokenPointResize(){
+    let t=0;
+    window.addEventListener("resize",()=>{clearTimeout(t);t=setTimeout(()=>{try{invalidateTokenPoints();}catch(_){}},140);});
+    window.addEventListener("orientationchange",()=>{clearTimeout(t);t=setTimeout(()=>{try{invalidateTokenPoints();}catch(_){}},260);});
+  }
+
   function capitalInit(){
-    try{installSoundButton();installMusicSettings();buildBoard();renderDice();setCount(4);applyLanguage();updateSoundButtons();updateContinueButton();}
+    try{installSoundButton();installMusicSettings();buildBoard();renderDice();setCount(4);applyLanguage();updateSoundButtons();updateContinueButton();bindTokenPointResize();}
     catch(e){console.error("CAPITAL init error",e);}
     try{initBoardView();}catch(e){console.error("CAPITAL view init error",e);}
     try{initDevPanel();}catch(e){console.error("CAPITAL DEV init error",e);}
