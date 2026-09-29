@@ -16,14 +16,14 @@ Clone, then open the file:
 
 ```bash
 git clone https://github.com/abukloun/Capital_Monopoly.git
-open Capital_Monopoly/html_version/index.html
+open Capital_Monopoly/index.html
 ```
 
 `index.html` runs straight from the filesystem. There is nothing to build and
 nothing to install. If you prefer a server, any static one will do:
 
 ```bash
-cd html_version && python3 -m http.server 8000
+cd Capital_Monopoly && python3 -m http.server 8000
 ```
 
 The 3D board loads three.js from a CDN the first time you switch to it, so that
@@ -88,9 +88,14 @@ Multiplayer hides Save, since the host owns the state.
 
 ## Deploying
 
-The repo is set up for [Vercel](https://vercel.com) — `vercel.json` points at
-`html_version/` and adds cache headers. Any static host works just as well: set
-the publish directory to `html_version`.
+The game sits at the repository root, so **GitHub Pages needs no build at all**:
+Settings → Pages → Source → *Deploy from a branch* → `main` / `/ (root)`. It
+will be live at `https://abuklown.github.io/Capital_Monopoly/`, and every push
+to `main` republishes it.
+
+`vercel.json` is also set up, with cache headers so the audio is not
+re-downloaded. Any static host works just as well — point it at the repository
+root.
 
 ## How it is built
 
