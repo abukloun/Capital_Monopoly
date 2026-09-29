@@ -4779,16 +4779,40 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     });
     const tex=new window.THREE.CanvasTexture(cv);tex.anisotropy=4;tex.encoding=window.THREE.sRGBEncoding;return tex;
   }
-  function cap3dDiceQuat(v,out){
-    const e=new window.THREE.Euler(0,0,0);
-    if(v===2)e.set(0,Math.PI*0.25,0);
-    else if(v===5)e.set(Math.PI,Math.PI*0.25,0);
-    else if(v===1)e.set(0,Math.PI*0.25,Math.PI/2);
-    else if(v===6)e.set(0,Math.PI*0.25,-Math.PI/2);
-    else if(v===3)e.set(-Math.PI/2,0,Math.PI*0.25);
-    else e.set(Math.PI/2,0,Math.PI*0.25);
-    out=out||new window.THREE.Quaternion();
-    out.setFromEuler(e);return out;
+  /* Which value is painted on which face of the die.
+     BoxGeometry material order is [+X,-X,+Y,-Y,+Z,-Z], so this maps the pip
+     texture index to a world direction. It is the single source of truth: the
+     die is built from it and the resting orientation is solved from it, so the
+     two can never disagree. Opposite faces sum to 7, as on a real die. */
+  const cap3dDiceFaceTable=[3,4,2,5,1,6];
+  const cap3dDiceFaceNormal=[
+    [1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]
+  ];
+  /* Rotation that stands the face showing `v` up, so the result is readable
+     from above once the die settles.
+
+     This used to be a hand-written Euler angle per value, and it was wrong for
+     four of the six: 1 and 3 were swapped, 4 and 6 were swapped, and only 2 and
+     5 stood up correctly. The angles read as plausible in a debugger, which is
+     exactly why the bug survived. Solving it from the face table removes the
+     class of mistake entirely, and a new face or a reordered table can no
+     longer desync the picture from the number. */
+  function cap3dDiceQuat(v,out,yaw){
+    const THREE=window.THREE;
+    const want=Math.max(1,Math.min(6,Math.round(Number(v)||1)));
+    const idx=cap3dDiceFaceTable.indexOf(want);
+    const n=cap3dDiceFaceNormal[idx<0?0:idx];
+    out=out||new THREE.Quaternion();
+    out.setFromUnitVectors(new THREE.Vector3(n[0],n[1],n[2]),new THREE.Vector3(0,1,0));
+    // Any spin about world up is still a legal resting orientation, since the
+    // body is a cube. A different one per roll keeps two identical results from
+    // landing in a visibly cloned pose.
+    // premultiply, not multiply: the yaw has to be applied in world space, i.e.
+    // AFTER the face has been stood up. Applied on the right it rotates the die
+    // about up first and the face-up solve then lands on a different normal,
+    // which leaves the die tipped over instead of flat.
+    if(yaw)out.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),yaw));
+    return out;
   }
   function cap3dInit(){
     if(cap3d.ready||!window.THREE||!window.THREE.Scene)return cap3d.ready;
@@ -4916,12 +4940,41 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       cap3d.tokens.set(i,{group:grp,body:bodyM,cap:capM,glow:glow,labCv:labCv,labTex:labTex,vis:{x:0,z:0,init:false}});
     }
     const faceTex=[3,4,2,5,1,6].map(cap3dPipTexture);
-    const diceMats=faceTex.map(function(tx){return new THREE.MeshPhysicalMaterial({color:0xffffff,roughness:0.32,metalness:0,clearcoat:0.3,clearcoatRoughness:0.5,map:tx});});
+    /* Dice: two per-die material sets (so each can flash on its own impact),
+       plus a flat ring on the board that fires on every bounce. The face
+       textures come from cap3dDiceFaceTable, the same table the resting
+       orientation is solved from, so the picture can never disagree with the
+       number. */
+    const diceGeo=new THREE.BoxGeometry(0.34,0.34,0.34);
+    const impactGeo=new THREE.RingGeometry(0.3,0.4,40);
     for(let d=0;d<2;d++){
-      const m=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.34,0.34),diceMats);
+      const mats=faceTex.map(function(tx){
+        return new THREE.MeshPhysicalMaterial({color:0xffffff,roughness:0.3,metalness:0,clearcoat:0.4,clearcoatRoughness:0.35,emissive:0x000000,map:tx});
+      });
+      const m=new THREE.Mesh(diceGeo,mats);
       m.castShadow=true;m.visible=false;scene.add(m);
-      cap3d.dice.push({mesh:m,spin:{x:0,y:0},target:new THREE.Quaternion(),rest:new THREE.Vector3(d===0?-0.55:0.55,0.18,d===0?-0.25:0.25),active:false,t:0});
+      const ring=new THREE.Mesh(impactGeo,new THREE.MeshBasicMaterial({color:0xf6d365,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false}));
+      ring.rotation.x=-Math.PI/2;ring.visible=false;scene.add(ring);
+      cap3d.dice.push({
+        mesh:m,mats:mats,ring:ring,
+        target:new THREE.Quaternion(),
+        rest:new THREE.Vector3(d===0?-0.62:0.62,0.18,d===0?-0.3:0.3),
+        // throw state
+        mode:"idle",t0:0,wasRolling:false,tumble:new THREE.Vector3(0.4,1,0.25).normalize(),
+        tumbleRate:0,tumbleAng:0,startQ:new THREE.Quaternion(),throwFrom:new THREE.Vector3(),
+        landFrom:new THREE.Vector3(),landQ:new THREE.Quaternion(),landP:0,
+        squashT:9,squashS:0,ringT:9,ringS:0,flashT:9,flashS:0
+      });
     }
+    /* The total, drawn on the board right above the dice. The dice themselves
+       now show their own value face up, but the board is viewed at an angle
+       from far away, so the sum is spelled out as well: two 3s read as 6
+       without the player having to add them up from across the table. */
+    const sumCv=document.createElement("canvas");sumCv.width=512;sumCv.height=256;
+    const sumTex=new THREE.CanvasTexture(sumCv);sumTex.encoding=THREE.sRGBEncoding;
+    const sumSpr=new THREE.Sprite(new THREE.SpriteMaterial({map:sumTex,transparent:true,depthTest:false,opacity:0}));
+    sumSpr.scale.set(1.9,0.95,1);sumSpr.position.set(0,1.55,0);sumSpr.visible=false;scene.add(sumSpr);
+    cap3d.sumCv=sumCv;cap3d.sumCtx=sumCv.getContext("2d");cap3d.sumTex=sumTex;cap3d.sumSpr=sumSpr;cap3d.sumT=9;
     cap3dBindControls();
     cap3dResize();
     cap3dFitCamera(true);
@@ -5159,14 +5212,48 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       const pl=players.find(function(q){return q&&q.id===id;});
       if(!pl)slot.group.visible=false;
     });
+    /* The dice targets follow the rolled values. The resting yaw is derived
+       from the roll number rather than stored, so it is stable while the result
+       is on screen and still different between two identical rolls. */
     const dk=lastDice[0]+"+"+lastDice[1]+"|"+state;
     if(force||dk!==cap3d.prevDiceKey){
+      const rolled=lastDice[0]+"+"+lastDice[1]!==cap3d.prevDiceVals;
+      if(rolled||force){
+        cap3d.rollSeq=(cap3d.rollSeq||0)+1;
+        cap3dDiceSumDraw();
+        cap3d.sumT=0;
+      }
       cap3d.prevDiceKey=dk;
+      cap3d.prevDiceVals=lastDice[0]+"+"+lastDice[1];
+      const seq=cap3d.rollSeq||1;
       cap3d.dice.forEach(function(d,i){
         const v=Math.max(1,Math.min(6,Number(lastDice[i])||1));
-        d.target.copy(cap3dDiceQuat(v));
+        // Golden-ratio spread over the roll number: the two dice never share a
+        // pose, and consecutive rolls are not related to each other.
+        const yaw=((seq*0.6180339887+i*0.5)%1)*Math.PI*2;
+        d.target.copy(cap3dDiceQuat(v,null,yaw));
       });
     }
+  }
+  /* Paints the total above the dice: the two faces that were thrown, and the
+     sum they add up to. */
+  function cap3dDiceSumDraw(){
+    const ctx=cap3d.sumCtx;
+    if(!ctx)return;
+    const cv=cap3d.sumCv;
+    const a=Math.max(1,Math.min(6,Number(lastDice[0])||1));
+    const b=Math.max(1,Math.min(6,Number(lastDice[1])||1));
+    ctx.clearRect(0,0,cv.width,cv.height);
+    ctx.textAlign="center";ctx.textBaseline="middle";
+    ctx.font="700 46px 'Trebuchet MS',system-ui,sans-serif";
+    ctx.fillStyle="rgba(226,236,255,.82)";
+    ctx.fillText(a+"  +  "+b,cv.width/2,86);
+    ctx.font="800 148px 'Trebuchet MS',system-ui,sans-serif";
+    ctx.lineWidth=12;ctx.strokeStyle="rgba(4,7,13,.92)";
+    ctx.strokeText(String(a+b),cv.width/2,190);
+    ctx.fillStyle="#f6d365";
+    ctx.fillText(String(a+b),cv.width/2,190);
+    try{cap3d.sumTex.needsUpdate=true;}catch(_){}
   }
   /* 3D tile-by-tile movement (renderer only). Reads game state, writes only its
      own visual slot. Resolves strictly on rAF animation completion — the game
@@ -5254,6 +5341,228 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
         requestAnimationFrame(frame);
       }catch(_){done();}
     });
+  }
+  /* ---------- 3D dice throw ----------
+     The old throw was a hover: the die floated above the board on a sine wave
+     and spun on its own axes, then slerped to its resting face. It never left
+     the board, never landed, and nothing happened at the moment of contact,
+     which is the only moment a die throw is actually about.
+
+     This runs a real trajectory in three beats:
+       throw  a hand-off from high and behind, arcing down onto the board
+       land   impact, squash, then two bounces with decaying height
+       settle the last bounce resolves onto the exact face-up orientation,
+              with a small overshoot so it snaps rather than slides
+
+     Impact is where the juice lives, so it is worth naming: a flat ring
+     expands on the board, the die squashes and wobbles back with a damped
+     spring, and its faces flash warm. Each beat gets weaker, so the die
+     appears to come to rest under its own weight rather than stopping dead.
+
+     Everything is renderer-only and additive. The rolled values, the turn
+     state and the game continuation are read, never written. */
+  const cap3dDiceThrowDur=0.62,cap3dDiceLandDur=0.95;
+  // easeInOutCubic, the same curve the 3D piece walk uses, so a throw and a
+  // walk do not read as two different clocks.
+  function cap3dDiceEase(t){
+    t=Math.max(0,Math.min(1,t));
+    return t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+  }
+  // easeOutBack: overshoots slightly past 1, so the number arrives with a kick.
+  function cap3dDicePop(t){
+    t=Math.max(0,Math.min(1,t));
+    const c=1.70158*0.55;
+    return 1+(c+1)*Math.pow(t-1,3)+c*Math.pow(t-1,2);
+  }
+  function cap3dDiceTick(ts,dt,reduced,rolling){
+    if(!cap3d.scene||!cap3d.dice.length)return;
+    const show=players.length>0;
+    cap3d.dice.forEach(function(d,i){
+      d.mesh.visible=show;
+      if(d.ring)d.ring.visible=d.ring.visible&&show;
+      if(!show)return;
+
+      // Reduced motion: no trajectory, no squash, no ring. The result is
+      // simply already face up, which is the one thing that must never be lost.
+      if(reduced){
+        d.mesh.position.copy(d.rest);
+        d.mesh.quaternion.copy(d.target);
+        d.mesh.scale.set(1,1,1);
+        if(d.ring){d.ring.visible=false;d.ring.material.opacity=0;}
+        return;
+      }
+
+      if(rolling){
+        if(!d.wasRolling){
+          // A fresh roll. Start the die up and behind the board, from the side
+          // the camera tends to sit on, so the throw reads as coming from the
+          // player's hand rather than dropping in from nowhere.
+          // lastP must reset too: impact detection compares it against the
+          // crossing, and a stale value from the previous throw would either
+          // skip the first impact or fire it late.
+          d.wasRolling=true;d.t0=ts;d.tumbleAng=0;d.mode="throw";d.lastP=undefined;
+          d.tumble.set(d===cap3d.dice[0]?0.55:-0.5,1,d.rest.z>0?-0.35:0.4).normalize();
+          d.tumbleRate=16+3*i+Math.random()*4;
+          d.startQ.copy(d.mesh.quaternion);
+          d.throwFrom.set(d.rest.x*2.2,2.45,d.rest.z*2.2+1.15);
+          d.ring.visible=false;d.ring.material.opacity=0;
+        }
+        const el=(ts-d.t0)/1000;
+        if(el<cap3dDiceThrowDur){
+          const u=el/cap3dDiceThrowDur;
+          const e=cap3dDiceEase(u);
+          // Arc: eased horizontally, parabola vertically, so the die accelerates
+          // out of the hand and drops the last of the way under gravity.
+          d.mesh.position.set(
+            d.throwFrom.x+(d.rest.x-d.throwFrom.x)*e,
+            d.rest.y+(d.throwFrom.y-d.rest.y)*(1-e)+Math.sin(Math.PI*u)*0.75,
+            d.throwFrom.z+(d.rest.z-d.throwFrom.z)*e
+          );
+        }else{
+          // The result is not known yet, so the die keeps waiting: small hops
+          // over the resting spot that decay toward flat. Without this it
+          // would hang frozen in mid-air for the rest of the roll, and the
+          // throw reads as having finished before the player knows the result.
+          const w=el-cap3dDiceThrowDur;
+          const hop=Math.abs(Math.sin(w*11))*Math.max(0,0.3-w*0.28);
+          d.mesh.position.set(
+            d.rest.x+Math.sin(w*6+i*2)*0.06*hop,
+            d.rest.y+hop,
+            d.rest.z+Math.cos(w*5+i)*0.06*hop
+          );
+        }
+        d.tumbleAng+=dt*d.tumbleRate;
+        d.mesh.quaternion.setFromAxisAngle(d.tumble,d.tumbleAng).multiply(d.startQ);
+        d.mesh.scale.set(1,1,1);
+        return;
+      }
+
+      // Not rolling: land. Captured once, on the frame the roll ends, so the
+      // die settles from wherever the throw actually left it.
+      if(d.wasRolling){
+        d.wasRolling=false;d.t0=ts;d.landP=0;d.squashT=9;
+        d.landFrom.copy(d.mesh.position);
+        d.landQ.copy(d.mesh.quaternion);
+      }
+      if(d.mode==="idle"){
+        d.mesh.position.copy(d.rest);
+        d.mesh.quaternion.slerp(d.target,Math.min(1,dt*3.4));
+        d.mesh.scale.set(1,1,1);
+        return;
+      }
+      d.landP=Math.min(1,(ts-d.t0)/(cap3dDiceLandDur*1000));
+      cap3dDiceLand(d,dt);
+    });
+    cap3dDiceSumTick(dt,reduced);
+  }
+  /* The land phase, as a function of elapsed time.
+     p      0.00-0.22  the last of the drop, under gravity
+           0.22-0.52  first bounce, and the squash on the way down
+           0.52-0.74  second bounce, weaker
+           0.74-1.00  at rest, easing onto the rolled face
+     Every boundary is an impact, and each one fires the ring, the squash and
+     the flash with a strength that decays along with the bounce. */
+  function cap3dDiceLand(d,dt){
+    const p=d.landP;
+    const IMP=[[0.22,1],[0.52,0.5],[0.74,0.22]];
+    let y=0;
+    if(p<0.22){
+      const u=p/0.22;
+      y=(d.landFrom.y-d.rest.y)*(1-u*u);
+    }else if(p<0.52){
+      y=Math.sin(Math.PI*(p-0.22)/0.3)*0.34;
+    }else if(p<0.74){
+      y=Math.sin(Math.PI*(p-0.52)/0.22)*0.14;
+    }
+    d.mesh.position.set(
+      d.landFrom.x+(d.rest.x-d.landFrom.x)*Math.min(1,p/0.22),
+      d.rest.y+y,
+      d.landFrom.z+(d.rest.z-d.landFrom.z)*Math.min(1,p/0.22)
+    );
+
+    // Orientation: the tumble is spun down first, then the die is handed the
+    // exact face-up orientation with a small overshoot before it settles.
+    if(p<0.4){
+      d.tumbleAng+=dt*d.tumbleRate*0.5;
+      d.mesh.quaternion.setFromAxisAngle(d.tumble,d.tumbleAng).multiply(d.landQ);
+    }else{
+      const u=cap3dDiceEase((p-0.4)/0.6);
+      d.mesh.quaternion.slerp(d.target,Math.min(1.06,u*1.06));
+    }
+
+    // Impact handling.
+    for(let k=0;k<IMP.length;k++){
+      if(d.lastP!==undefined&&d.lastP<IMP[k][0]&&p>=IMP[k][0]){
+        d.squashT=0;d.squashS=IMP[k][1];
+        d.ringT=0;d.ringS=IMP[k][1];
+        d.flashT=0;d.flashS=IMP[k][1];
+        d.ring.position.set(d.rest.x,0.012,d.rest.z);
+        d.ring.visible=true;
+      }
+    }
+    d.lastP=p;
+
+    // Damped squash: the die flattens on contact, then wobbles upright.
+    d.squashT+=dt;
+    if(d.squashT<0.5){
+      const e=Math.exp(-d.squashT*11)*Math.cos(d.squashT*26)*d.squashS;
+      d.mesh.scale.set(1+e*0.26,1-e*0.34,1+e*0.26);
+    }else if(d.mesh.scale.y!==1){
+      d.mesh.scale.set(1,1,1);
+    }
+
+    // Ring: expands and fades on the board under the die.
+    if(d.ring.visible){
+      d.ringT+=dt;
+      const u=d.ringT/0.5;
+      if(u>=1){d.ring.visible=false;d.ring.material.opacity=0;}
+      else{
+        const s=0.5+u*1.9*d.ringS;
+        d.ring.scale.set(s,s,1);
+        d.ring.material.opacity=(1-u)*(1-u)*0.8*d.ringS;
+      }
+    }
+
+    // Warm flash on the faces, only on the strongest impact.
+    if(d.flashS>0){
+      d.flashT+=dt;
+      const u=d.flashT/0.3;
+      if(u>=1){d.flashS=0;for(let m=0;m<d.mats.length;m++)d.mats[m].emissive.setRGB(0,0,0);}
+      else{
+        const e=(1-u)*(1-u)*d.flashS*0.5;
+        for(let m=0;m<d.mats.length;m++)d.mats[m].emissive.setRGB(e,e*0.86,e*0.5);
+      }
+    }
+
+    if(p>=1)d.mode="idle";
+  }
+  /* The sum readout: pops in when the result lands, then dims to a quiet
+     persistent hint so it never competes with the board. */
+  function cap3dDiceSumTick(dt,reduced){
+    const spr=cap3d.sumSpr;
+    if(!spr||!players.length){if(spr)spr.visible=false;return;}
+    // Under reduced motion the total still has to be readable, so it appears at
+    // a fixed size instead of popping in.
+    if(reduced){
+      spr.visible=true;
+      spr.material.opacity=0.9;
+      spr.scale.set(1.9,0.95,1);
+      return;
+    }
+    cap3d.sumT+=dt;
+    spr.visible=true;
+    if(cap3d.sumT<0.4){
+      const u=cap3dDicePop(cap3d.sumT/0.4);
+      spr.scale.set(1.9*u,0.95*u,1);
+      spr.material.opacity=Math.min(1,cap3d.sumT/0.18);
+    }else if(cap3d.sumT<2.2){
+      spr.material.opacity=1;
+      spr.scale.set(1.9,0.95,1);
+    }else{
+      const u=Math.min(1,(cap3d.sumT-2.2)/1.2);
+      spr.material.opacity=1-u*0.45;
+      spr.scale.set(1.9,0.95,1);
+    }
   }
   /* ---------- CAPITAL 3D FX LAYER (experimental, fully reversible) ----------
      Visual-only effects. Each effect reads game state and animates 3D objects;
@@ -5430,23 +5739,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       });
       cap3dFxTick(ts,dt);
       cap3dGrowTick(ts);
-      const rolling=(state===STATES.ROLLING);
-      cap3d.dice.forEach(function(d,i){
-        if(!cap3d.scene)return;
-        const show=players.length>0;
-        d.mesh.visible=show;
-        if(!show)return;
-        if(rolling&&!reduced){
-          if(!d.wasRolling){d.wasRolling=true;d.rollT0=ts;}
-          const b=cap3dFx.enabled?Math.min(1,(ts-d.rollT0)/200):1,lift=b*b;
-          d.mesh.position.set(d.rest.x+Math.sin(t*7+i*2)*0.25*lift,d.rest.y+(1.1-d.rest.y)*lift+Math.abs(Math.sin(t*5+i))*0.5*lift,d.rest.z+Math.cos(t*6+i)*0.25*lift);
-          d.mesh.rotation.x+=dt*(6+i*2)*lift;d.mesh.rotation.y+=dt*(7-i*2)*lift;d.mesh.rotation.z+=dt*3*lift;
-        }else{
-          d.wasRolling=false;
-          d.mesh.position.lerp(d.rest,Math.min(1,dt*4));
-          d.mesh.quaternion.slerp(d.target,Math.min(1,dt*(reduced?10:3.2)));
-        }
-      });
+      cap3dDiceTick(ts,dt,reduced,state===STATES.ROLLING);
       cap3d.renderer.render(cap3d.scene,cap3d.camera);
     }catch(err){try{console.warn("CAPITAL 3D frame failed",err);}catch(_){}}
   }
