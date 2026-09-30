@@ -3511,6 +3511,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 <button class="btn yes wide" id="btnPlay" onclick="window.Capital.play()" type="button">Играть с ботами</button>
 <button class="btn no wide capital-mp-menu-btn" id="btnMultiplayer" type="button"><span>Создать игру</span></button>
 <button class="btn no wide capital-mp-menu-btn" id="btnJoin" type="button"><span>Войти по коду</span></button>
+<button class="btn no wide capital-mp-menu-btn" id="btnResumeRoom" type="button" style="display:none"></button>
 <button class="btn no wide" id="btnHow">Как играть</button>
 <button class="btn no wide" id="btnTutorial">🎓 Обучение</button>
 </div>
@@ -4380,6 +4381,11 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       }
       mpTeardownTransport();
       mp.room=code;mp.host=!!host;mp.localName=(name||"Player").trim().slice(0,16)||"Player";
+      // Remembering the room here is what puts "return to room ABC123" back on
+      // the menu, which together with the server copy is a real way back into a
+      // game whose host has gone.
+      profileRememberRoom(code);
+      profileSet({name:mp.localName});
       if(!restoreSession||!mp.joinedAt)mp.joinedAt=Date.now();
       mp.active=true;mp.connected=false;mp.snapshotSeq=0;mp.lastAppliedSeq=0;mp.pendingSnapshotSeq=0;mp.realtimeStateSeq=0;mp.lastRealtimeStateSeq=0;mpEventSeq=0;mp.lastModalSig="";mpPendingTrade=null;mpLastTradeId=null;mp.members=host?[{clientId:mp.clientId,name:mp.localName,host:true,joinedAt:mp.joinedAt}]:[];
       // A host coming back from a stored session may no longer be the authority.
@@ -4533,6 +4539,10 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     if(mp.active)mpSend({kind:"leave",clientId:mp.clientId});
     mpTeardownTransport(200);
     mp.host=false;mp.room="";mp.members=[];mp.pendingStart=null;mpPendingTrade=null;mpLastTradeId=null;mpClearSession();clearModal();modalOpen=false;modalKind=null;backToMenu();
+    // Leaving on purpose means that room is not "where you were playing", so the
+    // resume shortcut should stop offering it.
+    profileForgetRoom();
+    try{profileRenderResume();}catch(_){}
     try{syncActionPanel();}catch(_){}
   }
   function mpFlowClose(){
@@ -7109,6 +7119,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
 
   function setLanguage(next){lang=next==="ru"?"ru":"en";window.capitalLang=lang;applyLanguage();}
   function applyLanguage(){
+    try{profileRenderResume();}catch(_){}
     document.documentElement.lang=lang;document.title=lang==="en"?"Capital — Board Game":"Capital — настольная игра";
     const set=(sel,val)=>{const e=document.querySelector(sel);if(e)e.textContent=val;};
     set("#menuScreen .menu-sub",T("menuSub"));set("#btnPlay",T("play"));set("#btnHow",T("how"));set("#btnTutorial",T("tutorial"));
@@ -7615,6 +7626,89 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     if(remaining.length>0)return;
     mpServerCancelSave();
     mpServerClearState();
+  }
+  /* ---------- Remember me ----------
+     Not a login. Nothing here can stop anyone playing: there is no gate, no
+     password, no account to create, and clearing storage costs you nothing but
+     the nickname you typed. What it buys is the small friction that makes a
+     browser game feel like it remembers you - your name is already filled in,
+     your capital and table size are where you left them, and a room you played
+     in is one click away instead of a code to retype from memory.
+
+     The room memory is the part that earns its keep. Combined with the server
+     copy of the game state, "return to room ABC123" is a real recovery path: if
+     your host lost their laptop, the room you were in is still on the menu, and
+     walking back into it brings the game with it. */
+  const PROFILE_KEY="capital.profile.v1";
+  const PROFILE_ROOM_TTL=7*24*60*60*1000;   // forget a room after a week
+  let profileCache=null;
+  function profileGet(){
+    if(profileCache)return profileCache;
+    try{
+      const raw=localStorage.getItem(PROFILE_KEY);
+      profileCache=raw?(JSON.parse(raw)||{}):{};
+    }catch(_){profileCache={};}
+    return profileCache;
+  }
+  function profileSet(patch){
+    try{
+      const next={...profileGet(),...patch};
+      // Never store a blank name: an empty nickname is worse than the default
+      // one it replaced, and it would show up pre-filled in every dialog.
+      if(next.name!=null&&!String(next.name).trim())delete next.name;
+      profileCache=next;
+      localStorage.setItem(PROFILE_KEY,JSON.stringify(next));
+      return next;
+    }catch(_){return profileGet();}
+  }
+  function profileForgetRoom(){
+    try{const p={...profileGet()};delete p.room;delete p.roomAt;profileCache=p;localStorage.setItem(PROFILE_KEY,JSON.stringify(p));}catch(_){}
+  }
+  function profileRoom(){
+    const p=profileGet();
+    const room=String(p.room||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6);
+    if(room.length!==6)return "";
+    const at=Number(p.roomAt)||0;
+    if(!at||Date.now()-at>PROFILE_ROOM_TTL)return "";
+    return room;
+  }
+  function profileRememberRoom(code){
+    const room=String(code||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6);
+    if(room.length!==6)return;
+    profileSet({room:room,roomAt:Date.now()});
+  }
+  function profileNickname(){
+    const n=String(profileGet().name||"").trim().slice(0,16);
+    return n||"";
+  }
+  /* The resume button is a shortcut, never a gate. It only appears when there is
+     a recent room, and pressing it just opens the normal join dialog with the
+     code already filled in - the same path as typing the code by hand. */
+  function profileRenderResume(){
+    const btn=document.getElementById("btnResumeRoom");
+    if(!btn)return;
+    const room=profileRoom();
+    if(!room){btn.style.display="none";btn.textContent="";return;}
+    btn.style.display="";
+    btn.innerHTML=`<span>${lang==="en"?"Return to room":"Вернуться в комнату"} <b>${escapeHtml(room)}</b></span>`;
+  }
+  function profileBind(){
+    // The nickname field is the one piece of identity the game has, so it is
+    // both read from and written to the profile.
+    const nick=document.getElementById("nickInput");
+    if(nick){
+      const remembered=profileNickname();
+      if(remembered)nick.value=remembered;
+      nick.addEventListener("change",()=>profileSet({name:nick.value}));
+      nick.addEventListener("blur",()=>profileSet({name:nick.value}));
+    }
+    const resume=document.getElementById("btnResumeRoom");
+    if(resume)resume.addEventListener("click",()=>{
+      const room=profileRoom();
+      if(!room)return;
+      mpJoin(room,profileNickname());
+    });
+    profileRenderResume();
   }
   /* ---------- State machine ---------- */
   function setState(next){
@@ -9215,6 +9309,10 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     if(startingMoneyOverride!=null){const sm=Number(startingMoneyOverride);if([500,1000,1500,2000,3000].includes(sm))selectedStartingMoney=sm;}
     const startingMoney=selectedStartingMoney;
     const nick=(document.getElementById("nickInput")?.value||"Player").trim()||"Player";const count=Math.max(2,Math.min(8,Number(selectedCount)||4));
+    // Starting a game is the clearest signal that a name was chosen on purpose,
+    // so this is where the profile picks it up. Capital and table size are
+    // remembered too: re-picking them every session is pure friction.
+    profileSet({name:nick,count:count,startingMoney:startingMoney});
     completedRounds=0;totalTurns=0;fastPace=false;
     if(mp.active){
       const members=mp.pendingStart&&mp.pendingStart.length?mpMembersSortedFrom(mp.pendingStart):mpMembersSorted();
@@ -9499,8 +9597,16 @@ document.addEventListener("keydown",e=>{
   }
 
   function capitalInit(){
-    try{installSoundButton();installMusicSettings();buildBoard();renderDice();setCount(4);applyLanguage();updateSoundButtons();updateContinueButton();bindTokenPointResize();}
-    catch(e){console.error("CAPITAL init error",e);}
+    try{installSoundButton();installMusicSettings();buildBoard();renderDice();applyLanguage();updateSoundButtons();updateContinueButton();bindTokenPointResize();}catch(e){console.error("CAPITAL init error",e);}
+    try{profileBind();}catch(e){console.error("CAPITAL profile init error",e);}
+    // Restore the remembered table size and capital. Applied after the profile
+    // read, and through the same setters the buttons use, so the UI reflects it
+    // rather than only the values underneath.
+    try{
+      const p=profileGet();
+      setCount(Number(p.count)||4);
+      setStartingMoney(Number(p.startingMoney)||selectedStartingMoney);
+    }catch(_){}
     try{initBoardView();}catch(e){console.error("CAPITAL view init error",e);}
     try{initDevPanel();}catch(e){console.error("CAPITAL DEV init error",e);}
     try{mpInstallButtons();}catch(e){console.error("CAPITAL multiplayer init error",e);}
