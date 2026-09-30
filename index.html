@@ -3000,6 +3000,37 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 }
 #gameWrap #players .pr-sub > span:last-child{overflow:hidden;text-overflow:ellipsis}
 #gameWrap #players .pr-sub .capital-personality{margin-left:0!important;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis}
+/* Double streak pips. Two filled pips means one more double and the player is
+   on their way to jail, so the second pip pulses rather than sitting still. */
+#gameWrap #players .capital-streak{
+  display:inline-flex!important;align-items:center!important;gap:3px!important;
+  margin-left:7px!important;padding:2px 6px 2px 5px!important;border-radius:999px!important;
+  background:rgba(244,201,93,.13)!important;border:1px solid rgba(244,201,93,.42)!important;
+  vertical-align:middle!important;white-space:nowrap!important;flex:0 0 auto!important;
+}
+#gameWrap #players .capital-streak i{
+  width:7px!important;height:7px!important;border-radius:50%!important;
+  background:rgba(244,201,93,.18)!important;box-shadow:none!important;
+  display:inline-block!important;transition:background .16s ease!important;
+}
+#gameWrap #players .capital-streak i.on{background:#f4c95d!important;box-shadow:0 0 7px rgba(244,201,93,.8)!important}
+#gameWrap #players .capital-streak b{
+  font-size:9px!important;font-weight:900!important;color:rgba(244,201,93,.62)!important;
+  margin-left:2px!important;line-height:1!important;letter-spacing:-.02em!important;
+}
+#gameWrap #players .capital-streak.danger{
+  background:rgba(255,101,116,.15)!important;border-color:rgba(255,101,116,.55)!important;
+  animation:capitalStreakWarn .9s ease-in-out infinite!important;
+}
+#gameWrap #players .capital-streak.danger i.on{background:#ff6574!important;box-shadow:0 0 8px rgba(255,101,116,.85)!important}
+#gameWrap #players .capital-streak.danger b{color:rgba(255,101,116,.75)!important}
+@keyframes capitalStreakWarn{
+  0%,100%{transform:scale(1)}
+  50%{transform:scale(1.09)}
+}
+@media (prefers-reduced-motion:reduce){
+  #gameWrap #players .capital-streak.danger{animation:none!important}
+}
 #gameWrap #players .player-row .pmoney{
   flex:0 0 auto!important;
   font-size:15px!important;
@@ -5462,13 +5493,34 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     const c=1.70158*0.55;
     return 1+(c+1)*Math.pow(t-1,3)+c*Math.pow(t-1,2);
   }
+  /* How strongly the dice are lit by a live double streak. Rises quickly and
+     holds, then falls away when the streak ends. Kept in one place so the
+     streak cast and the landing flash cannot fight over the same emissive. */
+  function cap3dDiceStreakGlow(ts){
+    const live=players.some(p=>p&&!p.bankrupt&&(Number(p.doubles)||0)>0);
+    const target=live?0.5:0;
+    const cur=cap3d.doubleGlow||0;
+    const next=cur+(target-cur)*(live?0.25:0.06);
+    cap3d.doubleGlow=next;
+    return next;
+  }
   function cap3dDiceTick(ts,dt,reduced,rolling){
     if(!cap3d.scene||!cap3d.dice.length)return;
     const show=players.length>0;
+    // While a double streak is live the dice hold a gold cast, so the pair
+    // reads as "these are matching" from across the board without having to
+    // lean in and look. Fades out as soon as the streak ends.
+    const streak=rolling?0:cap3dDiceStreakGlow(ts);
     cap3d.dice.forEach(function(d,i){
       d.mesh.visible=show;
       if(d.ring)d.ring.visible=d.ring.visible&&show;
       if(!show)return;
+      if(d.mats&&!reduced){
+        for(let m=0;m<d.mats.length;m++){
+          const e=d.mats[m].emissive;
+          if(e&&e.setRGB)e.setRGB(streak,streak*0.82,streak*0.42);
+        }
+      }
 
       // Reduced motion: no trajectory, no squash, no ring. The result is
       // simply already face up, which is the one thing that must never be lost.
@@ -5611,14 +5663,17 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       }
     }
 
-    // Warm flash on the faces, only on the strongest impact.
+    // Warm flash on the faces, only on the strongest impact. It adds to the
+    // double-streak cast rather than replacing it, so landing during a streak
+    // is brighter than either on its own instead of the streak being cancelled.
+    const base=cap3d.doubleGlow||0;
     if(d.flashS>0){
       d.flashT+=dt;
       const u=d.flashT/0.3;
-      if(u>=1){d.flashS=0;for(let m=0;m<d.mats.length;m++)d.mats[m].emissive.setRGB(0,0,0);}
+      if(u>=1)d.flashS=0;
       else{
         const e=(1-u)*(1-u)*d.flashS*0.5;
-        for(let m=0;m<d.mats.length;m++)d.mats[m].emissive.setRGB(e,e*0.86,e*0.5);
+        for(let m=0;m<d.mats.length;m++)d.mats[m].emissive.setRGB(Math.min(1,base+e),Math.min(1,base*0.82+e*0.86),Math.min(1,base*0.42+e*0.5));
       }
     }
 
@@ -5717,6 +5772,42 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       cap3dFx.floaters.push({spr:spr,tex:tex,mat:mat,t0:now,life:1400,slot:idx,x0:at.x+place.x,y0:place.y});
       cap3dFxPruneFloaters();
     }catch(_){}
+  }
+  /* Double celebration.
+     A double used to be one more line in the event log and a line of text in
+     the panel. It is the one roll the crowd cheers for, so it gets said out
+     loud in the 3D view: both dice take a gold cast, a ring fires outward from
+     under them, and the number over the board punches up. Visual only, it
+     writes nothing but its own timers. */
+  function cap3dFxDouble(){
+    if(!cap3dFx.enabled)return;
+    if(boardView!=="3d"||!cap3d.ready||!cap3d.scene)return;
+    try{
+      const now=performance.now();
+      if(!cap3d.doubleRing){
+        const ring=new THREE.Mesh(
+          new THREE.RingGeometry(0.42,0.52,48),
+          new THREE.MeshBasicMaterial({color:0xf6d365,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false})
+        );
+        ring.rotation.x=-Math.PI/2;ring.visible=false;cap3d.scene.add(ring);
+        cap3d.doubleRing=ring;
+      }
+      const ring=cap3d.doubleRing;
+      // Ring starts under the dice, which sit either side of the board centre.
+      ring.position.set(0,0.02,0);
+      ring.visible=true;
+      cap3d.doubleT=now;
+    }catch(_){}
+  }
+  function cap3dFxDoubleTick(now){
+    const ring=cap3d&&cap3d.doubleRing;
+    if(!ring||!ring.visible)return;
+    const t=(now-cap3d.doubleT)/900;
+    if(t>=1){ring.visible=false;ring.material.opacity=0;return;}
+    // Two rings' worth of motion compressed into one: a fast burst that settles.
+    const s=0.5+Math.pow(t,0.55)*3.4;
+    ring.scale.set(s,s,1);
+    ring.material.opacity=(1-t)*(1-t)*0.85;
   }
   function cap3dFxPurchase(p,t){
     if(!cap3dFx.enabled)return;
@@ -5860,6 +5951,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
         try{entry.crown.scale.set(s,s,1);}catch(_){}
       });
       cap3dFxTick(ts,dt);
+      cap3dFxDoubleTick(ts);
       cap3dGrowTick(ts);
       cap3dDiceTick(ts,dt,reduced,state===STATES.ROLLING);
       cap3d.renderer.render(cap3d.scene,cap3d.camera);
@@ -6559,6 +6651,27 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     dice(){playDiceSfx();},
     step(){playStepSfx();},
     coin(){tone(660,.075,"sine",.044);tone(880,.09,"sine",.040,.07);tone(1175,.12,"sine",.034,.14);tone(1568,.16,"sine",.024,.23);},
+    /* A double. Struck metal rather than a plain beep, so it belongs to the
+       same family as rent and income and is recognisable over the theme.
+       Ascending and bright, because a double is the one roll worth cheering:
+       three rising strikes instead of one. */
+    double(){
+      const ctx=ensureAudio();if(!ctx)return;
+      const t=ctx.currentTime;
+      metal(t,880,.26,.30,0);
+      metal(t+.055,1175,.28,.30,0);
+      metal(t+.11,1568,.42,.34,0);
+    },
+    /* Second double in a row: the same shape, pushed up a tone and doubled in
+       weight. Without this the warning is only a colour change in the panel. */
+    doubleWarn(){
+      const ctx=ensureAudio();if(!ctx)return;
+      const t=ctx.currentTime;
+      metal(t,1175,.24,.30,0);
+      metal(t+.05,1568,.26,.30,0);
+      metal(t+.10,1760,.5,.36,0);
+      tone(140,.22,"sine",.20,0);
+    },
     /* Paying rent. This used to be payment.wav layered on top of coin(), which
        is an ascending chime: the game played the "you gained money" sound while
        taking money away, so paying rent sounded like a reward and was buried
@@ -6925,7 +7038,13 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
       row.style.position="relative";
       const isMe=mp.active?mpIsLocalPlayer(p):!!p.human;
       const tags=`${isMe?`<span class="pr-tag pr-you">${lang==="en"?"You":"Вы"}</span>`:""}${p.inJail?`<span class="pr-tag pr-jail" title="${lang==="en"?"In Jail":"В тюрьме"}">🔒</span>`:""}${p.getOutCards?`<span class="pr-tag" title="${lang==="en"?"Get Out of Jail Free":"Выход из тюрьмы"}">🎟×${p.getOutCards}</span>`:""}`;
-      row.innerHTML=`<div class="pr-top"><div class="player-mini-piece" style="--piece-color:${p.color}"><span class="mini-head"></span><span class="mini-body"></span></div><div class="pname"><div class="pr-name"><span class="pr-name-text">${escapeHtml(playerLabel(p))}</span>${tags}</div><div class="pr-sub">${!p.human?`<span class="capital-personality">${escapeHtml(personalityLabel(p))}</span>`:""}<span>${playerPropertySummary(p,props,houses,hotels)}</span></div></div><div class="pmoney">${p.bankrupt?T("bankrupt"):"$"+Math.max(0,Math.floor(p.money)).toLocaleString("en-US")}</div></div>`;
+      // Double streak indicator. The counter was tracked and synced to every
+      // multiplayer client but never rendered, so a third double sent a player
+      // to jail with nothing on screen warning it was coming.
+      const streak=(Number(p.doubles)||0)>0&&!p.bankrupt
+        ?`<span class="capital-streak${(Number(p.doubles)||0)>=2?" danger":""}" title="${lang==="en"?"Double streak — a third double sends you to jail":"Серия дублей — третий дубль отправляет в тюрьму"}" aria-label="${Math.min(2,Number(p.doubles)||0)} of 2 doubles, a third sends you to jail">${[1,2].map(i=>`<i class="${(Number(p.doubles)||0)>=i?"on":""}"></i>`).join("")}<b>${Math.min(2,Number(p.doubles)||0)}/2</b></span>`
+        :"";
+      row.innerHTML=`<div class="pr-top"><div class="player-mini-piece" style="--piece-color:${p.color}"><span class="mini-head"></span><span class="mini-body"></span></div><div class="pname"><div class="pr-name"><span class="pr-name-text">${escapeHtml(playerLabel(p))}</span>${tags}${streak}</div><div class="pr-sub">${!p.human?`<span class="capital-personality">${escapeHtml(personalityLabel(p))}</span>`:""}<span>${playerPropertySummary(p,props,houses,hotels)}</span></div></div><div class="pmoney">${p.bankrupt?T("bankrupt"):"$"+Math.max(0,Math.floor(p.money)).toLocaleString("en-US")}</div></div>`;
       if(props.length){
         const inv=document.createElement("div");
         inv.className="capital-inventory";
@@ -7427,6 +7546,11 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
   function resolveRoll(p,d1,d2,jailRoll){
     if(!validTurn(p)||state!==STATES.ROLLING)return;
     const total=d1+d2,isDouble=d1===d2;lastRollTotal=total;
+    // The celebration fires on the roll itself, not after the piece has
+    // finished walking, so the two dice the player is looking at are the ones
+    // that light up.
+    if(isDouble&&!cap3dReducedMotion)try{cap3dFxDouble&&cap3dFxDouble();}catch(_){}
+    if(isDouble)try{SFX.double();}catch(_){}
     log(`${playerLabel(p)} бросает ${d1}+${d2}=${total}${isDouble?" — дубль, ещё один ход.":"."}`);tutorialAfterRoll();
     if(jailRoll){
       if(isDouble){p.inJail=false;p.jailAttempts=0;p.doubles=0;extraTurnPending=false;log(`${playerLabel(p)} выбрасывает дубль ${d1}+${d2} и выходит из тюрьмы.`);showActionEvent("jailfree",p,{titleEn:"OUT OF JAIL",titleRu:"ВЫХОД ИЗ ТЮРЬМЫ",detailEn:`Double ${d1} + ${d2}`,detailRu:`Дубль ${d1} + ${d2}`,icon:"🔓",tone:"green",duration:1350});SFX.coin();}
@@ -7435,6 +7559,18 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
       p.doubles=isDouble?(p.doubles||0)+1:0;
       if(isDouble&&p.doubles>=3){p.doubles=0;extraTurnPending=false;sendToJail(p);endTurn(p);return;}
       extraTurnPending=isDouble;
+      // The second double is the one that matters: the next one costs the
+      // player their turn and their freedom. Nothing used to say so.
+      if(isDouble&&p.doubles===2){
+        try{SFX.doubleWarn();}catch(_){}
+        const warn=lang==="en"
+          ?`${playerLabel(p)} has rolled two doubles in a row. One more and they go straight to jail.`
+          :`${playerLabel(p)} выбросил два дубля подряд. Ещё один — и прямая тюрьма.`;
+        log(warn);
+        toast(lang==="en"?"⚠️ One more double and you go to jail":"⚠️ Ещё дубль — и ты в тюрьме",'warn');
+        showActionEvent("doublewarn",p,{titleEn:"DOUBLE STREAK",titleRu:"СЕРИЯ ДУБЛЕЙ",detailEn:"One more double sends you to jail",detailRu:"Ещё один дубль — и ты в тюрьме",icon:"⚠️",tone:"red",duration:1600});
+      }
+      if(isDouble)renderPlayers();
     }
     animateMove(p,total,()=>landPlayer(p));
   }
