@@ -3870,7 +3870,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   /* ---------- Realtime multiplayer ---------- */
   const mp = {
     active:false, host:false, room:"", clientId:("c_"+Math.random().toString(36).slice(2,10)),
-    channel:null, members:[], pendingStart:null, lastSnapshot:"", lastModalSig:"", connected:false, publishTimer:null, auctionTimer:null, snapshotSeq:0, lastAppliedSeq:0, pendingSnapshotSeq:0, realtimeStateSeq:0, lastRealtimeStateSeq:0, syncTimer:null
+    channel:null, members:[], pendingStart:null, lastSnapshot:"", lastModalSig:"", connected:false, publishTimer:null, auctionTimer:null, snapshotSeq:0, lastAppliedSeq:0, pendingSnapshotSeq:0, realtimeStateSeq:0, lastRealtimeStateSeq:0, syncTimer:null, hostId:null, hostWatchTimer:null, claimTimer:null, lastTickAt:0, restorePending:false, authoritySettled:false
   };
   function mpLocalPlayer(){return players.find(p=>p&&p.mpClientId===mp.clientId)||null;}
   function mpIsLocalPlayer(p){return !!(p&&mp.active&&p.mpClientId===mp.clientId);}
@@ -4020,11 +4020,158 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       if(mpHasLiveGame())return false;
       if(!mpServerStateUsable(s))return false;
       mpApplySnapshot(s);
+      // A restored game may have been restored precisely because the host was
+      // gone. Start the stall watch from now: if the real host is alive its
+      // heartbeats keep resetting the clock, and if it is not, the same election
+      // that rescues a mid-game disconnect rescues this one.
+      if(!mp.host){mp.lastTickAt=Date.now();mpStartHostWatch();}
       log(lang==="en"?`Restored the saved game for room ${mp.room}.`:`Восстановлена сохранённая партия комнаты ${mp.room}.`);
       toast(lang==="en"?"Game restored from the server.":"Партия восстановлена с сервера.","good");
       if(reason)console.info("CAPITAL server restore",reason);
       return true;
     });
+  }
+  /* ---------- Host migration ----------
+     The host was the only game authority and there was no way to give that up:
+     close its tab and a thirty minute game is over for everyone, with the state
+     living in nothing but that browser. Now authority is recoverable.
+
+     The hard part is not handing over, it is making sure exactly one client
+     takes over. Two hosts would each publish their own snapshots and the game
+     would fork silently, which is far worse than the bug being fixed. So the
+     successor is not negotiated, it is *derived*: every client computes the same
+     answer from the same data, so there is nothing to disagree about. The rule
+     is the lowest clientId among the members currently in the room. clientId is
+     an opaque random string, so this has nothing to do with join order or clock
+     skew, and every participant lands on the same winner independently.
+
+     Being elected is not enough, so the claim is re-checked after announcing
+     and stepped down if the answer changed while presence was still settling.
+     And a claim is only obeyed from the client that actually won, which stops a
+     client that lost the election from talking its way into authority.
+
+     The host's heartbeat (a stateTick every 350ms) is what everyone watches. Six
+     seconds of silence during a running game means the host is gone. */
+  const MP_HOST_STALL_MS=6000;
+  const MP_HOST_CLAIM_DELAY=1500;
+  function mpPresentClientIds(){
+    // Everyone visible in presence, plus our own claim, plus the member list we
+    // were told about. Presence alone can lag right after a join, so all three
+    // are merged and the union is what the election runs on.
+    const ids=new Set([mp.clientId]);
+    try{
+      const pres=(mp.channel&&mp.channel.presenceState)?(mp.channel.presenceState()||{}):{};
+      Object.keys(pres).forEach(k=>{
+        const arr=Array.isArray(pres[k])?pres[k]:[];
+        arr.forEach(m=>{if(m&&m.clientId)ids.add(String(m.clientId));});
+      });
+    }catch(_){}
+    try{(mp.members||[]).forEach(m=>{if(m&&m.clientId)ids.add(String(m.clientId));});}catch(_){}
+    return [...ids];
+  }
+  function mpElectedHostId(){
+    // The host we were hearing from is, by construction, the one that went
+    // silent. Leaving it in the running would hand the election straight back to
+    // a dead client, and the successor would never be elected at all - which is
+    // exactly what happened when this only excluded clients presence had already
+    // pruned, since presence leave is slow and is not acted on by guests.
+    const gone=mp.hostId?String(mp.hostId):null;
+    const ids=mpPresentClientIds().filter(id=>!gone||id!==gone);
+    if(!ids.length)return mp.clientId;
+    // Plain string sort: stable, and identical on every client because it is
+    // the same set of the same opaque ids.
+    return ids.sort()[0];
+  }
+  function mpIsElectedHost(){return mpElectedHostId()===mp.clientId;}
+  function mpStopHostWatch(){
+    if(mp.hostWatchTimer){clearInterval(mp.hostWatchTimer);mp.hostWatchTimer=null;}
+    if(mp.claimTimer){clearTimeout(mp.claimTimer);mp.claimTimer=null;}
+  }
+  /* Only meaningful for a guest in a running game. A room still in its lobby
+     has no host to replace, and a guest with no game yet has nothing to watch
+     for - the restore path handles that case instead. */
+  function mpStartHostWatch(){
+    if(mp.hostWatchTimer)return;
+    mp.hostWatchTimer=setInterval(()=>{
+      if(!mp.active||mp.host||!mpGameRunning())return;
+      if(mp.authoritySettled)return;
+      if(!mp.lastTickAt)return;
+      if(Date.now()-mp.lastTickAt<MP_HOST_STALL_MS)return;
+      if(mp.claimTimer)return;
+      // Let presence settle before electing. Two clients that notice the stall
+      // at slightly different moments must not compute different member sets.
+      mp.claimTimer=setTimeout(()=>{
+        mp.claimTimer=null;
+        if(!mp.active||mp.host)return;
+        if(Date.now()-mp.lastTickAt<MP_HOST_STALL_MS)return;
+        if(!mpIsElectedHost())return;
+        mpBecomeHost();
+      },MP_HOST_CLAIM_DELAY);
+    },1000);
+  }
+  function mpStepDownHost(successorId){
+    if(!mp.host)return;
+    mp.host=false;
+    mpStopRealtimeHeartbeat();
+    // A former host must stop writing, or it would keep overwriting the new
+    // host's snapshots in the server copy.
+    mpServerCancelSave();
+    mpPersistSession();
+    log(lang==="en"?"The host left. You are now playing this game.":"Хост вышел. Теперь вы ведёте эту партию.");
+    toast(lang==="en"?"You are now the host of this game.":"Теперь вы — хост этой партии.","good");
+    showActionEvent("hostchange",{id:turn,name:mp.localName,color:PLAYER_COLORS[0]||"#f4c95d",mpClientId:mp.clientId,bankrupt:false,money:0,pos:0},
+      {titleEn:"NEW HOST",titleRu:"НОВЫЙ ХОСТ",detailEn:lang==="en"?"You have taken over the game.":"Вы приняли управление партией.",icon:"👑",tone:"gold",duration:2600});
+    // Pull the authoritative state from the new host rather than trusting what
+    // this client last happened to receive.
+    setTimeout(()=>{if(mp.active&&!mp.host&&mp.connected)mpSend({kind:"join",member:mpLocalPresence(),wantSnapshot:true});},400);
+  }
+  function mpBecomeHost(){
+    if(!mp.active||mp.host)return Promise.resolve(false);
+    mp.host=true;
+    mp.hostId=mp.clientId;
+    mp.authoritySettled=true;
+    mpStopRealtimeHeartbeat();
+    mpStopHostWatch();
+    if(mp.claimTimer){clearTimeout(mp.claimTimer);mp.claimTimer=null;}
+    // Adopt this client's own state if it already has the game; otherwise take
+    // the server copy, which is the last thing the previous host committed. The
+    // guard is re-checked after the read so a snapshot arriving mid-read wins.
+    const haveGame=mpHasLiveGame();
+    const load=haveGame?Promise.resolve(false):mpServerLoadState();
+    return load.then(s=>{
+      if(!mp.active)return false;
+      if(!haveGame&&!mpHasLiveGame()&&mpServerStateUsable(s))mpApplySnapshot(s);
+      // Presence may have changed while we were reading. If we are no longer the
+      // right host, stand down rather than fork the game.
+      if(!mpIsElectedHost()){mpStepDownHost();return false;}
+      mpStartRealtimeHeartbeat();
+      mpPersistSession();
+      mpSend({kind:"hostClaim",clientId:mp.clientId,previousHostId:mp.hostId||null});
+      if(mpGameRunning()){
+        mpPublishSnapshot(true);
+        log(lang==="en"?"The previous host disconnected. You have taken over as host.":"Предыдущий хост отключился. Вы приняли партию как хост.");
+        toast(lang==="en"?"The host disconnected — you have taken over.":"Хост отключился — вы приняли управление.","good");
+        showActionEvent("hostchange",mpLocalPlayer()||{id:turn,name:mp.localName,color:PLAYER_COLORS[0]||"#f4c95d",mpClientId:mp.clientId,bankrupt:false,money:0,pos:0},
+          {titleEn:"HOST RECOVERED",titleRu:"ХОСТ ВОССТАНОВЛЕН",detailEn:lang==="en"?"The game carried on without losing state.":"Партия продолжилась без потери состояния.",icon:"👑",tone:"gold",duration:2800});
+      }else{
+        mpShowLobby();
+      }
+      return true;
+    }).catch(e=>{
+      console.warn("CAPITAL host takeover failed",e);
+      mp.host=false;
+      return false;
+    });
+  }
+  /* A returning original host is the dangerous case: it reconnects believing it
+     still owns the room and would immediately publish over the successor's game.
+     The server copy records who the authority was, and that record is the
+     tiebreak - not a fresh election, which would hand the room to whichever
+     clientId happens to sort first. */
+  function mpServerClaimsAnotherHost(s){
+    if(!s||typeof s!=="object")return false;
+    const prev=s.hostClientId!=null?String(s.hostClientId):null;
+    return !!(prev&&prev!==mp.clientId);
   }
   /* ---------- Supabase Realtime transport. The host is the only game authority. ---------- */
   // Multiplayer is intentionally server-assisted now: GitHub Pages serves the UI,
@@ -4167,7 +4314,14 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     if(status==="SUBSCRIBED"){
       mp.connected=true;
       mp.channel.track(mpLocalPresence()).catch(()=>{});
-      if(mp.host){mpRefreshMembersFromPresence(false);if(mpGameRunning())mpPublishSnapshot(true);else mpShowLobby();mpStartRealtimeHeartbeat();}
+      if(mp.host){
+        // A host resuming a stored session has not confirmed it still holds
+        // authority yet. mpConnect owns that path end to end; acting here as well
+        // would publish a snapshot before the check had run.
+        if(mp.restorePending)return;
+        mp.hostId=mp.clientId;
+        mpRefreshMembersFromPresence(false);if(mpGameRunning())mpPublishSnapshot(true);else mpShowLobby();mpStartRealtimeHeartbeat();
+      }
       else{
         setTimeout(()=>{if(mp.active&&mp.connected&&!mp.host)mpSend({kind:"join",member:mpLocalPresence(),wantSnapshot:true});},80);
       }
@@ -4189,9 +4343,9 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     const channel=client.channel(mpChannelName(),{config:{broadcast:{self:false,ack:true},presence:{key:mp.clientId}}});
     mp.channel=channel;
     channel.on("broadcast",{event:"capital"},({payload})=>{if(payload&&payload._capitalSender===mp.clientId)return;mpHandle(payload);});
-    channel.on("presence",{event:"sync"},()=>{if(mp.host)mpRefreshMembersFromPresence(true);});
-    channel.on("presence",{event:"join"},()=>{if(mp.host)mpRefreshMembersFromPresence(true);});
-    channel.on("presence",{event:"leave"},()=>{if(mp.host)mpRefreshMembersFromPresence(true);});
+    channel.on("presence",{event:"sync"},()=>{mpRefreshMembersFromPresence(!!mp.host);});
+    channel.on("presence",{event:"join"},()=>{mpRefreshMembersFromPresence(!!mp.host);});
+    channel.on("presence",{event:"leave"},()=>{mpRefreshMembersFromPresence(!!mp.host);});
     return new Promise((resolve,reject)=>{
       let settled=false;
       const finish=(ok,value)=>{if(settled)return;settled=true;ok?resolve(value):reject(value);};
@@ -4205,6 +4359,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   }
   function mpTeardownTransport(delay=0){
     mpStopRealtimeHeartbeat();
+    mpStopHostWatch();
     if(mpReconnectTimer){clearTimeout(mpReconnectTimer);mpReconnectTimer=null;}
     if(mpPresenceTimer){clearTimeout(mpPresenceTimer);mpPresenceTimer=null;}
     const channel=mp.channel,client=mpSupabaseClient;
@@ -4227,10 +4382,35 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       mp.room=code;mp.host=!!host;mp.localName=(name||"Player").trim().slice(0,16)||"Player";
       if(!restoreSession||!mp.joinedAt)mp.joinedAt=Date.now();
       mp.active=true;mp.connected=false;mp.snapshotSeq=0;mp.lastAppliedSeq=0;mp.pendingSnapshotSeq=0;mp.realtimeStateSeq=0;mp.lastRealtimeStateSeq=0;mpEventSeq=0;mp.lastModalSig="";mpPendingTrade=null;mpLastTradeId=null;mp.members=host?[{clientId:mp.clientId,name:mp.localName,host:true,joinedAt:mp.joinedAt}]:[];
+      // A host coming back from a stored session may no longer be the authority.
+      // Flag it before subscribing, so the SUBSCRIBED handler stands aside.
+      mp.restorePending=!!(host&&restoreSession);
+      mp.lastTickAt=0;
+      mp.authoritySettled=false;
+      mp.hostId=host?mp.clientId:null;
+      mpStopHostWatch();
       mpPersistSession();
       await mpSubscribeChannel();
       if(host){
         mpRefreshMembersFromPresence(false);
+        if(mp.restorePending){
+          mp.restorePending=false;
+          const serverState=await mpServerLoadState();
+          if(!mp.active)return false;
+          if(mpServerClaimsAnotherHost(serverState)){
+            // Authority was inherited while this host was away. Stand down and
+            // join as a guest, so its state cannot overwrite the live game.
+            mp.host=false;
+            mp.hostId=String(serverState.hostClientId);
+            mpPersistSession();
+            log(lang==="en"?"This game is now hosted by another player.":"Этой партией теперь управляет другой игрок.");
+            toast(lang==="en"?"Another player is hosting this game.":"Эту партию ведёт другой игрок.","warn");
+            setTimeout(()=>{if(mp.active&&!mp.host&&mp.connected)mpSend({kind:"join",member:mpLocalPresence(),wantSnapshot:true});},300);
+            return true;
+          }
+        }
+        mp.hostId=mp.clientId;
+        mpStartRealtimeHeartbeat();
         if(restoreSession){
           const saved=mpReadHostState();
           if(saved&&Array.isArray(saved.players)&&saved.players.length>1){
@@ -4295,6 +4475,13 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     }
     if(msg.kind==="lobby"){mp.members=mpMembersSortedFrom(msg.members);if(!mpGameRunning())mpShowLobby();return;}
     if(msg.kind==="stateTick"&&!mp.host){
+      // The host's heartbeat is what everyone else watches to notice it died.
+      // Only the host sends these, so the sender is the authority - and knowing
+      // which client that is lets the election exclude it instead of waiting for
+      // presence to notice the corpse.
+      if(msg._capitalSender)mp.hostId=String(msg._capitalSender);
+      mp.lastTickAt=Date.now();
+      mpStartHostWatch();
       const st=msg.state||{};const seq=Number(st.seq)||0;
       if(seq&&seq<=mp.lastRealtimeStateSeq)return;if(seq)mp.lastRealtimeStateSeq=seq;
       if(Array.isArray(st.players)){const byId=new Map(st.players.map(x=>[Number(x.id),x]));players.forEach(p=>{const x=byId.get(Number(p.id));if(!x)return;p.pos=Number(x.pos)||0;p.money=Number(x.money)||0;p.bankrupt=!!x.bankrupt;p.inJail=!!x.inJail;p.jailAttempts=Number(x.jailAttempts)||0;p.getOutCards=Number(x.getOutCards)||0;p.doubles=Number(x.doubles)||0;});}
@@ -4319,7 +4506,23 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     if(msg.kind==="start"){mp.pendingStart=Array.isArray(msg.members)?mpMembersSortedFrom(msg.members):[];mp.members=mp.pendingStart;if(!mp.host){clearModal();modalOpen=false;modalKind=null;startGame(msg.startingMoney);}return;}
     if(msg.kind==="action"&&mp.host){mpExecuteAction(msg);return;}
     if(msg.kind==="actionEvent"&&!mp.host){const ev=msg.event||{};const p=players.find(x=>x&&x.id===msg.playerId)||null;if(p)showActionEvent(ev.kind||"event",p,ev);return;}
-    if(msg.kind==="snapshot"&&!mp.host){mpApplySnapshot(msg.snapshot);return;}
+    if(msg.kind==="snapshot"&&!mp.host){mp.lastTickAt=Date.now();mpApplySnapshot(msg.snapshot);return;}
+    if(msg.kind==="hostClaim"){
+      const cid=String(msg.clientId||"");
+      if(!cid||cid===mp.clientId)return;
+      // Authority is now established, whoever won. Stop electing, or a second
+      // client that also decided it was elected would claim as well and the room
+      // would end up with two hosts publishing divergent snapshots.
+      mp.authoritySettled=true;
+      mpStopHostWatch();
+      // Residual race: two clients elected at the same instant. The lower id
+      // wins, so both sides converge on the same host without further messages.
+      if(cid<mp.clientId){
+        mp.hostId=cid;
+        if(mp.host)mpStepDownHost(cid);
+      }
+      return;
+    }
     if(msg.kind==="leave"&&mp.host){mpRefreshMembersFromPresence(false);mp.members=mp.members.filter(m=>m.clientId!==msg.clientId);mpSend({kind:"lobby",members:mp.members});if(gameWrap?.style.display==="block"&&players.length>1)mpPublishSnapshot(true);else mpShowLobby();mpServerDropIfEmpty();return;}
   }
   function mpStartGame(){
@@ -4408,7 +4611,11 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       logHistory:gameLog.slice(-80),
       auction:activeAuction&&!activeAuction.closed?{tileId:activeAuction.tile?.id,turnPlayerId:activeAuction.turnPlayer?.id??null,currentBid:activeAuction.currentBid,highestBidder:activeAuction.highestBidder,remainingMs:Math.max(0,(activeAuction.endsAt||performance.now())-performance.now()),history:activeAuction.history||[]}:null,
       trade:mpPendingTrade?{...mpPendingTrade,giveTileIds:[...(mpPendingTrade.giveTileIds||[])],getTileIds:[...(mpPendingTrade.getTileIds||[])]}:null,
-      room:mp.room
+      room:mp.room,
+      // Who the authority was when this was written. A host that comes back
+      // after its authority was inherited reads this and stands down instead of
+      // publishing over the successor's game.
+      hostClientId:mp.clientId
     };
   }
   function mpPublishSnapshot(force=false){
