@@ -6938,6 +6938,11 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     if(type==="sawtooth"||type==="square"){filter.type="lowpass";filter.frequency.setValueAtTime(Math.min(5200,Math.max(500,freq*7)),now);osc.connect(filter);filter.connect(gain);}else osc.connect(gain);
     gain.gain.setValueAtTime(.0001,now);gain.gain.exponentialRampToValueAtTime(Math.max(.0001,volume*sfxGain()),now+.008);gain.gain.exponentialRampToValueAtTime(.0001,now+duration);
     gain.connect(bus);osc.start(now);osc.stop(now+duration+.025);
+    // Release the graph when the sound is over. A node that stays connected to
+    // the bus stays in the rendering graph forever, and the browser walks that
+    // whole graph every 128 samples, so leaking one node per sound made the
+    // game get steadily slower the longer it was played. This was the lag.
+    osc.onended=()=>{try{osc.disconnect();gain.disconnect();if(filter)filter.disconnect();}catch(_){}};
   }
   /* A struck-metal partial stack. Three inharmonic partials are what makes a
      coin or a small bell read as metal rather than as a beep; a single sine is
@@ -6960,6 +6965,9 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
       gain.gain.exponentialRampToValueAtTime(.0001,when+tail);
       osc.connect(gain);gain.connect(bus);
       osc.start(when);osc.stop(when+tail+.03);
+      // See tone(): a connected node stays in the audio graph until it is
+      // disconnected. One metal() sound is three of these.
+      osc.onended=()=>{try{osc.disconnect();gain.disconnect();}catch(_){}};
     });
   }
   function noise(duration=.08,volume=.025,when=0){
@@ -6969,7 +6977,13 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     for(let i=0;i<len;i++)data[i]=(Math.random()*2-1)*(1-i/len);
     const src=ctx.createBufferSource(),gain=ctx.createGain(),filter=ctx.createBiquadFilter();
     const now=ctx.currentTime+when;filter.type="highpass";filter.frequency.value=900;gain.gain.value=volume*sfxGain();
-    src.buffer=buffer;src.connect(filter);filter.connect(bus);src.start(now);
+    // The gain node has to sit in the chain. It used to be created and given a
+    // value, then left out of the signal path entirely: the step sounds played
+    // at full volume and ignored both their own volume argument and the
+    // player's effects volume setting.
+    src.buffer=buffer;src.connect(filter);filter.connect(gain);gain.connect(bus);src.start(now);
+    // Release the graph when done, same reason as tone() and metal().
+    src.onended=()=>{try{src.disconnect();filter.disconnect();gain.disconnect();}catch(_){}};
   }
   const SFX={
     dice(){playDiceSfx();},
