@@ -3295,6 +3295,128 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 .capital-trade-modal .ct-verdict.bad{color:#ff8a96}
 #modalRoot .capital-trade-modal .modal-btns{margin:0!important;justify-content:flex-end!important}
 .capital-trade-modal.ct-shake{animation:ctShake .36s ease!important}
+/* ---- Incoming and outgoing offer screens.
+   These were one-line templates built by string concatenation, and they read as
+   a form with the contents dumped into a dashed empty-state box: the property
+   names and cash amounts had no shared shape, the two sides had no visual
+   relationship to each other, and a pending offer had nothing to look at while
+   it waited. They are now a proper two-sided summary with the offered rows in
+   real trade rows, a running value comparison between the two sides, and a
+   waiting state that animates rather than sitting still. */
+/* The generic .modal rule sets a vertical centre and a translateY offset. Every
+   section below assumes it has been neutralised, because any residual offset
+   shifts the hero flush against the top edge while the rest of the dialog hangs
+   below centre. */
+#modalRoot .modal.capital-trade-offer{
+  max-width:600px!important;
+  padding:0!important;
+  overflow:hidden!important;
+  border-radius:18px!important;
+  /* Sections are flush with each other, so the dialog must not be vertically
+     offset: the generic .modal centres with a translateY and any residual offset
+     slides the whole stack down out of view. align-self also stops the stretch
+     from making a two-sided dialog as tall as the backdrop. */
+  transform:none!important;
+  top:auto!important;
+  margin:0!important;
+  align-self:center!important;
+}
+.capital-trade-offer .cto-scroll{padding:22px 24px 20px}
+.capital-trade-offer .cto-hero{
+  display:flex;align-items:center;gap:14px;padding:18px 24px;
+  background:linear-gradient(135deg,rgba(109,124,255,.16),rgba(244,201,93,.07) 60%,transparent);
+  border-bottom:1px solid rgba(255,255,255,.06);
+}
+.capital-trade-offer .cto-avatar{
+  width:44px;height:44px;flex:0 0 auto;border-radius:13px;display:grid;place-items:center;
+  font-size:21px;background:rgba(15,21,31,.72);border:1px solid rgba(255,255,255,.1);
+  box-shadow:0 6px 18px rgba(0,0,0,.34)
+}
+.capital-trade-offer .cto-hero-text{min-width:0}
+.capital-trade-offer .cto-hero h3{margin:0!important;font-size:17px!important;letter-spacing:-.01em}
+.capital-trade-offer .cto-hero p{margin:3px 0 0;font-size:12.5px;color:#9aa8ba}
+/* Direction strip: makes the shape of the deal readable at a glance. */
+/* The row heights follow the content of the taller side, and the arrow is centred
+   on that row rather than on the viewport. */
+.capital-trade-offer .cto-flow{
+  display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:stretch;margin:0 0 4px
+}
+.capital-trade-offer .cto-side{
+  border:1px solid rgba(255,255,255,.07);border-radius:13px;background:rgba(10,15,23,.5);
+  padding:11px 12px;min-width:0
+}
+.capital-trade-offer .cto-side.give{border-color:rgba(255,138,150,.26);background:rgba(255,101,116,.06)}
+.capital-trade-offer .cto-side.get{border-color:rgba(53,211,154,.26);background:rgba(53,211,154,.06)}
+.capital-trade-offer .cto-side h4{
+  margin:0 0 8px!important;font-size:10px!important;font-weight:900!important;letter-spacing:.14em;
+  text-transform:uppercase;color:#8d9aad
+}
+.capital-trade-offer .cto-side.give h4{color:#ff9aa5}
+.capital-trade-offer .cto-side.get h4{color:#4fe0ae}
+/* Empty space inside a side reads as "something failed to load", so a side with
+   fewer items says so rather than showing a void. */
+.capital-trade-offer .cto-spacer{flex:1 1 auto;min-height:0}
+.capital-trade-offer .cto-arrow{
+  display:grid;place-items:center;color:#6d7cff;font-size:19px;font-weight:900;
+  align-self:center;animation:ctoArrowPulse 1.9s ease-in-out infinite
+}
+@keyframes ctoArrowPulse{0%,100%{transform:translateX(0);opacity:.65}50%{transform:translateX(3px);opacity:1}}
+/* One row per item, using the same visual language as the trade builder. */
+.capital-trade-offer .cto-rows{display:grid;gap:5px;min-height:34px;align-content:start}
+/* Both sides are stretched to the taller one, and the shorter list is spread over
+   that height, so neither column shows a bare panel with a hole under it. */
+.capital-trade-offer .cto-side{display:flex;flex-direction:column}
+.capital-trade-offer .cto-side .cto-rows{flex:0 0 auto}
+.capital-trade-offer .cto-side .cto-spacer{flex:1 1 auto}
+.capital-trade-offer .cto-item{
+  display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:9px;
+  background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.06);
+  font-size:12.5px;font-weight:650;animation:ctoItemIn .26s cubic-bezier(.2,.8,.2,1) both
+}
+.capital-trade-offer .cto-item.cash{background:rgba(53,211,154,.1);border-color:rgba(53,211,154,.26);color:#5fe6b6}
+.capital-trade-offer .cto-item b{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:850;color:#c3cdda}
+.capital-trade-offer .cto-item .cto-swatch{width:4px;height:19px;border-radius:2px;flex:0 0 auto}
+.capital-trade-offer .cto-item span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@keyframes ctoItemIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.capital-trade-offer .cto-nothing{
+  padding:11px;font-size:11.5px;color:#6f7c90;border:1px dashed #2a3547;border-radius:9px;text-align:center
+}
+/* Balance line: the single most useful number on an offer, so it is the biggest. */
+.capital-trade-offer .cto-balance{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  margin:14px 0 0;padding:12px 14px;border-radius:12px;
+  background:rgba(15,21,31,.62);border:1px solid rgba(255,255,255,.07)
+}
+.capital-trade-offer .cto-balance span{font-size:11px;font-weight:900;letter-spacing:.13em;text-transform:uppercase;color:#8d9aad}
+.capital-trade-offer .cto-balance strong{font-size:19px;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.capital-trade-offer .cto-balance strong.even{color:#aeb9c8}
+.capital-trade-offer .cto-balance strong.favor{color:#4fe0ae}
+.capital-trade-offer .cto-balance strong.tilt{color:#ff9aa5}
+/* Waiting state, so a pending offer is visibly alive. */
+.capital-trade-offer .cto-waiting{
+  display:flex;align-items:center;justify-content:center;gap:10px;margin-top:14px;
+  padding:12px;border-radius:11px;background:rgba(109,124,255,.09);border:1px solid rgba(109,124,255,.26);
+  font-size:12.5px;font-weight:750;color:#b7c1ff
+}
+.capital-trade-offer .cto-dots{display:inline-flex;gap:4px}
+.capital-trade-offer .cto-dots i{
+  width:5px;height:5px;border-radius:50%;background:#8b96ff;display:block;
+  animation:ctoDot 1.15s ease-in-out infinite
+}
+.capital-trade-offer .cto-dots i:nth-child(2){animation-delay:.16s}
+.capital-trade-offer .cto-dots i:nth-child(3){animation-delay:.32s}
+@keyframes ctoDot{0%,100%{opacity:.28;transform:translateY(0)}50%{opacity:1;transform:translateY(-3px)}}
+#modalRoot .capital-trade-offer .modal-btns{
+  margin:0!important;padding:14px 24px!important;border-top:1px solid rgba(255,255,255,.06);
+  background:rgba(8,12,18,.5);gap:10px!important
+}
+#modalRoot .capital-trade-offer .modal-btns .btn{min-width:118px;transition:transform .14s ease,box-shadow .14s ease}
+#modalRoot .capital-trade-offer .modal-btns .btn:hover{transform:translateY(-1px)}
+#modalRoot .capital-trade-offer .modal-btns .btn:active{transform:translateY(0)}
+@media (prefers-reduced-motion:reduce){
+  .capital-trade-offer .cto-arrow,.capital-trade-offer .cto-dots i,
+  .capital-trade-offer .cto-item{animation:none!important}
+}
 @keyframes ctShake{
   0%,100%{transform:none}
   20%{transform:translateX(-8px)}
@@ -3307,6 +3429,13 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   .capital-trade-modal .ct-list{max-height:160px}
   #modalRoot .capital-trade-modal .modal-btns{justify-content:stretch!important}
   #modalRoot .capital-trade-modal .modal-btns .btn{flex:1}
+}
+@media (max-width:560px){
+  .capital-trade-offer .cto-flow{grid-template-columns:1fr}
+  .capital-trade-offer .cto-arrow{transform:rotate(90deg);justify-self:center;animation:none}
+  .capital-trade-offer .cto-hero{padding:15px 18px}
+  .capital-trade-offer .cto-scroll{padding:18px}
+  #modalRoot .capital-trade-offer .modal-btns .btn{min-width:0;flex:1}
 }
 @media (prefers-reduced-motion:reduce){
   .capital-trade-modal.ct-shake{animation:none!important}
@@ -6411,10 +6540,66 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   /* ---------- Multiplayer trading (human-to-human, host-authoritative) ---------- */
   let mpLastTradeId=null;
   function mpTradeTiles(ids){return (Array.isArray(ids)?ids:[]).map(id=>TILES[Number(id)]).filter(t=>t&&["prop","station","util"].includes(t.type));}
-  function mpTradeSummary(tr){
-    const give=mpTradeTiles(tr.giveTileIds).map(t=>tileLabel(t)).join(", ");
-    const get=mpTradeTiles(tr.getTileIds).map(t=>tileLabel(t)).join(", ");
-    return {give,get};
+  /* Rendering for the two passive offer screens (sent and received). The trade
+     builder has its own controls; these only have to present a deal that already
+     exists, so they are built as read-only rows with a value comparison rather
+     than as editable lists.
+
+     `flip` is what the recipient sees: what the sender gives is what they get,
+     and the other way round. Getting this backwards would show a player their
+     own offer as if it were the other player's, which is the one thing this
+     screen must never do. */
+  function tradeOfferHtml(opts){
+    const en=lang==="en";
+    const rows=(tiles,cash)=>{
+      const items=(tiles||[]).map((t,i)=>{
+        // Railroad and utility tiles have no colour group, so the swatch falls
+        // back to the neutral the board itself uses for them.
+        const color=(t&&t.group&&GROUP_COLORS[t.group])||"#8d9aad";
+        const label=tileLabel(t);
+        const extra=t.type==="prop"?(t.hotel?en?"hotel":"отель":(t.houses||0)>0?(en?`${t.houses} houses`:`${t.houses} дом.`):(en?"no buildings":"без застройки")):"";
+        return `<div class="cto-item" style="animation-delay:${(i*45)}ms"><i class="cto-swatch" style="background:${escapeHtml(color)}"></i><span>${escapeHtml(label)}${extra?`<em style="display:block;font-style:normal;font-size:10.5px;opacity:.62">${escapeHtml(extra)}</em>`:""}</span></div>`;
+      }).join("");
+      const cashRow=cash?`<div class="cto-item cash" style="animation-delay:${(tiles||[]).length*45}ms">💵 <span>${en?"Cash":"Наличные"}</span><b>$${Math.max(0,Number(cash)||0)}</b></div>`:"";
+      return items+cashRow;
+    };
+    const left=rows(opts.leftTiles,opts.leftCash)||"";
+    const right=rows(opts.rightTiles,opts.rightCash)||"";
+    const balance=Number(opts.balance)||0;
+    const tone=Math.abs(balance)<=4?"even":balance>0?"favor":"tilt";
+    const verdict=Math.abs(balance)<=4
+      ?(en?"Even deal":"Равноценный обмен")
+      :balance>0
+        ?(en?`You come out ahead by $${balance}`:`Вы выигрываете $${balance}`)
+        :(en?`You give up $${Math.abs(balance)} extra`:`Вы отдаёте на $${Math.abs(balance)} больше`);
+    const buttons=opts.actions||"";
+    return `<div class="modal-bg"><div class="modal capital-trade-modal capital-trade-offer" role="dialog" aria-modal="true">
+      <div class="cto-hero">
+        <div class="cto-avatar">${opts.avatar||"🤝"}</div>
+        <div class="cto-hero-text"><h3>${opts.title}</h3><p>${opts.subtitle}</p></div>
+      </div>
+      <div class="cto-scroll">
+        <div class="cto-flow">
+          <section class="cto-side give"><h4>${opts.leftLabel}</h4><div class="cto-rows">${left||`<div class="cto-nothing">${en?"Nothing":"Ничего"}</div>`}</div><div class="cto-spacer"></div></section>
+          <div class="cto-arrow" aria-hidden="true">⇄</div>
+          <section class="cto-side get"><h4>${opts.rightLabel}</h4><div class="cto-rows">${right||`<div class="cto-nothing">${en?"Nothing":"Ничего"}</div>`}</div><div class="cto-spacer"></div></section>
+        </div>
+        <div class="cto-balance"><span>${en?"Net result":"Итог"}</span><strong class="${tone}">${verdict}</strong></div>
+        ${opts.waiting?`<div class="cto-waiting"><span class="cto-dots" aria-hidden="true"><i></i><i></i><i></i></span>${opts.waiting}</div>`:""}
+      </div>
+      <div class="modal-btns">${buttons}</div>
+    </div></div>`;
+  }
+  /* Net cash swing for the receiving player, so the balance line means something. */
+  function tradeOfferValue(tiles,cash){
+    let sum=Number(cash)||0;
+    (tiles||[]).forEach(t=>{
+      if(!t)return;
+      if(t.type==="prop"){sum+=(Number(t.price)||0)+(t.hotel||t.houses||0)*60;}
+      else if(t.type==="station"){sum+=Number(t.price)||200;}
+      else sum+=Number(t.price)||150;
+    });
+    return sum;
   }
   function openMpTradeModal(){
     const me=mpLocalPlayer();
@@ -6504,9 +6689,20 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     const from=players[tr.fromPlayerId],to=players[tr.toPlayerId];
     if(!from||!to){return;}
     const en=lang==="en";
-    const {give,get}=mpTradeSummary(tr);
     if(isFrom){
-      modalRoot.innerHTML=`<div class="modal-bg"><div class="modal capital-trade-modal capital-trade-offer" role="dialog" aria-modal="true"><div class="ct-head"><h3>🤝 ${en?"Offer sent":"Предложение отправлено"}</h3></div><p style="color:#9aa8ba;font-size:13px;margin:6px 0 12px">${en?`Waiting for ${playerLabel(to)}…`:`Ожидание ответа от ${playerLabel(to)}…`}</p><section class="ct-col"><h4>${en?"You give":"Вы отдаёте"}</h4><div class="ct-list"><div class="ct-empty">${escapeHtml(give||("$"+tr.cashGive))}${tr.cashGive?` + $${tr.cashGive}`:""}</div></div></section><section class="ct-col"><h4>${en?"You get":"Вы получаете"}</h4><div class="ct-list"><div class="ct-empty">${escapeHtml(get||("$"+tr.cashGet))}${tr.cashGet?` + $${tr.cashGet}`:""}</div></div></section><div class="modal-btns" style="margin-top:14px"><button class="btn no" id="mpTradeCancel">${en?"Cancel offer":"Отменить"}</button></div></div></div>`;
+      modalRoot.innerHTML=tradeOfferHtml({
+        avatar:"🤝",
+        title:en?"Offer sent":"Предложение отправлено",
+        subtitle:en?`Sent to ${playerLabel(to)}`:`Отправлено игроку ${playerLabel(to)}`,
+        leftLabel:en?"You give":"Вы отдаёте",
+        rightLabel:en?"You get":"Вы получаете",
+        leftTiles:mpTradeTiles(tr.giveTileIds),leftCash:tr.cashGive,
+        rightTiles:mpTradeTiles(tr.getTileIds),rightCash:tr.cashGet,
+        // From the sender's side, what they receive is the upside.
+        balance:tradeOfferValue(mpTradeTiles(tr.getTileIds),tr.cashGet)-tradeOfferValue(mpTradeTiles(tr.giveTileIds),tr.cashGive),
+        waiting:en?"Waiting for their answer…":"Ожидание ответа…",
+        actions:`<button class="btn no" id="mpTradeCancel">${en?"Cancel offer":"Отменить"}</button>`
+      });
       modalOpen=true;modalKind="trade";updateBadge();
       modalRoot.querySelector("#mpTradeCancel").onclick=()=>{
         if(mp.host){mpPendingTrade=null;mpLastTradeId=null;clearModal();mpPublishSnapshot(true);}
@@ -6515,7 +6711,20 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       return;
     }
     if(isTo){
-      modalRoot.innerHTML=`<div class="modal-bg"><div class="modal capital-trade-modal capital-trade-offer" role="dialog" aria-modal="true"><div class="ct-head"><h3>🤝 ${playerLabel(from)} ${en?"offers a trade":"предлагает обмен"}</h3></div><div class="ct-cols" style="margin-top:12px"><section class="ct-col"><h4>${en?"You give":"Вы отдаёте"}</h4><div class="ct-list"><div class="ct-empty">${escapeHtml(get||("$"+tr.cashGet))}${tr.cashGet?` + $${tr.cashGet}`:""}</div></div></section><section class="ct-col"><h4>${en?"You get":"Вы получаете"}</h4><div class="ct-list"><div class="ct-empty">${escapeHtml(give||("$"+tr.cashGive))}${tr.cashGive?` + $${tr.cashGive}`:""}</div></div></section></div><div class="modal-btns" style="margin-top:14px"><button class="btn yes" id="mpTradeAccept">✓ ${en?"Accept":"Принять"}</button><button class="btn no" id="mpTradeDecline">✕ ${en?"Decline":"Отклонить"}</button></div></div></div>`;
+      // What the sender gives becomes what this player receives, and the rest is
+      // the mirror image. Showing the sender's own view here would tell the
+      // recipient they are giving away their own property.
+      modalRoot.innerHTML=tradeOfferHtml({
+        avatar:from?.color?`<i style="width:14px;height:14px;border-radius:50%;background:${escapeHtml(from.color)};display:block"></i>`:"🤝",
+        title:en?`${playerLabel(from)} offers a trade`:`${playerLabel(from)} предлагает обмен`,
+        subtitle:en?"Review what you would send and receive":"Посмотрите, что вы отдадите и получите",
+        leftLabel:en?"You give":"Вы отдаёте",
+        rightLabel:en?"You get":"Вы получаете",
+        leftTiles:mpTradeTiles(tr.getTileIds),leftCash:tr.cashGet,
+        rightTiles:mpTradeTiles(tr.giveTileIds),rightCash:tr.cashGive,
+        balance:tradeOfferValue(mpTradeTiles(tr.giveTileIds),tr.cashGive)-tradeOfferValue(mpTradeTiles(tr.getTileIds),tr.cashGet),
+        actions:`<button class="btn no" id="mpTradeDecline">✕ ${en?"Decline":"Отклонить"}</button><button class="btn yes" id="mpTradeAccept">✓ ${en?"Accept":"Принять"}</button>`
+      });
       modalOpen=true;modalKind="trade";updateBadge();
       modalRoot.querySelector("#mpTradeAccept").onclick=()=>{mpProxyAction({type:"tradeResponse",accept:true});if(mp.host)mpExecuteAction({playerId:mp.clientId,action:{type:"tradeResponse",accept:true}});};
       modalRoot.querySelector("#mpTradeDecline").onclick=()=>{mpProxyAction({type:"tradeResponse",accept:false});if(mp.host)mpExecuteAction({playerId:mp.clientId,action:{type:"tradeResponse",accept:false}});clearModal();mpLastTradeId=null;};
@@ -6909,17 +7118,92 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     /* Intentionally persistent: music continues across menu, setup, game and result screens. */
   }
   let diceSfxEl=null,stepSfxEl=null;
-  const externalSfxCache=new Map();
   function ensureDiceSfx(){if(!diceSfxEl)diceSfxEl=document.getElementById("capitalDiceSfx");return diceSfxEl;}
   function ensureStepSfx(){if(!stepSfxEl)stepSfxEl=document.getElementById("capitalStepSfx");return stepSfxEl;}
-  function playExternalSfx(file,volume=.72){
-    if(!soundEnabled||gamePaused)return;
+  /* Playing short effects.
+     These used to be played through a freshly cloned <audio> element every time,
+     which asks the browser's media pipeline to start a playback for each sound.
+     Start-up is then at the mercy of that pipeline rather than on the audio
+     clock, so an effect can visibly arrive after the thing that caused it - the
+     "sounds lag" report. Eleven of the thirteen effects are under half a second
+     and the shortest is 0.12s, so for most of them the latency is a large
+     fraction of the sound itself.
+
+     Each file is now fetched once and decoded to an AudioBuffer, then replayed
+     with a BufferSource started straight on the AudioContext clock. The media
+     element path stays as a fallback, because decodeAudioData needs a user
+     gesture in some browsers and refusing to make a sound there would be worse
+     than a slightly late one. */
+  const decodedAudioCache=new Map();
+  const externalSfxCache=new Map();
+  const externalSfxRecent=new Map();
+  // Throttling: a turn can ask for the same sound several times in a few hundred
+  // milliseconds. Four copies of one effect is not four times the information,
+  // it is a wall of noise for the limiter to fight.
+  const EXTERNAL_SFX_MIN_GAP_MS=45;
+  function ensureDiceSfx(){if(!diceSfxEl)diceSfxEl=document.getElementById("capitalDiceSfx");return diceSfxEl;}
+  function ensureStepSfx(){if(!stepSfxEl)stepSfxEl=document.getElementById("capitalStepSfx");return stepSfxEl;}
+  function playExternalSfxFallback(file,volume){
     try{
       let base=externalSfxCache.get(file);
-      if(!base){base=new Audio("audio/"+file);base.preload="auto";externalSfxCache.set(file,base);}
+      if(!base){base=new Audio("audio/"+file);base.preload="auto";externalSfxCache.set(file,base);externalSfxTrimCaches();}
       const el=base.cloneNode(true);el.volume=Math.max(0,Math.min(1,volume*sfxGain()));el.currentTime=0;
       const pr=el.play();if(pr&&pr.catch)pr.catch(()=>{});
     }catch(e){}
+  }
+  function playDecodedSfx(file,buffer,volume){
+    const ctx=ensureAudio();
+    if(!ctx)return false;
+    const bus=sfxBus();
+    if(!bus)return false;
+    const src=ctx.createBufferSource(),gain=ctx.createGain();
+    src.buffer=buffer;
+    gain.gain.setValueAtTime(Math.max(.0001,volume*sfxGain()),ctx.currentTime);
+    src.connect(gain);gain.connect(bus);
+    src.start();
+    // Release the graph when the sound ends, for the same reason tone() and
+    // metal() do: a node left connected stays in the audio graph forever.
+    src.onended=()=>{try{src.disconnect();gain.disconnect();}catch(_){}};
+    return true;
+  }
+  /* The effect list is fixed, so both caches are small in practice. They are
+     still bounded: a room code or a saved file name reaching this code would
+     otherwise be able to grow them without limit. */
+  function externalSfxTrimCaches(){
+    if(externalSfxCache.size>32){const first=externalSfxCache.keys().next();if(!first.done)externalSfxCache.delete(first.value);}
+    if(externalSfxRecent.size>32){const first=externalSfxRecent.keys().next();if(!first.done)externalSfxRecent.delete(first.value);}
+  }
+  function loadDecodedSfx(file,volume){
+    const ctx=ensureAudio();
+    if(!ctx)return false;
+    let entry=decodedAudioCache.get(file);
+    if(entry==="failed")return false;
+    if(entry)return playDecodedSfx(file,entry,volume);
+    if(!fetch){decodedAudioCache.set(file,"failed");return false;}
+    // Reserve the slot so overlapping calls do not start several fetches for the
+    // same file before the first one resolves.
+    decodedAudioCache.set(file,null);
+    fetch("audio/"+file)
+      .then(r=>r.ok?r.arrayBuffer():Promise.reject(new Error("http "+r.status)))
+      .then(buf=>ctx.decodeAudioData(buf))
+      .then(decoded=>{
+        decodedAudioCache.set(file,decoded);
+        playDecodedSfx(file,decoded,volume);
+      })
+      .catch(()=>{
+        decodedAudioCache.set(file,"failed");
+        playExternalSfxFallback(file,volume);
+      });
+    return true;
+  }
+  function playExternalSfx(file,volume=.72){
+    if(!soundEnabled||gamePaused)return;
+    const now=Date.now();
+    const last=externalSfxRecent.get(file)||0;
+    if(now-last<EXTERNAL_SFX_MIN_GAP_MS)return;
+    externalSfxRecent.set(file,now);
+    externalSfxTrimCaches();
+    try{loadDecodedSfx(file,volume);}catch(e){playExternalSfxFallback(file,volume);}
   }
   function playDiceSfx(){playExternalSfx("dice-roll.wav",.82);}
   function playStepSfx(){playExternalSfx("step-soft.wav",.58);}
@@ -9630,7 +9914,16 @@ document.addEventListener("keydown",e=>{
 
   window.Capital={
     start:startGame,back:backToMenu,play:openSetup,select:setCount,
-    multiplayer:mpCreate,joinMultiplayer:mpJoin
+    multiplayer:mpCreate,joinMultiplayer:mpJoin,
+    // Read-only view of the offer screen, so its layout can be inspected and
+    // screenshotted without standing up a second player in a live room. Tile ids
+    // are resolved against the real board rather than taken on trust, so what a
+    // screenshot shows is what a player would actually see.
+    tradeOfferPreview:function(o){
+      const opt=o||{};
+      const pick=v=>(Array.isArray(v)?v:[]).map(id=>TILES[Number(id)]).filter(Boolean);
+      return tradeOfferHtml({...opt,leftTiles:pick(opt.leftTiles),rightTiles:pick(opt.rightTiles)});
+    }
   };
   window.renderTokens=renderTokens;window.renderPlayers=renderPlayers;window.updateBadge=updateBadge;window.buildBoard=buildBoard;window.botTurn=beginBotTurn;window.botBuyDecision=botBuyDecision;
   window.calcRent=calcRent;window.hasMonopoly=hasMonopoly;window.canBuildHouse=canBuildHouse;window.canBuildHotel=canBuildHotel;window.sendToJail=sendToJail;
