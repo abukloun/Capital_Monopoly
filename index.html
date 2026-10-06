@@ -3771,7 +3771,38 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     red:"#e85c62",yellow:"#e4bd48",green:"#329463",blue:"#536fc8"
   };
   const HOUSE_COST = {brown:50,lblue:50,pink:100,orange:100,red:150,yellow:150,green:200,blue:200};
-  const RENT_MULT = [1,5,15,25,35,50];
+  /* Classic Monopoly rents, per property, as [base, 1 house, 2, 3, 4, hotel].
+     This replaces a formula that derived rent from the price, and it is the one
+     remaining thing that separated this board from richup.io and from the
+     physical game. Everything else here was already classic and still is: the
+     price ladder (60,60,100,100,120...400), house costs (50/50/100/100/150/150/
+     200/200), railroad rent (25/50/100/200), utility rent (4x and 10x the dice),
+     mortgage at half the price, unmortgage at 55%, and the tile layout itself
+     with railroads on 5/15/25/35 and utilities on 12/28.
+
+     The old formula charged roughly six times the classic base rent - $12 on a
+     $60 property where the real game charges $2 - which made every landing far
+     more expensive and games much more volatile than the ones friends already
+     play. The multipliers were also shared across every property, while the real
+     ladder is hand-tuned per street, so the jump from a bare lot to a hotel was
+     the wrong shape as well as the wrong size.
+
+     Keyed by tile id. Each price on this board is unique to one property except
+     where the real game also shares it, so this maps straight across. */
+  const CLASSIC_RENT={
+    1:[2,10,30,90,160,250],    3:[4,20,60,180,320,450],
+    6:[6,30,90,270,400,550],    8:[6,30,90,270,400,550],    9:[8,40,100,300,450,600],
+    11:[10,50,150,450,625,750], 13:[10,50,150,450,625,750], 14:[12,60,180,500,700,900],
+    16:[14,70,200,550,750,950], 18:[14,70,200,550,750,950], 19:[16,80,220,600,800,1000],
+    21:[18,90,250,700,875,1050],23:[18,90,250,700,875,1050],24:[20,100,300,750,925,1100],
+    26:[22,110,330,800,975,1150],27:[22,110,330,800,975,1150],29:[24,120,360,850,1025,1200],
+    31:[26,130,390,900,1100,1275],32:[26,130,390,900,1100,1275],34:[28,150,450,1000,1200,1400],
+    37:[35,175,500,1100,1300,1500],39:[50,200,600,1400,1700,2000]
+  };
+  function rentLadder(t){
+    const row=t?CLASSIC_RENT[t.id]:null;
+    return row||[0,0,0,0,0,0];
+  }
   const PLAYER_COLORS = ['#e7b34c','#4ca6e7','#e05c5c','#4caf7d','#b877e0','#3ad1c4','#e0904c','#c7d63f'];
   const BOT_NAMES_EN = ['Bot Anna','Bot Mark','Bot Irina','Bot Oleg','Bot Elena','Bot Timur','Bot Sofia','Bot Victor'];
   const BOT_NAMES_RU = ['Бот Анна','Бот Марк','Бот Ирина','Бот Олег','Бот Елена','Бот Тимур','Бот София','Бот Виктор'];
@@ -6578,7 +6609,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   const howModalRoot = document.getElementById("howModalRoot");
   const rollBtn = document.getElementById("rollBtn");
 
-  const P=(id,name,group,price)=>({id,type:"prop",name,group,price,rent:Math.round(price/10)*2,owner:null,houses:0,hotel:false,mortgaged:false});
+  const P=(id,name,group,price)=>({id,type:"prop",name,group,price,rent:(CLASSIC_RENT[id]||[0,0,0,0,0,0])[0],owner:null,houses:0,hotel:false,mortgaged:false});
   const S=(id,name)=>({id,type:"station",name,price:200,owner:null,mortgaged:false});
   const U=(id,name)=>({id,type:"util",name,price:150,owner:null,mortgaged:false});
 
@@ -7562,7 +7593,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     let rent=0;
     if(t.type==="station"){const n=TILES.filter(x=>x.type==="station"&&x.owner===t.owner&&!x.mortgaged).length;rent=n?25*Math.pow(2,n-1):0;}
     else if(t.type==="util"){const n=TILES.filter(x=>x.type==="util"&&x.owner===t.owner&&!x.mortgaged).length;rent=lastRollTotal*(n>=2?10:4);}
-    else {const level=t.hotel?5:(t.houses||0);rent=level>0?t.rent*RENT_MULT[level]:(hasMonopoly(t.owner,t.group)?t.rent*2:t.rent);}
+    else {const ladder=rentLadder(t);const level=t.hotel?5:(t.houses||0);rent=level>0?ladder[level]:(hasMonopoly(t.owner,t.group)?ladder[0]*2:ladder[0]);}
     return fastPace?Math.round(rent*1.25):rent;
   }
   function groupHasMortgage(t){return t?.type==="prop"&&TILES.some(x=>x.type==="prop"&&x.group===t.group&&x.mortgaged);}
@@ -8293,7 +8324,8 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
   function propertyRentLadderHtml(t){
     if(!t||t.type!=="prop")return "";
     const labels=lang==="en"?["Base","Monopoly","1 house","2 houses","3 houses","4 houses","Hotel"]:["База","Монополия","1 дом","2 дома","3 дома","4 дома","Отель"];
-    const values=[t.rent,t.rent*2,t.rent*RENT_MULT[1],t.rent*RENT_MULT[2],t.rent*RENT_MULT[3],t.rent*RENT_MULT[4],t.rent*RENT_MULT[5]];
+    const ladder=rentLadder(t);
+    const values=[ladder[0],ladder[0]*2,ladder[1],ladder[2],ladder[3],ladder[4],ladder[5]];
     const current=t.hotel?6:(t.houses>0?1+t.houses:(hasMonopoly(t.owner,t.group)?1:0));
     return `<div class="capital-rent-ladder capital-rent-ladder-7">${labels.map((label,i)=>`<div class="capital-rent-step ${i===current?'active':''}"><span>${escapeHtml(label)}</span><strong>$${values[i]}</strong></div>`).join("")}</div>`;
   }
@@ -9565,6 +9597,7 @@ document.addEventListener("keydown",e=>{
       ["🏠","Buying","Land on a free property to buy it. If you skip it, it goes to a live auction where every bid resets the 10-second timer."],
       ["🏗","Building","Own a whole color group to double its rent and build houses (evenly), then a hotel. Click any of your properties — on the board or the colored chips in the Players panel — to build, sell or mortgage."],
       ["💸","Rent & debt","Rent grows with buildings; stations pay more the more you own. If you can't pay, buildings are sold and property mortgaged automatically before you go bankrupt."],
+      ["📈","Classic values","Prices, rents, house costs and jail rules are the classic Monopoly ones, so a $60 street really does charge $2 and a Boardwalk hotel $2000. The catch-up rule adds 25% to all rent once total cash drops below 45% of the starting total."],
       ["🃏","Cards","Chance and Community Chest can move you, pay you, fine you or send you to Jail. Keep a Get Out of Jail Free card for later."],
       ["🔒","Jail","Roll a double, pay $50, or use a card to get out. After three failed tries you pay $50 and move."],
       ["⌨️","Shortcuts","Space or R — roll · P — pause · Esc — close a window. The game also pauses by itself when you switch tabs."]
@@ -9575,6 +9608,7 @@ document.addEventListener("keydown",e=>{
       ["🏠","Покупка","Попав на свободный участок, его можно купить. Если отказаться — начнётся живой аукцион, каждая ставка сбрасывает 10-секундный таймер."],
       ["🏗","Застройка","Соберите всю цветовую группу — рента удвоится и откроется строительство домов (равномерно), затем отеля. Нажмите на свой участок на поле или на цветной значок в панели игроков, чтобы строить, продавать или закладывать."],
       ["💸","Рента и долги","Рента растёт с застройкой; вокзалы дают больше, чем больше их у вас. Если нечем платить, застройка продаётся и недвижимость закладывается автоматически, прежде чем наступит банкротство."],
+      ["📈","Классические значения","Цены, рента, стоимость домов и правила тюрьмы — классические, от настольного Monopoly: участок за $60 действительно приносит $2, а отель на Бордволке — $2000. Когда суммарные деньги падают ниже 45% от стартовых, включается разгон: вся рента +25%."],
       ["🃏","Карточки","«Шанс» и «Казна» могут переместить вас, наградить, оштрафовать или отправить в тюрьму. Карту освобождения можно сохранить."],
       ["🔒","Тюрьма","Выбросите дубль, заплатите $50 или используйте карту. После трёх неудачных попыток вы платите $50 и ходите."],
       ["⌨️","Клавиши","Пробел или R — бросок · P — пауза · Esc — закрыть окно. Игра сама встаёт на паузу, когда вы переключаете вкладку."]
