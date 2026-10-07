@@ -7141,8 +7141,6 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
   // milliseconds. Four copies of one effect is not four times the information,
   // it is a wall of noise for the limiter to fight.
   const EXTERNAL_SFX_MIN_GAP_MS=45;
-  function ensureDiceSfx(){if(!diceSfxEl)diceSfxEl=document.getElementById("capitalDiceSfx");return diceSfxEl;}
-  function ensureStepSfx(){if(!stepSfxEl)stepSfxEl=document.getElementById("capitalStepSfx");return stepSfxEl;}
   function playExternalSfxFallback(file,volume){
     try{
       let base=externalSfxCache.get(file);
@@ -7178,8 +7176,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     if(!ctx)return false;
     let entry=decodedAudioCache.get(file);
     if(entry==="failed")return false;
-    if(entry)return playDecodedSfx(file,entry,volume);
-    if(!fetch){decodedAudioCache.set(file,"failed");return false;}
+    if(entry)return volume>0?playDecodedSfx(file,entry,volume):true;
     // Reserve the slot so overlapping calls do not start several fetches for the
     // same file before the first one resolves.
     decodedAudioCache.set(file,null);
@@ -7188,14 +7185,36 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
       .then(buf=>ctx.decodeAudioData(buf))
       .then(decoded=>{
         decodedAudioCache.set(file,decoded);
-        playDecodedSfx(file,decoded,volume);
+        // volume 0 means "warm the cache without playing": the sound was already
+        // made through the media element on this call.
+        if(volume>0)playDecodedSfx(file,decoded,volume);
       })
       .catch(()=>{
         decodedAudioCache.set(file,"failed");
-        playExternalSfxFallback(file,volume);
+        // A decode that never succeeds leaves the media element as the only route.
+        // It is not a lost sound, just the slower one, so there is nothing to do
+        // here beyond remembering it.
       });
     return true;
   }
+  /* Effects must make a sound on the very first call, and the dice roll is the
+     one that must never be silent.
+
+     Two things used to conspire against that. The primary path is asynchronous:
+     it fetches the file, decodes it, and only then starts a source. The first
+     time any file is played that is a network round trip plus a decode, which is
+     far longer than the roll animation that triggers it, so the first roll was
+     silent and the sound arrived late or never.
+
+     And dice-roll.wav is not a WAV file at all - it is MPEG audio wearing a .wav
+     extension. Browsers sniff the container so it plays, but any path that
+     trusts the extension does not, which is a trap worth not standing on.
+
+     So the media element handles the first play of each file, immediately, from
+     its own preloaded copy, and the decoded-buffer path takes over from the
+     second play onwards, once the buffer exists. Both routes reach the same
+     limiter. */
+  const externalSfxPrimed=new Set();
   function playExternalSfx(file,volume=.72){
     if(!soundEnabled||gamePaused)return;
     const now=Date.now();
@@ -7203,7 +7222,21 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     if(now-last<EXTERNAL_SFX_MIN_GAP_MS)return;
     externalSfxRecent.set(file,now);
     externalSfxTrimCaches();
-    try{loadDecodedSfx(file,volume);}catch(e){playExternalSfxFallback(file,volume);}
+    // Not yet decoded, or still decoding: play right now through the media
+    // element and start the decode in the background for next time.
+    if(!externalSfxPrimed.has(file)){
+      externalSfxPrimed.add(file);
+      playExternalSfxFallback(file,volume);
+      try{loadDecodedSfx(file,0);}catch(_){}
+      return;
+    }
+    // From here on the buffer route is the fast one. If it cannot play - a decode
+    // that never succeeded, or no audio context - fall back rather than drop the
+    // sound on the floor, which is how the dice roll went missing in the first
+    // place.
+    let played=false;
+    try{played=loadDecodedSfx(file,volume)!==false;}catch(_){played=false;}
+    if(!played)playExternalSfxFallback(file,volume);
   }
   function playDiceSfx(){playExternalSfx("dice-roll.wav",.82);}
   function playStepSfx(){playExternalSfx("step-soft.wav",.58);}
@@ -8508,17 +8541,19 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
 
     const title=lang==="en"?`${playerLabel(bot)} offers a trade`:`${playerLabel(bot)} предлагает обмен`;
     const en=lang==="en";
-    const cashRow=v=>v?`<div class="ct-prop ct-cash-row"><span class="ct-swatch">$</span><span class="ct-name">${en?"Cash":"Деньги"}</span><span class="ct-price">$${v}</span></div>`:"";
-    const root=openModal(`<div class="modal-bg"><div class="modal capital-trade-modal capital-trade-offer">
-      <div class="ct-head"><h3>🤝 ${escapeHtml(title)}</h3></div>
-      <div class="ct-cols">
-        <section class="ct-col"><h4>${en?"You get":"Вы получаете"}</h4><div class="ct-list">${give?tradePropCard(give,false).replace("<button","<div").replace("</button>","</div>"):""}${cashRow(cash)}</div></section>
-        <section class="ct-col"><h4>${en?"You give":"Вы отдаёте"}</h4><div class="ct-list">${tradePropCard(target.tile,false).replace("<button","<div").replace("</button>","</div>")}</div></section>
-      </div>
-      <div class="modal-btns">
-        <button class="btn yes" id="aiTradeAccept">✓ ${lang==="en"?"Accept":"Принять"}</button>
-        <button class="btn no" id="aiTradeDecline">✕ ${lang==="en"?"Decline":"Отклонить"}</button>
-      </div></div></div>`,"ai-trade");
+    // Same two-sided builder as every other offer screen. This one kept the old
+    // markup, which is why the redesign looked like it had not happened at all.
+    const root=openModal(tradeOfferHtml({
+      avatar:"🤝",
+      title:title,
+      subtitle:en?"Review what you would send and receive":"Посмотрите, что вы отдадите и получите",
+      leftLabel:en?"You give":"Вы отдаёте",
+      rightLabel:en?"You get":"Вы получаете",
+      leftTiles:[target.tile],leftCash:0,
+      rightTiles:give?[give]:[],rightCash:cash,
+      balance:tradeOfferValue(give?[give]:[],cash)-tradeOfferValue([target.tile],0),
+      actions:`<button class="btn no" id="aiTradeDecline">✕ ${lang==="en"?"Decline":"Отклонить"}</button><button class="btn yes" id="aiTradeAccept">✓ ${lang==="en"?"Accept":"Принять"}</button>`
+    }),"ai-trade");
     if(!root)return false;
     const finish=(accepted)=>{
       if(!validTurn(bot)||state!==STATES.WAITING_FOR_ROLL)return;
