@@ -5159,8 +5159,10 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       root.querySelector("#buyNo")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"declineProperty",tileId}});},{once:true});
       root.querySelector("#buyClose")?.addEventListener("click",e=>{
         e.preventDefault();
-        // Same distinction as the single-player dialog: Close only dismisses, it
-        // does not put the property up for auction.
+        // Closing is a decision, so it has to reach the host. Clearing only the
+        // local dialog left the host still holding an unanswered buy modal for
+        // this player, and the turn stalled for both of them.
+        mpSend({kind:"action",playerId:mp.clientId,action:{type:"dismissProperty",tileId}});
         clearModal();modalOpen=false;modalKind=null;
       },{once:true});
     }else if(modalKind==="jail"){
@@ -5213,6 +5215,19 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       const t=TILES[Number(a.tileId)];
       if(!isTurn||state!==STATES.TILE_ACTION||modalKind!=="buy"||!t||p.pos!==t.id||t.owner!=null)return;
       clearModal();startHumanAuction(p,t);
+      return;
+    }
+
+    if(a.type==="dismissProperty"){
+      const t=TILES[Number(a.tileId)];
+      if(!isTurn||state!==STATES.TILE_ACTION||modalKind!=="buy"||!t||p.pos!==t.id||t.owner!=null)return;
+      // Same distinction as the single-player dialog: the property stays with
+      // the bank and no auction starts. The turn still has to end, otherwise the
+      // host sits in TILE_ACTION with no modal and Roll Dice never comes back.
+      clearModal();
+      log(`${playerLabel(p)} оставляет «${tileLabel(t)}» банку.`);
+      const localRun=runId;
+      setTimeout(()=>{if(validRun(localRun)&&validTurn(p)&&state===STATES.TILE_ACTION&&!modalOpen)completeTileAction(p);},90);
       return;
     }
 
@@ -8912,15 +8927,24 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     // put the property straight into an auction and the second one was a lie.
     // Closing now just dismisses the dialog: the property stays with the bank,
     // and landing on it again offers the purchase again.
-    const close=bg.querySelector("#buyClose");if(close)close.onclick=()=>{
+    //
+    // Dismissing still has to END THE TILE ACTION. Roll Dice requires
+    // WAITING_FOR_ROLL and this dialog only ever appears during TILE_ACTION, so
+    // clearing the dialog on its own parked the turn in TILE_ACTION with nothing
+    // left to act on: the roll button stayed disabled and the game looked dead
+    // until the page was reloaded.
+    const dismissBuy=()=>{
       if(remoteTurn)return;
       clearModal();
       toast(lang==="en"?"Left the property with the bank. You can buy it if you land on it again.":"Недвижимость осталась у банка. Её можно купить, если снова выпадет на неё.","info");
+      const localRun=runId;
+      setTimeout(()=>{if(validRun(localRun)&&validTurn(p)&&state===STATES.TILE_ACTION&&!modalOpen)completeTileAction(p);},isFast()?300:700);
     };
+    const close=bg.querySelector("#buyClose");if(close)close.onclick=dismissBuy;
     // Clicking outside the dialog dismisses it, exactly like Close. It used to
     // start the auction, so a stray click next to the buttons put the property
     // up for sale - the same accident the duplicate Close button invited.
-    bg.onclick=e=>{if(!remoteTurn&&e.target===bg){clearModal();}};
+    bg.onclick=e=>{if(e.target===bg)dismissBuy();};
   }
 
   /* ---------- AI Personality Engine ---------- */
