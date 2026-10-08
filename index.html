@@ -3850,16 +3850,27 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     const create=get("btnMultiplayer");
     const join=get("btnJoin");
     if(!create || !join) return;
+    // Stand aside when the engine has already claimed these buttons.
+    //
+    // This script attaches its own capture-phase listeners, and so does the
+    // engine. Both call stopPropagation, so which one handled a click came down
+    // to the order the two scripts finished binding - which is not something a
+    // button's behaviour should depend on. The boot form exists for the case
+    // where the engine never initialised, so it only runs when that is true.
+    const engineReady=()=>typeof window.Capital?.multiplayer==="function"
+                     && typeof window.Capital?.joinMultiplayer==="function";
 
     create.addEventListener("click",e=>{
       e.preventDefault();
       e.stopPropagation();
+      if(engineReady())return;
       bootModal("create");
     },true);
 
     join.addEventListener("click",e=>{
       e.preventDefault();
       e.stopPropagation();
+      if(engineReady())return;
       bootModal("join");
     },true);
   }
@@ -4055,6 +4066,20 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     }catch(_){}
   }
   function mpClearSession(){try{sessionStorage.removeItem(MP_SESSION_KEY);}catch(_){}try{localStorage.removeItem(MP_SESSION_KEY);}catch(_){}mpClearHostState();}
+  /* A stored session older than this is treated as history, not as somewhere the
+     player still is. The localStorage mirror is what makes a stale session
+     reachable days later, and replaying it then silently swallows every click on
+     the multiplayer buttons. */
+  const MP_SESSION_MAX_AGE=12*60*60*1000;
+  function mpStoredSessionUsable(){
+    const s=mpReadSession();
+    if(!s||!s.room)return null;
+    const savedAt=Number(s.savedAt)||0;
+    // No timestamp at all means a session written by an older build. It is kept,
+    // because refusing it would strand anyone mid-game across an update.
+    if(savedAt&&Date.now()-savedAt>MP_SESSION_MAX_AGE)return null;
+    return s;
+  }
   function mpReadSession(){
     try{
       let raw=null;
@@ -4713,8 +4738,40 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     modalRoot.innerHTML=`<div class="modal-bg capital-mp-bg" id="capitalMpFlow"><div class="modal capital-mp-modal" style="max-width:430px">${title?`<div style="font-size:11px;letter-spacing:.16em;color:#8d9ab0;font-weight:900">${title}</div>`:""}${subtitle?`<h3 style="margin:7px 0 8px">${subtitle}</h3>`:""}<div>${body}</div><div class="modal-btns" style="margin-top:16px">${buttons}</div></div></div>`;
     modalOpen=true;modalKind="mpFlow";
   }
+  /* What to say when a click arrives while a room is already open.
+
+     Both buttons used to open with `if(mp.active)return;`, which is the correct
+     decision - one client cannot hold two rooms - but it was made silently. The
+     session is mirrored into localStorage as well as sessionStorage, so it
+     outlives the tab, and the game replays it 250ms after every load. A player who
+     had played a room once came back to a fresh page, was quietly dropped into
+     that room again, and from then on every click on "Create game" or "Join by
+     code" vanished with no message. Which browser reproduced it depended on
+     whether that auto-rejoin had won the race against the click.
+
+     So the guard now explains itself and offers the way out. */
+  function mpRoomActiveNotice(){
+    const en=lang==="en";
+    const room=mp.room?String(mp.room).toUpperCase():"";
+    modalRoot.innerHTML=`<div class="modal-bg"><div class="modal" role="dialog" aria-modal="true">
+      <h3>${en?"You are already in a room":"Вы уже в комнате"}</h3>
+      <p style="color:#9aa8ba;font-size:13px;margin:8px 0 4px">${en
+        ?`This browser is connected to room <b style="color:#f4c95d">${escapeHtml(room)}</b>. Leave it first, or use the code below to rejoin.`
+        :`Этот браузер подключён к комнате <b style="color:#f4c95d">${escapeHtml(room)}</b>. Сначала выйдите из неё или введите код ниже, чтобы вернуться.`}</p>
+      <div class="modal-btns" style="margin-top:18px">
+        <button class="btn no" id="mpActiveCancel">${en?"Cancel":"Отмена"}</button>
+        <button class="btn no" id="mpActiveLeave">${en?"Leave room":"Выйти из комнаты"}</button>
+        <button class="btn yes" id="mpActiveRejoin">${en?"Rejoin":"Вернуться"}</button>
+      </div></div></div>`;
+    modalOpen=true;modalKind="mpActive";updateBadge();
+    const close=()=>{clearModal();modalOpen=false;modalKind=null;};
+    modalRoot.querySelector("#mpActiveCancel").onclick=close;
+    modalRoot.querySelector("#mpActiveLeave").onclick=()=>{close();mpLeaveRoom();};
+    // Rejoin uses the engine's own dialog, so it behaves like a normal join.
+    modalRoot.querySelector("#mpActiveRejoin").onclick=()=>{close();mpShowLobby();};
+  }
   function mpCreate(prefillName=""){
-    if(mp.active)return;
+    if(mp.active){mpRoomActiveNotice();return;}
     const preset=(prefillName||document.getElementById("nickInput")?.value||"").trim().slice(0,16);
     const title=lang==="en"?"CREATE GAME":"СОЗДАНИЕ ИГРЫ";
     const subtitle=lang==="en"?"Choose your nickname":"Выберите никнейм";
@@ -4740,7 +4797,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     input?.addEventListener("keydown",e=>{if(e.key==="Enter")modalRoot.querySelector("#mpFlowContinue")?.click();if(e.key==="Escape")modalRoot.querySelector("#mpFlowCancel")?.click();});
   }
   function mpJoin(prefillRoom="",prefillName=""){
-    if(mp.active)return;
+    if(mp.active){mpRoomActiveNotice();return;}
     const preset=(prefillName||document.getElementById("nickInput")?.value||"").trim().slice(0,16);
     const presetRoom=String(prefillRoom||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6);
     const title=lang==="en"?"JOIN GAME":"ВХОД В ИГРУ";
@@ -9988,7 +10045,7 @@ document.addEventListener("keydown",e=>{
     try{mpInstallButtons();}catch(e){console.error("CAPITAL multiplayer init error",e);}
     try{mpBootstrapTransport();}catch(e){console.error("CAPITAL multiplayer transport init error",e);}
     try{syncActionPanel();}catch(e){}
-    try{setTimeout(()=>{const session=mpReadSession();if(session&&session.room){mpConnect(session.room,!!session.host,session.name||"Player",true);}},250);}catch(e){console.error("CAPITAL multiplayer restore error",e);}
+    try{setTimeout(()=>{const session=mpStoredSessionUsable();if(session&&session.room){mpConnect(session.room,!!session.host,session.name||"Player",true);}},250);}catch(e){console.error("CAPITAL multiplayer restore error",e);}
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",capitalInit,{once:true});
   else capitalInit();
