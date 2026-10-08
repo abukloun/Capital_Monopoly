@@ -1163,6 +1163,21 @@ body{
 .auction-prop-meta b{color:#e6ebf2;font-weight:850;font-variant-numeric:tabular-nums;margin-left:4px}
 .auction-body{padding:18px 22px 20px;display:grid;gap:13px}
 .auction-body>.auction-kicker{margin:0}
+/* Bidding: a ladder of raises above an exact-amount fallback. The rungs are the
+   point - one small "+$10" next to a number box makes raising a bid feel like
+   typing, and a ladder gives a real shortcut once two people are competing. */
+.auction-bid-controls{display:grid!important;gap:10px}
+.auction-bid-ladder{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px}
+.auction-bid-ladder .auction-bid-step{
+  padding:11px 4px!important;font-size:14px;font-weight:900;font-variant-numeric:tabular-nums;
+  letter-spacing:-.02em;white-space:nowrap
+}
+.auction-bid-ladder .auction-bid-step-lg{font-size:15px}
+.auction-bid-ladder .auction-bid-step:disabled{opacity:.34}
+.auction-bid-custom{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+@media (max-width:520px){
+  .auction-bid-ladder{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
 .auction-body-top{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
 .auction-body-top .auction-timer-wrap{margin-right:auto}
 .auction-body .auction-stats{flex:1 1 260px;min-width:0;margin:0!important}
@@ -3623,14 +3638,14 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 #cap3dCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
 #cap3dCanvas:active{cursor:grabbing}
 #cap3dHud{position:absolute;inset:0;pointer-events:none;display:flex;align-items:flex-end;justify-content:center;padding:8px 8px 14px;z-index:5}
-#cap3dHud .center{pointer-events:auto;width:min(320px,94%);background:radial-gradient(circle at 50% 36%,rgba(76,93,129,.22),transparent 38%),linear-gradient(145deg,rgba(17,26,40,.88),rgba(9,15,24,.88))!important;border:1px solid rgba(255,255,255,.09)!important;border-radius:14px!important;box-shadow:0 14px 40px rgba(0,0,0,.45)!important;padding:8px 12px!important;gap:6px!important;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
-#cap3dHud .center h2{font-size:13px!important;letter-spacing:.1em!important}
-#cap3dHud .dice-row{gap:10px!important}
-#cap3dHud .die2d{width:54px!important;height:54px!important;border-radius:13px!important;box-shadow:inset 0 2px 0 rgba(255,255,255,.9),inset 0 -5px 10px rgba(24,34,48,.1),0 8px 16px rgba(0,0,0,.28)!important}
-#cap3dHud .die2d .die-pip{width:10px!important;height:10px!important}
-#cap3dHud .roll-btn{min-width:160px!important;min-height:46px!important;font-size:13px!important;padding:8px 14px!important}
-#cap3dHud .log{font-size:12px!important;color:#96a3b5!important}
-#cap3dHud #turnHint{font-size:11px!important}
+#cap3dHud .center{pointer-events:auto;width:min(262px,92%);background:radial-gradient(circle at 50% 36%,rgba(76,93,129,.22),transparent 38%),linear-gradient(145deg,rgba(17,26,40,.88),rgba(9,15,24,.88))!important;border:1px solid rgba(255,255,255,.09)!important;border-radius:14px!important;box-shadow:0 14px 40px rgba(0,0,0,.45)!important;padding:8px 12px!important;gap:6px!important;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+#cap3dHud .center h2{font-size:11.5px!important;letter-spacing:.1em!important}
+#cap3dHud .dice-row{gap:8px!important}
+#cap3dHud .die2d{width:42px!important;height:42px!important;border-radius:10px!important;box-shadow:inset 0 2px 0 rgba(255,255,255,.9),inset 0 -5px 10px rgba(24,34,48,.1),0 8px 16px rgba(0,0,0,.28)!important}
+#cap3dHud .die2d .die-pip{width:8px!important;height:8px!important}
+#cap3dHud .roll-btn{min-width:132px!important;min-height:40px!important;font-size:12px!important;padding:7px 11px!important}
+#cap3dHud .log{font-size:11px!important;color:#96a3b5!important}
+#cap3dHud #turnHint{font-size:10px!important}
 /* 3D-mode sidebar: premium glass HUD. All rules scoped to .view-3d — 2D untouched. */
 #gameWrap.view-3d .side .panel{background:rgba(13,19,29,.68)!important;border:1px solid rgba(244,201,93,.14)!important;border-radius:16px!important;box-shadow:0 18px 50px rgba(0,0,0,.45)!important;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
 #gameWrap.view-3d .side .panel h3{color:#718096!important}
@@ -4070,6 +4085,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   let fastPace = false;
   let movingPlayerId = null;
   let movingPieceEl = null;
+  let localWalkFrame = null;
   // Tile count of the move currently being animated, so the 2D walker builds
   // one waypoint per tile. Set by animateMove, read by animatePieceTo.
   let moveStepCount = 1;
@@ -4928,7 +4944,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     const rm=mpRemoteMovement;
     if(!rm)return;
     if(!force && !rm.done)return;
-    if(rm.raf)cancelAnimationFrame(rm.raf);
+    if(rm.raf)cancelWalkFrame(rm.raf);
     if(rm.el?.isConnected)rm.el.remove();
     mpRemoteMovement=null;
     movingPlayerId=null;
@@ -4986,11 +5002,11 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       const pt=tokenWalkAt(path,e*path.length);
       el.dataset.x=String(pt.x);el.dataset.y=String(pt.y);
       el.style.setProperty("transform",`translate3d(${pt.x}px,${pt.y}px,0)`,'important');
-      if(t<1){rm.raf=requestAnimationFrame(frame);return;}
+      if(t<1){rm.raf=scheduleWalkFrame(frame);return;}
       el.style.setProperty("transform",`translate3d(${target.x}px,${target.y}px,0)`,'important');
       rm.done=true;rm.raf=null;
     };
-    rm.raf=requestAnimationFrame(frame);
+    rm.raf=scheduleWalkFrame(frame);
   }
 
   function mpApplySnapshot(s){
@@ -5141,7 +5157,12 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       const tileId=Number(root.dataset.tileId);
       root.querySelector("#buyYes")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"buyProperty",tileId}});},{once:true});
       root.querySelector("#buyNo")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"declineProperty",tileId}});},{once:true});
-      root.querySelector("#buyClose")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"declineProperty",tileId}});},{once:true});
+      root.querySelector("#buyClose")?.addEventListener("click",e=>{
+        e.preventDefault();
+        // Same distinction as the single-player dialog: Close only dismisses, it
+        // does not put the property up for auction.
+        clearModal();modalOpen=false;modalKind=null;
+      },{once:true});
     }else if(modalKind==="jail"){
       root.querySelector("#jRoll")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"jailRoll"}});},{once:true});
       root.querySelector("#jPay")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"jailPay"}});},{once:true});
@@ -7030,7 +7051,40 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     const id=requestAnimationFrame(ts=>{animationFrames.delete(id);fn(ts);});
     animationFrames.add(id);return id;
   }
-  function cancelFrames(){animationFrames.forEach(id=>cancelAnimationFrame(id));animationFrames.clear();}
+  function cancelFrames(){animationFrames.forEach(id=>cancelAnimationFrame(id));animationFrames.clear();walkTimers.forEach(id=>clearTimeout(id));walkTimers.clear();}
+  /* Frame clock for walks that decide game state, not just pixels.
+
+     requestAnimationFrame is the right clock for a walk: it is synced to the
+     display and it stops when there is nothing to draw. But it is stopped
+     outright in a background tab, and playing with a friend means the game is
+     very often in a tab that nobody is looking at. The walk then never advanced
+     at all: the piece was placed at its starting tile, the host's arrival event
+     arrived and snapped it to the destination, and the other player saw exactly
+     the teleport this was supposed to prevent.
+
+     So a walk falls back to a timer while the document is hidden. Browsers
+     throttle background timers to roughly once a second, which nobody can see
+     happen - but it lets the walk run to its end and land on the right tile, so
+     the board is correct the moment the tab is looked at again. When the tab
+     comes back, the next frame resumes the same walk and, because walks measure
+     elapsed time rather than counting frames, it simply continues. */
+  const walkTimers=new Set();
+  function scheduleWalkFrame(fn){
+    const hidden=(typeof document!=="undefined"&&document.hidden);
+    if(hidden){
+      const id=setTimeout(()=>{walkTimers.delete(id);try{fn(performance.now());}catch(_){}},60);
+      walkTimers.add(id);
+      return {kind:"timer",id};
+    }
+    const id=requestAnimationFrame(ts=>{walkTimers.delete(id);fn(ts);});
+    walkTimers.add(id);
+    return {kind:"raf",id};
+  }
+  function cancelWalkFrame(slot){
+    if(!slot)return;
+    try{if(slot.kind==="timer")clearTimeout(slot.id);else cancelAnimationFrame(slot.id);}catch(_){}
+    walkTimers.delete(slot.id);
+  }
   function cancelBotTimers(){botTimers.forEach(id=>clearTimeout(id));botTimers.clear();}
   /* ---------- Game speed (single player) ----------
      "fast" shortens bot thinking, dice, movement, pop-ups and auctions.
@@ -8241,6 +8295,9 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
   }
 
   function clearMovingPiece(){
+    // Cancel the walk's clock too: leaving it pending would let a stale walk
+    // write a transform onto a piece that no longer exists.
+    if(localWalkFrame){cancelWalkFrame(localWalkFrame);localWalkFrame=null;}
     if(boardEl)boardEl.querySelectorAll(".moving-piece").forEach(el=>el.remove());
     movingPieceEl=null;
     movingPlayerId=null;
@@ -8374,12 +8431,14 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
       const t=Math.min(1,(ts-t0)/duration);
       const pt=tokenWalkAt(path,ease(t)*L);
       movingPieceEl.style.setProperty("transform",`translate3d(${pt.x}px,${pt.y}px,0)`,"important");
-      if(t<1){scheduleFrame(frame);return;}
+      if(t<1){localWalkFrame=scheduleWalkFrame(frame);return;}
       movingPieceEl.style.setProperty("transform",`translate3d(${last.x}px,${last.y}px,0)`,"important");
       movingPieceEl.dataset.x=String(last.x);movingPieceEl.dataset.y=String(last.y);
       done?.();
     };
-    scheduleFrame(frame);
+    // The walk drives the turn itself - done() is what lands the piece - so it
+    // must not depend on a tab being visible to keep ticking.
+    localWalkFrame=scheduleWalkFrame(frame);
   }
   function animateMove(p,steps,onDone){
     if(!validTurn(p))return;
@@ -8849,8 +8908,19 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     };
     const buy=bg.querySelector("#buyYes");if(buy)buy.onclick=finishBuy;
     const no=bg.querySelector("#buyNo");if(no)no.onclick=()=>{if(remoteTurn)return;clearModal();startHumanAuction(p,t);};
-    const close=bg.querySelector("#buyClose");if(close)close.onclick=()=>{if(remoteTurn)return;clearModal();startHumanAuction(p,t);};
-    bg.onclick=e=>{if(!remoteTurn&&e.target===bg){clearModal();startHumanAuction(p,t);}};
+    // Close used to be wired to the same action as Skip purchase, so both buttons
+    // put the property straight into an auction and the second one was a lie.
+    // Closing now just dismisses the dialog: the property stays with the bank,
+    // and landing on it again offers the purchase again.
+    const close=bg.querySelector("#buyClose");if(close)close.onclick=()=>{
+      if(remoteTurn)return;
+      clearModal();
+      toast(lang==="en"?"Left the property with the bank. You can buy it if you land on it again.":"Недвижимость осталась у банка. Её можно купить, если снова выпадет на неё.","info");
+    };
+    // Clicking outside the dialog dismisses it, exactly like Close. It used to
+    // start the auction, so a stray click next to the buttons put the property
+    // up for sale - the same accident the duplicate Close button invited.
+    bg.onclick=e=>{if(!remoteTurn&&e.target===bg){clearModal();}};
   }
 
   /* ---------- AI Personality Engine ---------- */
@@ -9255,6 +9325,53 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
      title is written once when the modal is built, and only the small numeric
      readouts are updated in place. The countdown keeps its own interval, which is
      the one thing that genuinely needs a timer. */
+  /* Bidding controls.
+
+     There used to be one "+$10" button next to a number box, so raising a bid
+     meant either a single small step or typing an exact figure. Anyone coming
+     from richup expects a row of ready-made raises that get bigger as the
+     bidding climbs, so that is what this is: a ladder of raises, each one
+     placing a bid of the current price plus that raise.
+
+     The ladder is not a list of absolute bids - each button is a step up from
+     whatever the price is now, so the row keeps working after the price has
+     moved. The first rung is the minimum legal raise; later rungs are the
+     shortcuts that matter once two people are actually competing. */
+  // The first rung is derived from the minimum raise so the two cannot drift
+  // apart if AUCTION_STEP ever changes; the rest scale off it.
+  const AUCTION_BID_LADDER=[AUCTION_STEP,AUCTION_STEP*5,AUCTION_STEP*10,AUCTION_STEP*25,AUCTION_STEP*50];
+  function auctionBidControlsHtml(a,canBid,minBid,me){
+    const en=lang==="en";
+    const cash=Math.max(0,Math.floor(me?.money||0));
+    const buttons=AUCTION_BID_LADDER.map(step=>{
+      // Dim the rungs a player cannot afford instead of hiding them, so the
+      // ladder keeps its shape and the greyed-out rungs explain themselves.
+      const afford=canBid&&cash>=a.currentBid+step;
+      return `<button class="btn yes auction-bid-step${step===AUCTION_BID_LADDER[0]?"":" auction-bid-step-lg"}" data-bid-step="${step}" ${afford?"":"disabled"}>+$${step}</button>`;
+    }).join("");
+    return `<div class="auction-bid-controls">
+            <div class="auction-bid-ladder">${buttons}</div>
+            <div class="auction-bid-custom">
+              <input id="auctionBidInput" class="setup-input" type="number" min="${minBid}" max="${cash}" step="${AUCTION_STEP}" value="${Math.min(cash,minBid)}" ${canBid?"":"disabled"}>
+              <button class="btn yes" id="auctionBidCustom" ${canBid?"":"disabled"}>${en?"Bid":"Ставка"}</button>
+            </div>
+          </div>`;
+  }
+  function wireAuctionBidControls(a,me,bg){
+    if(!bg)return;
+    const ladder=bg.querySelector(".auction-bid-ladder");
+    if(ladder)ladder.addEventListener("click",e=>{
+      const b=e.target.closest("[data-bid-step]");
+      if(!b||b.disabled)return;
+      auctionPlaceBid(a,me,a.currentBid+Number(b.dataset.bidStep));
+    });
+    bg.querySelector("#auctionBidCustom").onclick=()=>{
+      const input=bg.querySelector("#auctionBidInput");
+      auctionPlaceBid(a,me,Number(input.value));
+    };
+    const input=bg.querySelector("#auctionBidInput");
+    input?.addEventListener("keydown",e=>{if(e.key==="Enter")bg.querySelector("#auctionBidCustom")?.click();});
+  }
   let auctionLastHistoryKey="";
   function auctionHistoryKey(a){return (a.history||[]).map(h=>h.playerId+":"+h.amount).join("|");}
   // The builder and the sync share one idea of what is on screen. Whichever
@@ -9278,7 +9395,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     const leaderEl=bg.querySelector("[data-auction-leader]");
     const cashEl=bg.querySelector("[data-auction-cash]");
     const historyEl=bg.querySelector(".auction-history");
-    const stepBtn=bg.querySelector("#auctionBidStep");
+    const stepBtn=bg.querySelector(".auction-bid-ladder");
     const customBtn=bg.querySelector("#auctionBidCustom");
     const input=bg.querySelector("#auctionBidInput");
     // Text nodes are cheap to compare and cheap to skip: a write that changes
@@ -9294,10 +9411,14 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
         historyEl.innerHTML=auctionHistoryRows(a)||`<div class="auction-empty">${lang==="en"?"No bids yet. Be the first to bid.":"Ставок пока нет. Сделай первую ставку."}</div>`;
       }
     }
+    // Each rung is a step up from the current price, so it has to be re-enabled
+    // or greyed out as the price climbs and the player's cash shrinks.
     if(stepBtn){
-      stepBtn.disabled=!canBid;
-      const label=`⬆️ +$${AUCTION_STEP}`;
-      if(stepBtn.textContent!==label)stepBtn.textContent=label;
+      const cash=Math.max(0,Math.floor(me?.money||0));
+      stepBtn.querySelectorAll("[data-bid-step]").forEach(b=>{
+        const on=canBid&&cash>=a.currentBid+Number(b.dataset.bidStep);
+        if(b.disabled===on)b.disabled=!on;
+      });
     }
     if(customBtn)customBtn.disabled=!canBid;
     if(input){
@@ -9374,25 +9495,12 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
             </div>
           </div>
           <div class="auction-history">${auctionHistoryRendered(a)||`<div class="auction-empty">${lang==="en"?"No bids yet. Be the first to bid.":"Ставок пока нет. Сделай первую ставку."}</div>`}</div>
-          <div class="auction-bid-controls">
-            <button class="btn yes auction-bid-step" id="auctionBidStep" ${canBid?"":"disabled"}>⬆️ +$${AUCTION_STEP}</button>
-            <input id="auctionBidInput" class="setup-input" type="number" min="${minBid}" max="${Math.max(0,Math.floor(me?.money||0))}" step="${AUCTION_STEP}" value="${Math.min(Math.max(0,Math.floor(me?.money||0)),minBid)}" ${canBid?"":"disabled"}>
-            <button class="btn yes" id="auctionBidCustom" ${canBid?"":"disabled"}>${lang==="en"?"Bid":"Сделать ставку"}</button>
-          </div>
+          ${auctionBidControlsHtml(a,canBid,minBid,me)}
           <div class="auction-rule">${lang==="en"?`Minimum raise: $${AUCTION_STEP}. Every new bid resets the ${auctionSeconds()}-second timer.`:`Минимальный шаг: $${AUCTION_STEP}. Каждая новая ставка сбрасывает таймер на ${auctionSeconds()} секунд.`}</div>`;
 
     const bg=openModal(auctionShellHtml(a,bidsHtml,""),"auction");
     if(!bg)return;
-
-    bg.querySelector("#auctionBidStep").onclick=()=>auctionPlaceBid(a,me,a.currentBid+AUCTION_STEP);
-    bg.querySelector("#auctionBidCustom").onclick=()=>{
-      const input=bg.querySelector("#auctionBidInput");
-      auctionPlaceBid(a,me,Number(input.value));
-    };
-    const input=bg.querySelector("#auctionBidInput");
-    input?.addEventListener("keydown",e=>{
-      if(e.key==="Enter")bg.querySelector("#auctionBidCustom")?.click();
-    });
+    wireAuctionBidControls(a,me,bg);
     return bg;
   }
 
@@ -10135,12 +10243,19 @@ document.addEventListener("keydown",e=>{
     // exposes the object itself rather than a copy, so anything added here is a
     // decision not to hide; the fields are all client-local facts.
     mpInfo:function(){
+      const p=currentPlayer();
       return {
         active:!!mp.active,host:!!mp.host,connected:!!mp.connected,room:mp.room||"",
         clientId:mp.clientId||"",hostId:mp.hostId||"",authoritySettled:!!mp.authoritySettled,
         lastTickAgo:mp.lastTickAt?Date.now()-mp.lastTickAt:-1,
         members:(mp.members||[]).map(m=>({clientId:m.clientId,name:m.name,host:!!m.host})),
-        remoteMove:mpRemoteMovement?{id:String(mpRemoteMovement.id),from:mpRemoteMovement.from,to:mpRemoteMovement.to,done:!!mpRemoteMovement.done,duration:mpRemoteMovement.duration}:null
+        remoteMove:mpRemoteMovement?{id:String(mpRemoteMovement.id),from:mpRemoteMovement.from,to:mpRemoteMovement.to,done:!!mpRemoteMovement.done,duration:mpRemoteMovement.duration}:null,
+        // Why the roll button is or is not live, so a stuck turn can be read off
+        // instead of guessed at. Every field is a local fact about this client.
+        turn:{turn:turn,state:state,modalOpen:modalOpen,modalKind:modalKind,
+              hasPlayer:!!p,human:p?!!p.human:null,bankrupt:p?!!p.bankrupt:null,
+              local:mp.active&&p?!!mpIsLocalPlayer(p):null,inJail:p?!!p.inJail:null,
+              rollDisabled:rollBtn?!!rollBtn.disabled:null,validRun:validRun(runId)}
       };
     },
     // Drives the guest-side walk directly, so remote movement can be exercised
@@ -10182,13 +10297,13 @@ document.addEventListener("keydown",e=>{
             </div>
           </div>
           <div class="auction-history">${auctionHistoryRendered(fake)||`<div class="auction-empty">${en?"No bids yet. Be the first to bid.":"Ставок пока нет."}</div>`}</div>
-          <div class="auction-bid-controls">
-            <button class="btn yes auction-bid-step" id="auctionBidStep" ${canBid?"":"disabled"}>⬆️ +$${AUCTION_STEP}</button>
-            <input id="auctionBidInput" class="setup-input" type="number" min="${minBid}" max="${Math.max(0,Math.floor(me?.money||0))}" step="${AUCTION_STEP}" value="${Math.min(Math.max(0,Math.floor(me?.money||0)),minBid)}" ${canBid?"":"disabled"}>
-            <button class="btn yes" id="auctionBidCustom" ${canBid?"":"disabled"}>${en?"Bid":"Сделать ставку"}</button>
-          </div>
+          ${auctionBidControlsHtml(fake,canBid,minBid,me)}
           <div class="auction-rule">${en?`Minimum raise: $${AUCTION_STEP}. Every new bid resets the ${auctionSeconds()}-second timer.`:`Минимальный шаг: $${AUCTION_STEP}. Каждая новая ставка сбрасывает таймер на ${auctionSeconds()} секунд.`}</div>`;
       window.__auctionPreviewRef=fake;
+      window.__auctionPreviewWire=()=>{
+        const bg=modalRoot&&modalRoot.querySelector?modalRoot.querySelector(".auction-live-bg"):null;
+        if(bg)wireAuctionBidControls(fake,players.find(x=>x.human&&!x.bankrupt)||players[0]||null,bg);
+      };
       return auctionShellHtml(fake,bids,"");
     },
     // Runs the live sync against whatever auction dialog is on screen, the same
