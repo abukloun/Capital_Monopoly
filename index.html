@@ -1123,6 +1123,58 @@ body{
 #gameWrap .eventlog{flex-direction:column!important;overflow-anchor:none!important;scroll-behavior:smooth!important}
 .capital-log-auction{color:#f4c95d!important}
 .auction-live-bg{padding:18px!important}
+/* ---- Live auction layout: the property on top, the auction underneath.
+   The dialog used to lead with a "LIVE AUCTION / hammer / name" heading with the
+   timer beside it, so the property being fought over was the least prominent
+   thing on screen. Now the property is the header - colour band, group, name,
+   price and rent - and everything about bidding sits below it. --auction-color
+   comes from the fixed group palette on the element, never from a value a
+   player can influence. */
+#modalRoot .modal.auction-live-modal{padding:0!important;overflow:hidden!important;border-radius:20px!important}
+.auction-prop-head{
+  display:flex;align-items:stretch;gap:16px;padding:20px 22px 18px;
+  background:
+    linear-gradient(180deg,color-mix(in srgb,var(--auction-color,#8d9aad) 26%,transparent),transparent 88%),
+    linear-gradient(140deg,rgba(20,27,38,.9),rgba(13,19,27,.9));
+  border-bottom:1px solid rgba(255,255,255,.07);
+  position:relative
+}
+.auction-prop-head::after{
+  content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;
+  background:linear-gradient(90deg,var(--auction-color,#8d9aad),transparent 78%)
+}
+.auction-prop-swatch{
+  width:12px;flex:0 0 auto;border-radius:6px;background:var(--auction-color,#8d9aad);
+  box-shadow:0 0 16px color-mix(in srgb,var(--auction-color,#8d9aad) 55%,transparent)
+}
+.auction-prop-text{min-width:0;flex:1 1 auto}
+.auction-prop-group{
+  font-size:10px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--auction-color,#8d9aad);margin-bottom:5px
+}
+.auction-prop-title{
+  margin:0!important;font-size:23px!important;line-height:1.12;letter-spacing:-.015em;
+  /* Written once when the dialog is built and never rewritten by a sync, so it
+     cannot shake under a sync's layout pass. */
+  overflow-wrap:anywhere
+}
+.auction-prop-meta{display:flex;gap:16px;margin-top:9px;flex-wrap:wrap}
+.auction-prop-meta span{font-size:11.5px;color:#8d9aad}
+.auction-prop-meta b{color:#e6ebf2;font-weight:850;font-variant-numeric:tabular-nums;margin-left:4px}
+.auction-body{padding:18px 22px 20px;display:grid;gap:13px}
+.auction-body>.auction-kicker{margin:0}
+.auction-body-top{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.auction-body-top .auction-timer-wrap{margin-right:auto}
+.auction-body .auction-stats{flex:1 1 260px;min-width:0;margin:0!important}
+/* Only a genuinely new bid animates in. The key check in syncAuctionModal means a
+   350ms state tick no longer restarts this on every frame. */
+.auction-history-row{animation:capitalBidIn .2s ease both}
+@media (max-width:520px){
+  .auction-prop-head{padding:16px 18px 14px;gap:12px}
+  .auction-prop-title{font-size:20px!important}
+  .auction-body{padding:15px 18px 17px}
+  .auction-body-top{flex-direction:column;gap:10px}
+}
 .auction-live-modal{max-width:520px!important;text-align:left!important}
 .auction-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:16px}
 .auction-kicker{font-size:10px;font-weight:900;letter-spacing:.16em;color:#f4c95d;margin-bottom:5px}
@@ -4686,7 +4738,24 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       // Do not advance lastAppliedSeq here. The following authoritative snapshot
       // is allowed to carry exactly this sequence and must be applied.
       if(ev.type==="DICE_ROLLED"){const rp=players.find(x=>x&&x.mpClientId===ev.playerId)||players.find(x=>x&&x.id===Number(ev.playerIndex));if(rp){turn=rp.id;state=STATES.ROLLING;lastDice=[Number(ev.d1)||1,Number(ev.d2)||1];lastRollTotal=lastDice[0]+lastDice[1];updateBadge();}animateDice(Number(ev.d1)||1,Number(ev.d2)||1,()=>{});return;}
-      if(ev.type==="PLAYER_MOVED"){const movement=ev.movement;if(movement&&movement.playerId!=null){const rp=players.find(x=>x&&x.mpClientId===movement.playerId)||players.find(x=>x&&x.id===Number(movement.playerIndex));if(rp){turn=rp.id;state=STATES.MOVING;startRemoteMovement(movement);updateBadge();}}return;}
+      if(ev.type==="PLAYER_MOVED"){
+        const movement=ev.movement;
+        if(movement&&movement.playerId!=null){
+          const rp=players.find(x=>x&&x.mpClientId===movement.playerId)||players.find(x=>x&&x.id===Number(movement.playerIndex));
+          if(rp){
+            turn=rp.id;state=STATES.MOVING;
+            // Same rule as the snapshot path: a repeat of the movement already
+            // being animated must not restart it. The host publishes a snapshot
+            // right after this event and again on every tick, so without the id
+            // check a guest re-entered the walk several times per second and the
+            // piece only ever appeared to jump to its destination.
+            const already=mpRemoteMovement&&mpRemoteMovement.id===String(movement.id);
+            if(!already)startRemoteMovement(movement);
+            updateBadge();
+          }
+        }
+        return;
+      }
       if(ev.type==="PLAYER_MOVE_FINISHED"){const rp=players.find(x=>x&&x.mpClientId===ev.playerId)||players.find(x=>x&&x.id===Number(ev.playerIndex));if(rp){rp.pos=((Number(ev.toPos)||0)%40+40)%40;turn=rp.id;state=STATES.TILE_ACTION;if(mpRemoteMovement)finishRemoteMovement(true);else{renderTokens();renderPlayers();updateBadge();}updateBadge();}return;}
       if(ev.type==="END_TURN"){const np=players.find(x=>x&&x.mpClientId===ev.nextPlayerId)||players.find(x=>x&&x.id===Number(ev.nextPlayerIndex));if(np&&!np.bankrupt){turn=np.id;state=STATES.WAITING_FOR_ROLL;extraTurnPending=false;if(modalKind!=="auction"&&modalKind!=="gameover"){modalRoot.innerHTML="";modalOpen=false;modalKind=null;}updateBadge();}return;}
       if(ev.type==="AUCTION_STARTED"||ev.type==="AUCTION_BID"||ev.type==="AUCTION_FINISHED"||ev.type==="PROPERTY_BOUGHT")return;
@@ -4958,7 +5027,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     // never change player.pos themselves; they only animate the visual token.
     const movement=s.movement&&s.movement.playerId!=null?s.movement:null;
     if(movement&&!mp.host){
-      const same=mpRemoteMovement&&mpRemoteMovement.id===movement.id;
+      const same=mpRemoteMovement&&mpRemoteMovement.id===String(movement.id);
       if(!same)startRemoteMovement(movement);
     }else if(!movement&&!mp.host&&mpRemoteMovement){
       finishRemoteMovement(true);
@@ -9173,6 +9242,32 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     a.botTimers.add(id);
   }
 
+  /* Live auction rendering.
+
+     This runs on every state tick the host sends - three times a second - so
+     anything it rewrites restarts that element's animation. The bid history used
+     to be rebuilt wholesale each time, and every row carries a 200ms entry
+     animation, so the rows were perpetually restarting and never settling: the
+     auction looked like it was lagging and the title visibly shook as the markup
+     underneath it was replaced.
+
+     So the history is keyed and only touched when the bids actually differ, the
+     title is written once when the modal is built, and only the small numeric
+     readouts are updated in place. The countdown keeps its own interval, which is
+     the one thing that genuinely needs a timer. */
+  let auctionLastHistoryKey="";
+  function auctionHistoryKey(a){return (a.history||[]).map(h=>h.playerId+":"+h.amount).join("|");}
+  // The builder and the sync share one idea of what is on screen. Whichever
+  // renders the rows records the key here, so the other can compare against
+  // reality instead of an empty string and rebuild rows that already exist -
+  // which would restart their entry animation for no reason.
+  function auctionHistoryRendered(a){auctionLastHistoryKey=auctionHistoryKey(a);return auctionHistoryRows(a);}
+  function auctionHistoryRows(a){
+    return a.history.slice(-6).reverse().map(h=>{
+      const who=players[h.playerId];
+      return `<div class="auction-history-row" data-bid-row="${h.playerId}:${h.amount}"><span>${escapeHtml(playerLabel(who))}</span><strong>$${h.amount}</strong></div>`;
+    }).join("");
+  }
   function syncAuctionModal(a,bg){
     if(!a||!bg)return;
     const leader=a.highestBidder==null?null:players[a.highestBidder];
@@ -9186,16 +9281,24 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     const stepBtn=bg.querySelector("#auctionBidStep");
     const customBtn=bg.querySelector("#auctionBidCustom");
     const input=bg.querySelector("#auctionBidInput");
-    if(currentEl)currentEl.textContent=`$${a.currentBid}`;
-    if(leaderEl)leaderEl.textContent=leader?playerLabel(leader):(lang==="en"?"No bids":"Нет ставок");
-    if(cashEl)cashEl.textContent=`$${Math.max(0,Math.floor(me?.money||0))}`;
+    // Text nodes are cheap to compare and cheap to skip: a write that changes
+    // nothing still costs a style recalculation.
+    const setText=(el,v)=>{if(el&&el.textContent!==v)el.textContent=v;};
+    setText(currentEl,`$${a.currentBid}`);
+    setText(leaderEl,leader?playerLabel(leader):(lang==="en"?"No bids":"Нет ставок"));
+    setText(cashEl,`$${Math.max(0,Math.floor(me?.money||0))}`);
     if(historyEl){
-      historyEl.innerHTML=a.history.slice(-6).reverse().map(h=>{
-        const who=players[h.playerId];
-        return `<div class="auction-history-row"><span>${escapeHtml(playerLabel(who))}</span><strong>$${h.amount}</strong></div>`;
-      }).join("")||`<div class="auction-empty">${lang==="en"?"No bids yet. Be the first to bid.":"Ставок пока нет. Сделай первую ставку."}</div>`;
+      const key=auctionHistoryKey(a);
+      if(key!==auctionLastHistoryKey){
+        auctionLastHistoryKey=key;
+        historyEl.innerHTML=auctionHistoryRows(a)||`<div class="auction-empty">${lang==="en"?"No bids yet. Be the first to bid.":"Ставок пока нет. Сделай первую ставку."}</div>`;
+      }
     }
-    if(stepBtn){stepBtn.disabled=!canBid;stepBtn.textContent=`⬆️ +$${AUCTION_STEP}`;}
+    if(stepBtn){
+      stepBtn.disabled=!canBid;
+      const label=`⬆️ +$${AUCTION_STEP}`;
+      if(stepBtn.textContent!==label)stepBtn.textContent=label;
+    }
     if(customBtn)customBtn.disabled=!canBid;
     if(input){
       input.min=String(minBid);
@@ -9207,7 +9310,34 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
       input.disabled=!canBid;
     }
     const rule=bg.querySelector(".auction-rule");
-    if(rule)rule.textContent=lang==="en"?`Minimum raise: $${AUCTION_STEP}. Every new bid resets the ${auctionSeconds()}-second timer.`:`Минимальный шаг: $${AUCTION_STEP}. Каждая новая ставка сбрасывает таймер на ${auctionSeconds()} секунд.`;
+    setText(rule,lang==="en"?`Minimum raise: $${AUCTION_STEP}. Every new bid resets the ${auctionSeconds()}-second timer.`:`Минимальный шаг: $${AUCTION_STEP}. Каждая новая ставка сбрасывает таймер на ${auctionSeconds()} секунд.`);
+  }
+  /* The auction dialog, built in one place: the property identifies itself on
+     top, and the bidding happens underneath it. Keeping this as one template
+     means the header and the body cannot drift apart between the single-player
+     and multiplayer renders. */
+  function auctionShellHtml(a,bidsHtml,actionsHtml){
+    const en=lang==="en";
+    const color=(a.tile&&a.tile.group&&GROUP_COLORS[a.tile.group])||"#8d9aad";
+    return `<div class="modal-bg auction-live-bg" style="--auction-color:${escapeHtml(color)}">
+      <div class="modal auction-live-modal">
+        <header class="auction-prop-head">
+          <div class="auction-prop-swatch" aria-hidden="true"></div>
+          <div class="auction-prop-text">
+            <div class="auction-prop-group">${escapeHtml(propertyGroupLabel(a.tile))}</div>
+            <h3 class="auction-prop-title" data-auction-title>${escapeHtml(tileLabel(a.tile))}</h3>
+            <div class="auction-prop-meta">
+              <span class="auction-prop-price">${en?"Price":"Цена"} <b>$${a.tile.price}</b></span>
+              ${a.tile.type==="prop"?`<span class="auction-prop-rent">${en?"Rent":"Рента"} <b>$${a.tile.rent}</b></span>`:""}
+            </div>
+          </div>
+        </header>
+        <div class="auction-body">
+          <div class="auction-kicker">${en?"LIVE AUCTION":"ЖИВОЙ АУКЦИОН"}</div>
+          ${bidsHtml}
+          ${actionsHtml}
+        </div>
+      </div></div>`;
   }
 
   function renderAuction(a){
@@ -9227,37 +9357,31 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     const minBid=a.currentBid+AUCTION_STEP;
     const me=(mp.active?mpLocalPlayer():players.find(x=>x.human&&!x.bankrupt))||null;
     const canBid=!!me&&!me.bankrupt&&me.money>=minBid&&tIsFree(a.tile);
-    const recent=a.history.slice(-6).reverse().map(h=>{
-      const who=players[h.playerId];
-      return `<div class="auction-history-row"><span>${escapeHtml(playerLabel(who))}</span><strong>$${h.amount}</strong></div>`;
-    }).join("");
+    // Any auction the preview hook leaves behind belongs to a different dialog;
+    // renderAuction records its own key below, so clear the old one first.
+    auctionLastHistoryKey="";
 
-    const bg=openModal(`<div class="modal-bg auction-live-bg">
-      <div class="modal auction-live-modal">
-        <div class="auction-head">
-          <div>
-            <div class="auction-kicker">${lang==="en"?"LIVE AUCTION":"ЖИВОЙ АУКЦИОН"}</div>
-            <h3>🔨 ${escapeHtml(tileLabel(a.tile))}</h3>
+    const bidsHtml=`
+          <div class="auction-body-top">
+            <div class="auction-timer-wrap">
+              <span>${lang==="en"?"Time":"Время"}</span>
+              <strong id="auctionTimer">${Math.ceil(Math.max(0,a.endsAt-performance.now())/1000)}</strong>
+            </div>
+            <div class="auction-stats">
+              <div><span>${lang==="en"?"Current bid":"Текущая ставка"}</span><strong data-auction-current>$${a.currentBid}</strong></div>
+              <div><span>${lang==="en"?"Highest bidder":"Лидер"}</span><strong data-auction-leader>${escapeHtml(leader?(playerLabel(leader)):(lang==="en"?"No bids":"Нет ставок"))}</strong></div>
+              <div><span>${T("yourCash")}</span><strong data-auction-cash>$${Math.max(0,Math.floor(me?.money||0))}</strong></div>
+            </div>
           </div>
-          <div class="auction-timer-wrap">
-            <span>${lang==="en"?"Time":"Время"}</span>
-            <strong id="auctionTimer">${Math.ceil(Math.max(0,a.endsAt-performance.now())/1000)}</strong>
+          <div class="auction-history">${auctionHistoryRendered(a)||`<div class="auction-empty">${lang==="en"?"No bids yet. Be the first to bid.":"Ставок пока нет. Сделай первую ставку."}</div>`}</div>
+          <div class="auction-bid-controls">
+            <button class="btn yes auction-bid-step" id="auctionBidStep" ${canBid?"":"disabled"}>⬆️ +$${AUCTION_STEP}</button>
+            <input id="auctionBidInput" class="setup-input" type="number" min="${minBid}" max="${Math.max(0,Math.floor(me?.money||0))}" step="${AUCTION_STEP}" value="${Math.min(Math.max(0,Math.floor(me?.money||0)),minBid)}" ${canBid?"":"disabled"}>
+            <button class="btn yes" id="auctionBidCustom" ${canBid?"":"disabled"}>${lang==="en"?"Bid":"Сделать ставку"}</button>
           </div>
-        </div>
-        <div class="auction-stats">
-          <div><span>${lang==="en"?"Current bid":"Текущая ставка"}</span><strong data-auction-current>$${a.currentBid}</strong></div>
-          <div><span>${lang==="en"?"Highest bidder":"Лидер"}</span><strong data-auction-leader>${escapeHtml(leader?(playerLabel(leader)):(lang==="en"?"No bids":"Нет ставок"))}</strong></div>
-          <div><span>${T("yourCash")}</span><strong data-auction-cash>$${Math.max(0,Math.floor(me?.money||0))}</strong></div>
-        </div>
-        <div class="auction-history">${recent||`<div class="auction-empty">${lang==="en"?"No bids yet. Be the first to bid.":"Ставок пока нет. Сделай первую ставку."}</div>`}</div>
-        <div class="auction-bid-controls">
-          <button class="btn yes auction-bid-step" id="auctionBidStep" ${canBid?"":"disabled"}>⬆️ +$${AUCTION_STEP}</button>
-          <input id="auctionBidInput" class="setup-input" type="number" min="${minBid}" max="${Math.max(0,Math.floor(me?.money||0))}" step="${AUCTION_STEP}" value="${Math.min(Math.max(0,Math.floor(me?.money||0)),minBid)}" ${canBid?"":"disabled"}>
-          <button class="btn yes" id="auctionBidCustom" ${canBid?"":"disabled"}>${lang==="en"?"Bid":"Сделать ставку"}</button>
-        </div>
-        <div class="auction-rule">${lang==="en"?`Minimum raise: $${AUCTION_STEP}. Every new bid resets the ${auctionSeconds()}-second timer.`:`Минимальный шаг: $${AUCTION_STEP}. Каждая новая ставка сбрасывает таймер на ${auctionSeconds()} секунд.`}</div>
-      </div>
-    </div>`,"auction");
+          <div class="auction-rule">${lang==="en"?`Minimum raise: $${AUCTION_STEP}. Every new bid resets the ${auctionSeconds()}-second timer.`:`Минимальный шаг: $${AUCTION_STEP}. Каждая новая ставка сбрасывает таймер на ${auctionSeconds()} секунд.`}</div>`;
+
+    const bg=openModal(auctionShellHtml(a,bidsHtml,""),"auction");
     if(!bg)return;
 
     bg.querySelector("#auctionBidStep").onclick=()=>auctionPlaceBid(a,me,a.currentBid+AUCTION_STEP);
@@ -10007,10 +10131,75 @@ document.addEventListener("keydown",e=>{
   window.Capital={
     start:startGame,back:backToMenu,play:openSetup,select:setCount,
     multiplayer:mpCreate,joinMultiplayer:mpJoin,
+    // Read-only multiplayer state, for the developer panel and for tests. It
+    // exposes the object itself rather than a copy, so anything added here is a
+    // decision not to hide; the fields are all client-local facts.
+    mpInfo:function(){
+      return {
+        active:!!mp.active,host:!!mp.host,connected:!!mp.connected,room:mp.room||"",
+        clientId:mp.clientId||"",hostId:mp.hostId||"",authoritySettled:!!mp.authoritySettled,
+        lastTickAgo:mp.lastTickAt?Date.now()-mp.lastTickAt:-1,
+        members:(mp.members||[]).map(m=>({clientId:m.clientId,name:m.name,host:!!m.host})),
+        remoteMove:mpRemoteMovement?{id:String(mpRemoteMovement.id),from:mpRemoteMovement.from,to:mpRemoteMovement.to,done:!!mpRemoteMovement.done,duration:mpRemoteMovement.duration}:null
+      };
+    },
+    // Drives the guest-side walk directly, so remote movement can be exercised
+    // without a second client. mpActive forces the remote path on.
+    remoteWalk:function(m){
+      const wasActive=mp.active;
+      mp.active=true;mp.host=false;
+      try{startRemoteMovement(Object.assign({id:"t_"+Date.now(),playerIndex:0,fromPos:0,steps:8,duration:tokenWalkDuration(8)},m||{}));}
+      finally{mp.active=wasActive;}
+      return mpRemoteMovement?{id:String(mpRemoteMovement.id),duration:mpRemoteMovement.duration}:null;
+    },
+    remoteMoveState:function(){return mpRemoteMovement?{id:String(mpRemoteMovement.id),done:!!mpRemoteMovement.done}:null;},
     // Read-only view of the offer screen, so its layout can be inspected and
     // screenshotted without standing up a second player in a live room. Tile ids
     // are resolved against the real board rather than taken on trust, so what a
     // screenshot shows is what a player would actually see.
+    // Read-only view of the live auction dialog, so its layout can be inspected
+    // and screenshotted without waiting for a real auction to start. Renders the
+    // same builder the live path uses.
+    auctionPreview:function(){
+      const tile=TILES[11];
+      const fake={
+        tile:tile,turnPlayer:players[0],currentBid:120,highestBidder:2,closed:false,
+        endsAt:performance.now()+7000,lastBidAt:performance.now(),
+        history:[{playerId:0,amount:100},{playerId:2,amount:120}]
+      };
+      auctionLastHistoryKey="";
+      const en=lang==="en";
+      const me=players.find(x=>x.human&&!x.bankrupt)||players[0]||null;
+      const canBid=!!me&&!me.bankrupt;
+      const minBid=fake.currentBid+AUCTION_STEP;
+      const bids=`
+          <div class="auction-body-top">
+            <div class="auction-timer-wrap"><span>${en?"Time":"Время"}</span><strong id="auctionTimer">7</strong></div>
+            <div class="auction-stats">
+              <div><span>${en?"Current bid":"Текущая ставка"}</span><strong data-auction-current>$${fake.currentBid}</strong></div>
+              <div><span>${en?"Highest bidder":"Лидер"}</span><strong data-auction-leader>${escapeHtml(playerLabel(players[2]||players[0]))}</strong></div>
+              <div><span>${T("yourCash")}</span><strong data-auction-cash>$${Math.max(0,Math.floor(me?.money||0))}</strong></div>
+            </div>
+          </div>
+          <div class="auction-history">${auctionHistoryRendered(fake)||`<div class="auction-empty">${en?"No bids yet. Be the first to bid.":"Ставок пока нет."}</div>`}</div>
+          <div class="auction-bid-controls">
+            <button class="btn yes auction-bid-step" id="auctionBidStep" ${canBid?"":"disabled"}>⬆️ +$${AUCTION_STEP}</button>
+            <input id="auctionBidInput" class="setup-input" type="number" min="${minBid}" max="${Math.max(0,Math.floor(me?.money||0))}" step="${AUCTION_STEP}" value="${Math.min(Math.max(0,Math.floor(me?.money||0)),minBid)}" ${canBid?"":"disabled"}>
+            <button class="btn yes" id="auctionBidCustom" ${canBid?"":"disabled"}>${en?"Bid":"Сделать ставку"}</button>
+          </div>
+          <div class="auction-rule">${en?`Minimum raise: $${AUCTION_STEP}. Every new bid resets the ${auctionSeconds()}-second timer.`:`Минимальный шаг: $${AUCTION_STEP}. Каждая новая ставка сбрасывает таймер на ${auctionSeconds()} секунд.`}</div>`;
+      window.__auctionPreviewRef=fake;
+      return auctionShellHtml(fake,bids,"");
+    },
+    // Runs the live sync against whatever auction dialog is on screen, the same
+    // call the 350ms state tick makes. Lets the "history is not rebuilt while
+    // the bids are unchanged" behaviour be measured rather than assumed.
+    auctionPreviewSync:function(){
+      const bg=modalRoot&&modalRoot.querySelector?modalRoot.querySelector(".auction-live-bg"):null;
+      if(!bg||!window.__auctionPreviewRef)return null;
+      syncAuctionModal(window.__auctionPreviewRef,bg);
+      return {rows:bg.querySelectorAll(".auction-history-row").length};
+    },
     tradeOfferPreview:function(o){
       const opt=o||{};
       const pick=v=>(Array.isArray(v)?v:[]).map(id=>TILES[Number(id)]).filter(Boolean);
