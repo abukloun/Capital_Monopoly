@@ -3632,20 +3632,31 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 #gameWrap .board-outer{padding:10px;overflow:visible}
 #gameWrap .action-panel .btn:only-child{flex:1}
 /* Full 3D renderer container. 2D board is hidden in 3D mode; the single
-   #center controls node is moved into #cap3dHud so all handlers persist. */
+   #center controls node is moved to the top of the right-hand column so all
+   handlers persist and the board itself stays clear. */
 #cap3dWrap{position:relative;width:100%;aspect-ratio:1/1;background:#04070d;overflow:hidden;border:0;border-radius:0;box-shadow:none}
 #cap3dVig{position:absolute;inset:0;pointer-events:none;z-index:4;background:radial-gradient(115% 115% at 50% 42%,rgba(0,0,0,0) 58%,rgba(0,0,0,.38) 100%)}
 #cap3dCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
 #cap3dCanvas:active{cursor:grabbing}
-#cap3dHud{position:absolute;inset:0;pointer-events:none;display:flex;align-items:flex-end;justify-content:center;padding:8px 8px 14px;z-index:5}
-#cap3dHud .center{pointer-events:auto;width:min(262px,92%);background:radial-gradient(circle at 50% 36%,rgba(76,93,129,.22),transparent 38%),linear-gradient(145deg,rgba(17,26,40,.88),rgba(9,15,24,.88))!important;border:1px solid rgba(255,255,255,.09)!important;border-radius:14px!important;box-shadow:0 14px 40px rgba(0,0,0,.45)!important;padding:8px 12px!important;gap:6px!important;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
-#cap3dHud .center h2{font-size:11.5px!important;letter-spacing:.1em!important}
-#cap3dHud .dice-row{gap:8px!important}
-#cap3dHud .die2d{width:42px!important;height:42px!important;border-radius:10px!important;box-shadow:inset 0 2px 0 rgba(255,255,255,.9),inset 0 -5px 10px rgba(24,34,48,.1),0 8px 16px rgba(0,0,0,.28)!important}
-#cap3dHud .die2d .die-pip{width:8px!important;height:8px!important}
-#cap3dHud .roll-btn{min-width:132px!important;min-height:40px!important;font-size:12px!important;padding:7px 11px!important}
-#cap3dHud .log{font-size:11px!important;color:#96a3b5!important}
-#cap3dHud #turnHint{font-size:10px!important}
+#cap3dHud{position:absolute;inset:0;pointer-events:none;z-index:5}
+/* Where #center lives while the 3D board is showing. It used to sit in
+   #cap3dHud, dead centre over the canvas: a 262px panel covering the bottom row
+   of properties with the roll button on top of the board. It is now parked at
+   the top of the right-hand column — beside the board, above Игроки — so the
+   board is never covered and the dice stay in the player's eyeline.
+   Same node and the same handlers, only a new parent. */
+#gameWrap .cap-controls-slot{display:none}
+/* Shown only in 3D; its place in the column (order, flex sizing) is set with the
+   rest of the 3D sidebar rules further down this sheet. */
+#gameWrap.view-3d .cap-controls-slot{display:block}
+#gameWrap.view-3d .cap-controls-slot .center{pointer-events:auto;width:100%;background:radial-gradient(circle at 50% 36%,rgba(76,93,129,.22),transparent 38%),linear-gradient(145deg,rgba(17,26,40,.88),rgba(9,15,24,.88))!important;border:1px solid rgba(244,201,93,.16)!important;border-radius:14px!important;box-shadow:0 14px 40px rgba(0,0,0,.45)!important;padding:8px 12px!important;gap:6px!important;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+#gameWrap.view-3d .cap-controls-slot .center h2{font-size:11.5px!important;letter-spacing:.1em!important}
+#gameWrap.view-3d .cap-controls-slot .dice-row{gap:8px!important}
+#gameWrap.view-3d .cap-controls-slot .die2d{width:42px!important;height:42px!important;border-radius:10px!important;box-shadow:inset 0 2px 0 rgba(255,255,255,.9),inset 0 -5px 10px rgba(24,34,48,.1),0 8px 16px rgba(0,0,0,.28)!important}
+#gameWrap.view-3d .cap-controls-slot .die2d .die-pip{width:8px!important;height:8px!important}
+#gameWrap.view-3d .cap-controls-slot .roll-btn{min-width:132px!important;min-height:40px!important;font-size:12px!important;padding:7px 11px!important}
+#gameWrap.view-3d .cap-controls-slot .log{font-size:11px!important;color:#96a3b5!important}
+#gameWrap.view-3d .cap-controls-slot #turnHint{font-size:10px!important}
 /* 3D-mode sidebar: premium glass HUD. All rules scoped to .view-3d — 2D untouched. */
 #gameWrap.view-3d .side .panel{background:rgba(13,19,29,.68)!important;border:1px solid rgba(244,201,93,.14)!important;border-radius:16px!important;box-shadow:0 18px 50px rgba(0,0,0,.45)!important;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
 #gameWrap.view-3d .side .panel h3{color:#718096!important}
@@ -3654,6 +3665,14 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 #gameWrap.view-3d .player-row.active{background:rgba(244,201,93,.07)!important;border-color:rgba(244,201,93,.45)!important;box-shadow:0 0 18px rgba(244,201,93,.16)!important}
 #gameWrap.view-3d .player-row .pmoney{color:#fff!important}
 #gameWrap.view-3d .eventlog li{border-bottom:1px solid rgba(255,255,255,.06)!important}
+/* The sidebar now carries the dice and the roll button as well. It is ordered
+   first so the one control the player has to reach is always at the top of the
+   column: appended last it sat below the fold on a 768px-tall window, where it
+   was cut off and could not be clicked at all. `order` rather than moving the
+   node, because the existing layout rules address the panels by nth-child. */
+#gameWrap.view-3d .cap-controls-slot{order:-1!important;flex:0 0 auto!important;min-height:0!important;margin-bottom:2px}
+#gameWrap.view-3d .side{overflow-y:auto!important;overflow-x:hidden!important;scrollbar-width:thin}
+#gameWrap.view-3d .side > .panel:nth-child(2){max-height:30vh!important}
 #gameWrap.view-3d .action-panel .btn.yes{background:linear-gradient(135deg,#f7d36a,#dfa83c)!important;color:#151a21!important;border:0!important}
 #gameWrap.view-3d .action-panel .btn.no:hover{border-color:rgba(244,201,93,.4)!important}
 #gameWrap.view-3d #turnBadge{border-color:rgba(244,201,93,.35)!important}
@@ -3795,6 +3814,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 <button class="btn no" id="tradeBtn" data-tooltip="Торг позволяет обмениваться деньгами и недвижимостью с ботами." style="flex:1" type="button">Торг</button>
 </div>
 </div>
+<div class="cap-controls-slot" id="cap3dControls"></div>
 </div>
 </div>
 </div>
@@ -6605,8 +6625,11 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   }
   function cap3dShowHud(){
     try{
-      const hud=document.getElementById("cap3dHud");
-      if(hud&&centerEl&&centerEl.parentNode!==hud){hud.appendChild(centerEl);}
+      // The dice and the roll button live in the right-hand column while the 3D
+      // board is showing. Keeping them over the canvas is what covered the
+      // properties along the bottom edge of the board.
+      const slot=document.getElementById("cap3dControls");
+      if(slot&&centerEl&&centerEl.parentNode!==slot){slot.appendChild(centerEl);}
     }catch(_){}
   }
   function cap3dShowBoard(){
@@ -7735,7 +7758,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
       boardEl.appendChild(div);
     });
     boardEl.appendChild(centerEl);bindHover();renderTokens();
-    if(boardView==="3d"){try{const hud=document.getElementById("cap3dHud");if(hud&&gameWrap&&gameWrap.style.display!=="none"){hud.appendChild(centerEl);cap3dApplyVisibility();}}catch(_){}}
+    if(boardView==="3d"){try{const slot=document.getElementById("cap3dControls");if(slot&&gameWrap&&gameWrap.style.display!=="none"){slot.appendChild(centerEl);cap3dApplyVisibility();}}catch(_){}}
   }
   function renderBoardText(){
     TILES.forEach(t=>{const el=document.getElementById("tile-"+t.id);if(!el)return;const n=el.querySelector(".name"),p=el.querySelector(".price");
@@ -8561,26 +8584,61 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     animateMove(p,total,()=>landPlayer(p));
   }
 
+  /* Last-resort completion of a tile action.
+
+     A turn only moves on through completeTileAction, and that is the one call
+     every exit from a dialog has to make. Bots get a 1s watchdog because
+     nothing else waits for them. Humans used to get none at all, so a dialog
+     dismissed by any path that forgot the call left the turn parked in
+     TILE_ACTION forever: Roll Dice needs WAITING_FOR_ROLL, so nothing on screen
+     could be pressed and the game looked dead until a reload.
+
+     The delay is long enough that a dialog the player is still reading is never
+     taken away from them. The guard is what makes this safe rather than the
+     delay: it only fires when the game state still says a tile action is
+     pending AND no dialog is on screen, so it rescues a stranded turn and never
+     interrupts a real one. */
+  const HUMAN_TILE_ACTION_TIMEOUT=45000;
+  let tileActionSeq=0;
   function scheduleTileActionSafety(p){
-    if(!p||p.human)return;
-    const localRun=runId;
+    if(!p)return;
+    const delay=p.human?HUMAN_TILE_ACTION_TIMEOUT:1000;
+    const localRun=runId, mySeq=tileActionSeq, myTurn=turn;
     const timer=setTimeout(()=>{
       botTimers.delete(timer);
       whenRunning(()=>{
         if(!validRun(localRun)||state===STATES.GAME_OVER)return;
-        if(validTurn(p)&&state===STATES.TILE_ACTION&&!modalOpen){
+        // A later tile action supersedes this watchdog. A double can put the same
+        // player back into TILE_ACTION while an earlier watchdog is still
+        // counting, and firing the stale one would skip the action in front of
+        // the player.
+        if(mySeq!==tileActionSeq||turn!==myTurn)return;
+        // On the host, a remote player's dialog is rendered on that player's own
+        // screen, so there is nothing here to rescue and the timer must stay out
+        // of it: the host would cut the other player off mid-turn.
+        if(mp.active&&mp.host&&!mpIsLocalPlayer(p))return;
+        // What matters is whether the player can see something to act on, so ask
+        // the DOM rather than the modalOpen flag. The flag and the markup can
+        // disagree - a dialog removed by something that did not reset the flag
+        // leaves the turn pending with nothing on screen and nothing to click,
+        // which is exactly the state this has to rescue.
+        if(modalRoot&&modalRoot.querySelector(".modal-bg"))return;
+        if(validTurn(p)&&state===STATES.TILE_ACTION){
           log(`${playerLabel(p)} — резервное завершение действия.`);
           completeTileAction(p);
         }
       });
-    },1000);
+    },delay);
     botTimers.add(timer);
   }
 
   function landPlayer(p){
     if(!validTurn(p)||state!==STATES.MOVING)return;
     setState(STATES.TILE_ACTION);
-    if(!p.human)scheduleTileActionSafety(p);
+    // Every player, not just the bots: this is the net for a turn that nothing
+    // else is going to finish. See scheduleTileActionSafety.
+    tileActionSeq++;
+    scheduleTileActionSafety(p);
     const t=TILES[p.pos];
     if(!t){completeTileAction(p);return;}
     log(`${playerLabel(p)} попадает на «${tileLabel(t)}».`);
