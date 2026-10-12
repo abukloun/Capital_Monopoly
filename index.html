@@ -3655,7 +3655,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 #gameWrap.view-3d .cap-controls-slot .die2d{width:42px!important;height:42px!important;border-radius:10px!important;box-shadow:inset 0 2px 0 rgba(255,255,255,.9),inset 0 -5px 10px rgba(24,34,48,.1),0 8px 16px rgba(0,0,0,.28)!important}
 #gameWrap.view-3d .cap-controls-slot .die2d .die-pip{width:8px!important;height:8px!important}
 #gameWrap.view-3d .cap-controls-slot .roll-btn{min-width:132px!important;min-height:40px!important;font-size:12px!important;padding:7px 11px!important}
-#gameWrap.view-3d .cap-controls-slot .log{font-size:11px!important;color:#96a3b5!important}
+#gameWrap.view-3d .cap-controls-slot .log{display:none!important}
 #gameWrap.view-3d .cap-controls-slot #turnHint{font-size:10px!important}
 /* 3D-mode sidebar: premium glass HUD. All rules scoped to .view-3d — 2D untouched. */
 #gameWrap.view-3d .side .panel{background:rgba(13,19,29,.68)!important;border:1px solid rgba(244,201,93,.14)!important;border-radius:16px!important;box-shadow:0 18px 50px rgba(0,0,0,.45)!important;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
@@ -3672,7 +3672,16 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
    node, because the existing layout rules address the panels by nth-child. */
 #gameWrap.view-3d .cap-controls-slot{order:-1!important;flex:0 0 auto!important;min-height:0!important;margin-bottom:2px}
 #gameWrap.view-3d .side{overflow-y:auto!important;overflow-x:hidden!important;scrollbar-width:thin}
-#gameWrap.view-3d .side > .panel:nth-child(2){max-height:30vh!important}
+/* No log in the 3D sidebar: the dice panel already sits at the top of the column
+   and the board is the thing the player is reading. Both log surfaces go — the
+   one-line #quickLog under the roll button and the Журнал событий panel. The DOM
+   is untouched (log() and the sync path keep writing to #eventlog, so switching
+   back to 2D shows the full history intact), only the panels are hidden.
+
+   The players panel then has the column to itself, so it takes the freed height
+   instead of leaving a gap under it. */
+#gameWrap.view-3d .side > .panel:nth-child(2){display:none!important}
+#gameWrap.view-3d .side > .panel:first-child{max-height:none!important}
 #gameWrap.view-3d .action-panel .btn.yes{background:linear-gradient(135deg,#f7d36a,#dfa83c)!important;color:#151a21!important;border:0!important}
 #gameWrap.view-3d .action-panel .btn.no:hover{border-color:rgba(244,201,93,.4)!important}
 #gameWrap.view-3d #turnBadge{border-color:rgba(244,201,93,.35)!important}
