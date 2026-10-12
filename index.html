@@ -1163,17 +1163,53 @@ body{
 .auction-prop-meta b{color:#e6ebf2;font-weight:850;font-variant-numeric:tabular-nums;margin-left:4px}
 .auction-body{padding:18px 22px 20px;display:grid;gap:13px}
 .auction-body>.auction-kicker{margin:0}
-/* Bidding: a ladder of raises above an exact-amount fallback. The rungs are the
-   point - one small "+$10" next to a number box makes raising a bid feel like
-   typing, and a ladder gives a real shortcut once two people are competing. */
+/* Debt settlement dialog: what is owed, what is in hand, and one button per
+   asset that can be turned into cash. The shortfall is the number that matters,
+   so it gets its own colour and flips green the moment the debt is coverable. */
+#gameWrap .capital-debt-figures{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0 12px
+}
+#gameWrap .capital-debt-figures > div{
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);
+  border-radius:12px;padding:9px 10px;display:flex;flex-direction:column;gap:3px
+}
+#gameWrap .capital-debt-figures span{font-size:9.5px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#7f8da0}
+#gameWrap .capital-debt-figures strong{font-size:17px;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+#gameWrap .capital-debt-assets{
+  display:flex;flex-direction:column;gap:7px;max-height:36vh;overflow-y:auto;
+  padding-right:4px;margin-bottom:12px
+}
+#gameWrap .capital-debt-asset{
+  display:flex!important;align-items:center!important;justify-content:space-between!important;
+  gap:10px;text-align:left!important;padding:10px 12px!important;font-size:12.5px!important;
+  line-height:1.25!important;white-space:normal!important
+}
+#gameWrap .capital-debt-asset span{flex:0 0 auto;font-weight:900;font-variant-numeric:tabular-nums;color:#7ddca0}
+
+/* Bidding: a ladder of ready-made bids above an exact-amount fallback. Each rung
+   is labelled with the total it places, and the rungs are multiples of the
+   current price so they stay meaningful however high the auction has climbed.
+   The last rung is MAX - one tap for the whole purse. */
 .auction-bid-controls{display:grid!important;gap:10px}
-.auction-bid-ladder{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px}
+/* Three rungs plus MAX: four across, which is wide enough that each figure gets
+   room to breathe instead of being clipped. */
+.auction-bid-ladder{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
 .auction-bid-ladder .auction-bid-step{
   padding:11px 4px!important;font-size:14px;font-weight:900;font-variant-numeric:tabular-nums;
   letter-spacing:-.02em;white-space:nowrap
 }
-.auction-bid-ladder .auction-bid-step-lg{font-size:15px}
+/* With only three rungs the larger figures fit without shrinking, so every
+   button is the same size and the row reads as one set. */
+.auction-bid-ladder .auction-bid-step-lg{font-size:14px}
 .auction-bid-ladder .auction-bid-step:disabled{opacity:.34}
+/* MAX is the loud one: it is the move that ends an auction, so it is set apart
+   from the ladder and reads as an action rather than another figure. */
+.auction-bid-ladder .auction-bid-max{
+  padding:11px 4px!important;font-size:13px;font-weight:900;letter-spacing:.04em;
+  white-space:nowrap;background:linear-gradient(135deg,#f7d36a,#dfa83c)!important;
+  color:#151a21!important;border-color:transparent!important
+}
+.auction-bid-ladder .auction-bid-max:disabled{opacity:.3}
 .auction-bid-custom{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
 @media (max-width:520px){
   .auction-bid-ladder{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -1542,6 +1578,17 @@ body{
   box-shadow:0 7px 18px rgba(0,0,0,.28),inset 0 0 0 1px rgba(255,255,255,.08)!important;
 }
 /* Board player pieces: miniature 3D character/pawn instead of flat dots. */
+/* ---- The figure, copied from the 3D pawn ----
+   cap3dInit builds: a dark truncated-cone base (#111722), a body cone that is
+   narrow at the top and wide at the bottom in the player's colour, a WHITE
+   sphere head with a WHITE cap dome on top, a gold ring at the feet for the
+   active player, and the owner's initial on a round sprite floating ABOVE the
+   whole figure. Proportions below are those radii mapped onto pixels.
+
+   An earlier attempt drew a flesh-toned head, a tie, eyes and hair, and put the
+   letter on the base. None of that is in the 3D model - it was invented, and it
+   made the 2D figure a different character from the 3D one rather than the same
+   one. Kept here as a warning: match the source, do not decorate it. */
 .player-piece{
   --piece-color:#e7b34c;
   position:relative!important;
@@ -4522,7 +4569,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       turn,state,extraTurnPending:!!extraTurnPending,
       lastRollTotal:Number(lastRollTotal)||0,
       lastDice:Array.isArray(lastDice)?lastDice.slice(0,2):[1,1],
-      players:players.map(p=>({id:p.id,mpClientId:p.mpClientId||null,pos:Number(p.pos)||0,money:Number(p.money)||0,bankrupt:!!p.bankrupt,inJail:!!p.inJail,jailAttempts:Number(p.jailAttempts)||0,getOutCards:Number(p.getOutCards)||0,doubles:Number(p.doubles)||0})),
+      players:players.map(p=>({id:p.id,mpClientId:p.mpClientId||null,pos:Number(p.pos)||0,money:Number(p.money)||0,bankrupt:!!p.bankrupt,left:!!p.left,inJail:!!p.inJail,jailAttempts:Number(p.jailAttempts)||0,getOutCards:Number(p.getOutCards)||0,doubles:Number(p.doubles)||0})),
       movement:mpAuthoritativeMovement?{...mpAuthoritativeMovement}:null,
       auction:activeAuction&&!activeAuction.closed?{tileId:activeAuction.tile?.id,turnPlayerId:activeAuction.turnPlayer?.id??null,currentBid:Number(activeAuction.currentBid)||0,highestBidder:activeAuction.highestBidder==null?null:Number(activeAuction.highestBidder),remainingMs:Math.max(0,(activeAuction.endsAt||performance.now())-performance.now()),history:Array.isArray(activeAuction.history)?activeAuction.history.slice(-12):[]}:null
     };
@@ -4628,7 +4675,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     channel.on("broadcast",{event:"capital"},({payload})=>{if(payload&&payload._capitalSender===mp.clientId)return;mpHandle(payload);});
     channel.on("presence",{event:"sync"},()=>{mpRefreshMembersFromPresence(!!mp.host);});
     channel.on("presence",{event:"join"},()=>{mpRefreshMembersFromPresence(!!mp.host);});
-    channel.on("presence",{event:"leave"},()=>{mpRefreshMembersFromPresence(!!mp.host);});
+    channel.on("presence",{event:"leave"},()=>{mpRefreshMembersFromPresence(!!mp.host);if(mp.host)mpScheduleRosterCheck();});
     return new Promise((resolve,reject)=>{
       let settled=false;
       const finish=(ok,value)=>{if(settled)return;settled=true;ok?resolve(value):reject(value);};
@@ -4828,7 +4875,21 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       }
       return;
     }
-    if(msg.kind==="leave"&&mp.host){mpRefreshMembersFromPresence(false);mp.members=mp.members.filter(m=>m.clientId!==msg.clientId);mpSend({kind:"lobby",members:mp.members});if(gameWrap?.style.display==="block"&&players.length>1)mpPublishSnapshot(true);else mpShowLobby();mpServerDropIfEmpty();return;}
+    if(msg.kind==="leave"&&mp.host){
+      mpRefreshMembersFromPresence(false);
+      const leaver=String(msg.clientId||"");
+      mp.members=mp.members.filter(m=>m.clientId!==leaver);
+      mpSend({kind:"lobby",members:mp.members});
+      if(gameWrap?.style.display==="block"&&players.length>1){
+        // A deliberate exit from a running game drops that player from play and
+        // can end it, so this is not just a lobby edit.
+        try{(mp.channel&&mp.channel.presenceState)?(mp.channel.presence()||{}):{};}catch(_){}
+        mpDropLeaverNow(leaver);
+        mpPublishSnapshot(true);
+      }else mpShowLobby();
+      mpServerDropIfEmpty();
+      return;
+    }
   }
   function mpStartGame(){
     if(!mp.active||!mp.host||mpMembersSorted().length<2)return;
@@ -4938,7 +4999,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   function mpSnapshot(){
     const turnPlayer=currentPlayer();
     const sharedModal = modalKind==="auction" || modalKind==="gameover";
-    const turnBoundModal = modalKind==="buy" || modalKind==="jail" || modalKind==="card";
+    const turnBoundModal = modalKind==="buy" || modalKind==="jail" || modalKind==="card" || modalKind==="debt";
     return {
       seq:++mp.snapshotSeq,
       players:players.map(p=>({...p})),
@@ -5101,7 +5162,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 
     // Turn-bound dialogs are rendered only for the player whose turn it is.
     // Shared dialogs (auction/game over) are visible to everyone.
-    const isTurnBound = s.modalKind==="buy" || s.modalKind==="jail" || s.modalKind==="card";
+    const isTurnBound = s.modalKind==="buy" || s.modalKind==="jail" || s.modalKind==="card" || s.modalKind==="debt";
     const shouldShowModal = !!s.auction || s.modalKind==="gameover" || (isTurnBound && s.modalOwnerClientId===mp.clientId);
     // Guests build their own game-over screen (their own place, working buttons)
     // instead of copying the host's HTML, whose buttons are not bound here.
@@ -5140,7 +5201,11 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     if(!d)return "";
     const t=d.kind==="buy"?TILES[Number(d.tileId)]:null;
     const p=players.find(x=>x&&x.id===Number(d.playerId))||currentPlayer();
-    return [d.kind,d.tileId,d.deck,d.index,p?p.money:"",p?p.getOutCards:""].join("|");
+    // The debt dialog also depends on how much the player can still raise, so the
+    // signature has to move when an asset is sold - otherwise the guest would keep
+    // the stale list of buttons and the stale shortfall.
+    const raisable=d.kind==="debt"&&p?playerLiquidations(p).map(x=>x.kind+x.t.id+x.amount).join(","):"";
+    return [d.kind,d.tileId,d.deck,d.index,d.amount,p?p.money:"",p?p.getOutCards:"",raisable].join("|");
   }
   function mpRenderModal(d){
     try{
@@ -5164,6 +5229,11 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
         const rentLine=isProp?`<div class="capital-monopoly-card"><div class="capital-monopoly-head"><span>${lang==="en"?"MONOPOLY PROGRESS":"ПРОГРЕСС МОНОПОЛИИ"}</span><strong>${escapeHtml(groupLine)}</strong></div><div class="capital-monopoly-track"><div class="capital-monopoly-fill" style="--property-color:${color};--property-glow:${glow};width:${progress.total?Math.round(progress.owned/progress.total*100):0}%"></div></div></div>${propertyRentLadderHtml(t)}`:"";
         const extra=isProp?`<div class="capital-property-stats"><div class="capital-property-stat"><span>${lang==="en"?"Base rent":"Базовая рента"}</span><strong>$${t.rent}</strong></div><div class="capital-property-stat"><span>${lang==="en"?"Monopoly rent":"Рента монополии"}</span><strong>$${t.rent*2}</strong></div><div class="capital-property-stat"><span>${lang==="en"?"House cost":"Дом"}</span><strong>$${houseCost}</strong></div></div>`:`<div class="capital-property-stats"><div class="capital-property-stat"><span>${lang==="en"?"Purchase":"Покупка"}</span><strong>$${t.price}</strong></div><div class="capital-property-stat"><span>${lang==="en"?"Current rent":"Текущая рента"}</span><strong>$${calcRent(t)}</strong></div><div class="capital-property-stat"><span>${lang==="en"?"Type":"Тип"}</span><strong>${escapeHtml(propertyGroupLabel(t))}</strong></div></div>`;
         return `<div class="modal-bg capital-property-modal-bg" data-action-close="1" data-tile-id="${t.id}"><div class="modal capital-property-modal" style="--property-color:${color};--property-glow:${glow}"><div class="capital-property-hero"><div class="capital-property-kicker"><span class="capital-property-swatch" style="background:${color}"></span>${escapeHtml(propertyGroupLabel(t))}</div><div class="capital-property-title">${escapeHtml(tileLabel(t))}</div><div class="capital-property-price">$${t.price}</div><div class="capital-property-owner"><span class="capital-property-owner-dot" style="background:${color}"></span>${lang==="en"?"Available to buy":"Свободно для покупки"}</div></div><div class="capital-property-body">${extra}${rentLine}<div class="capital-property-actions"><button class="btn yes capital-property-buy capital-primary-action" id="buyYes" ${p.money<t.price?"disabled":""}>💰 ${lang==="en"?`Buy for $${t.price}`:`Купить за $${t.price}`}</button><button class="btn no capital-property-auction" id="buyNo">${lang==="en"?"↳ Skip purchase → auction":"↳ Не покупать → аукцион"}</button><button class="btn no" id="buyClose">✕ ${T("close")}</button></div><p class="capital-property-note">${lang==="en"?"If you skip a free property, it immediately goes to a live auction. Every bid resets the timer.":"Если отказаться от свободной недвижимости, она сразу отправляется на живой аукцион. Каждая ставка сбрасывает таймер."}</p></div></div></div>`;
+      }
+      if(kind==="debt"){
+        const p=players.find(x=>x&&x.id===Number(d.playerId))||currentPlayer();
+        if(!p)return "";
+        return debtDialogHtml(p,Number(d.amount)||0,d.creditorId!=null?Number(d.creditorId):null,d.reason||"");
       }
       if(kind==="card"){
         const table=d.deck==="chance"?CHANCE_CARDS:CHEST_CARDS;
@@ -5200,6 +5270,23 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       root.querySelector("#jCard")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"jailCard"}});},{once:true});
     }else if(modalKind==="card"){
       root.querySelector("#cardOk")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"cardOk"}});},{once:true});
+    }else if(modalKind==="debt"){
+      // The guest does not touch its own money: every button is a request to the
+      // host, which re-checks it and publishes the result. The host is the only
+      // writer of state, so a guest that decided for itself could hand out a
+      // property the host never agreed to sell.
+      root.addEventListener("click",e=>{
+        const asset=e.target.closest("[data-kind]");
+        if(asset){
+          e.preventDefault();
+          mpSend({kind:"action",playerId:mp.clientId,action:{type:"debtSell",tileId:Number(asset.dataset.tile),assetKind:String(asset.dataset.kind)}});
+          return;
+        }
+        const pay=root.querySelector("#debtPay");
+        if(pay&&e.target===pay){e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"debtPay"}});return;}
+        const give=root.querySelector("#debtGiveUp");
+        if(give&&e.target===give){e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"debtGiveUp"}});return;}
+      });
     }
   }
 
@@ -5280,6 +5367,37 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       return;
     }
 
+    if(a.type==="debtSell"||a.type==="debtPay"||a.type==="debtGiveUp"){
+      const d=mpPendingDebt;
+      if(!d||d.playerId!==p.id)return;
+      if(a.type==="debtGiveUp"){
+        mpPendingDebt=null;
+        authoritativeModalData=null;
+        declareBankruptcy(p,d.creditorId);
+        try{modalRoot.innerHTML="";}catch(_){}
+        modalOpen=false;modalKind=null;updateBadge();saveGame();mpPublishSnapshot(true);
+        if(typeof d.onDone==="function")d.onDone(false);
+        return;
+      }
+      if(a.type==="debtPay"){mpDebtSettle();return;}
+      // debtSell: the host re-derives the amount from the tile itself. A guest
+      // that asked for a bigger number is simply answered with the real one.
+      const t=TILES[Number(a.tileId)];
+      if(!t||t.owner!==p.id){mpDebtSettle();return;}
+      const kind=String(a.assetKind||"");
+      if(!(kind==="mortgage"||kind==="house"||kind==="hotel"))return;
+      const row=playerLiquidations(p).find(x=>x.t.id===t.id&&x.kind===kind);
+      if(!row){mpDebtSettle();return;}
+      applyLiquidation(p,row);
+      playSellSfx();
+      log(lang==="en"?`${playerLabel(p)} ${kind==="mortgage"?"mortgages":"sells"} on «${tileLabel(t)}» to cover a debt.`:`${playerLabel(p)} ${kind==="mortgage"?"закладывает":"продаёт застройку на"} «${tileLabel(t)}», чтобы покрыть долг.`);
+      renderTokens();renderPlayers();saveGame();
+      // Still short: republish so the guest redraws with the new figures.
+      authoritativeModalData={kind:"debt",playerId:p.id,amount:d.amount,creditorId:d.creditorId,reason:d.reason};
+      modalOpen=false;modalKind="debt";updateBadge();mpPublishSnapshot(true);
+      if(p.money>=Math.max(0,Math.floor(Number(d.amount)||0)))mpDebtSettle();
+      return;
+    }
     if(a.type==="propertyAction"){
       const t=TILES[Number(a.tileId)];
       if(!t||t.owner!==p.id||p.bankrupt||!isTurn||state!==STATES.WAITING_FOR_ROLL)return;
@@ -7091,7 +7209,12 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
   }
   function cardLabel(c){return lang==="en"?(c.en||cardEN[c.t]||c.t):c.t;}
   function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));}
-  function alive(){return players.filter(p=>p&&!p.bankrupt);}
+  /* Still in play. `left` counts as out alongside `bankrupt`: a player who closed
+     the game is no longer an opponent, and several callers - the winner check,
+     the trade partner picker, the auction bidder pool - are all asking "who can
+     still compete", where a departed client must not appear. Keeping the two
+     flags separate still matters for display and for restoring the game. */
+  function alive(){return players.filter(p=>p&&!p.bankrupt&&!p.left);}
   function currentPlayer(){return players[turn]||null;}
   function validRun(id){return id===runId;}
   function scheduleFrame(fn){
@@ -7798,7 +7921,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
   }
   function renderDice(){setDie(document.getElementById("d1"),lastDice[0]);setDie(document.getElementById("d2"),lastDice[1]);}
 
-  function renderTokens(){
+    function renderTokens(){
     if(boardEl){
       const activeMoving=(movingPieceEl&&movingPieceEl.isConnected&&movingPlayerId!=null)?movingPieceEl:null;
       boardEl.querySelectorAll(".moving-piece").forEach(el=>{if(el!==activeMoving)el.remove();});
@@ -8168,16 +8291,12 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     }
     return guard;
   }
-  function checkBankrupt(p,creditorId=null){
-    if(!p||p.bankrupt)return !!p?.bankrupt;
-    if(p.money>=0)return false;
-    // Sell buildings and mortgage property before declaring bankruptcy (humans included).
-    const sold=botRaiseCash(p,0,Infinity);
-    if(sold>0){
-      log(lang==="en"?`${playerLabel(p)} sells buildings and mortgages property to cover a debt.`:`${playerLabel(p)} продаёт застройку и закладывает недвижимость, чтобы покрыть долг.`);
-      renderTokens();renderPlayers();
-    }
-    if(p.money>=0)return false;
+  /* Declare bankruptcy for real: out of the game, assets to the creditor or the
+     bank, creditor made whole for the part that was never paid. Split out of
+     checkBankrupt so the debt dialog can reach the same end state deliberately
+     rather than as a side effect of running out of money. */
+  function declareBankruptcy(p,creditorId=null){
+    if(!p||p.bankrupt)return true;
     p.bankrupt=true;
     returnJailCards(p);
     const creditor=creditorId!=null?players[creditorId]:null;
@@ -8187,8 +8306,258 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     TILES.forEach(t=>{if(t.owner===p.id){if(creditor&&!creditor.bankrupt){t.owner=creditor.id;}else{t.owner=null;t.houses=0;t.hotel=false;t.mortgaged=false;}}});
     log(`${playerLabel(p)} не может расплатиться и объявляет банкротство.`);playBankruptSfx();showActionEvent("bankrupt",p,{titleEn:"BANKRUPT",titleRu:"БАНКРОТСТВО",detailEn:"The player can no longer pay",detailRu:"Игрок больше не может расплачиваться",amount:null,icon:"💀",tone:"red",duration:1600});renderTokens();renderPlayers();return true;
   }
+  function checkBankrupt(p,creditorId=null){
+    if(!p||p.bankrupt)return !!p?.bankrupt;
+    if(p.money>=0)return false;
+    // Bots and anyone not at the keyboard liquidate automatically: there is
+    // nobody to press the buttons. A human at the keyboard gets the debt dialog
+    // instead - see requirePayment - so nothing of theirs moves without a click.
+    const sold=botRaiseCash(p,0,Infinity);
+    if(sold>0){
+      log(lang==="en"?`${playerLabel(p)} sells buildings and mortgages property to cover a debt.`:`${playerLabel(p)} продаёт застройку и закладывает недвижимость, чтобы покрыть долг.`);
+      renderTokens();renderPlayers();
+    }
+    if(p.money>=0)return false;
+    return declareBankruptcy(p,creditorId);
+  }
   window.checkBankrupt=checkBankrupt;
 
+  /* ---------- Debt settlement, the way richup does it ----------
+
+     The old behaviour was the machine deciding: a player who could not pay had
+     every building sold and every property mortgaged out from under them, and
+     was told afterwards. The player never saw a choice, and a group they had
+     spent the whole game assembling was gone in one invisible step.
+
+     Now a human is shown the figure they owe, the cash they hold, and one button
+     per asset that can be turned into cash. Nothing is sold until the button for
+     that asset is pressed, so the cost of covering a debt is always visible and
+     always a decision.
+
+     Selling follows the same rules the rest of the game already uses: a building
+     returns half the house cost, and only a property with no buildings anywhere
+     in its group can be mortgaged. Re-rendering after every sale keeps the
+     remaining cash and the shortfall live, so the "pay" button lights up the
+     moment the numbers work.
+
+     onDone(settled) - true once the debt is paid, false on bankruptcy. */
+  /* The markup, separated from the wiring so the host's snapshot can hand the
+     same dialog to a guest: the guest builds it from its own live state and its
+     own language, exactly as it does for the jail and the purchase dialog. */
+  function debtDialogHtml(p,amount,creditorId,reason){
+    const en=lang==="en";
+    const cash=Math.max(0,Math.floor(p.money));
+    const owed=Math.max(0,Math.floor(amount));
+    const short=Math.max(0,owed-cash);
+    const creditor=creditorId!=null?players[creditorId]:null;
+    const rows=playerLiquidations(p);
+    const assetHtml=rows.length?rows.map(x=>{
+      const label=x.kind==="mortgage"
+        ?(en?`Mortgage ${tileLabel(x.t)}`:`Заложить «${tileLabel(x.t)}»`)
+        :(x.kind==="hotel"?(en?`Sell the hotel on ${tileLabel(x.t)}`:`Продать отель на «${tileLabel(x.t)}»`):(en?`Sell a house on ${tileLabel(x.t)}`:`Продать дом на «${tileLabel(x.t)}»`));
+      return `<button class="btn no capital-debt-asset" data-kind="${x.kind}" data-tile="${x.t.id}">${escapeHtml(label)} <span style="opacity:.72">+$${x.amount}</span></button>`;
+    }).join(""):`<div class="auction-empty">${en?"You have nothing left to sell.":"Продавать больше нечего."}</div>`;
+    const canPay=owed>0&&cash>=owed;
+    return `<div class="modal-bg"><div class="modal capital-debt-modal">
+      <div class="capital-property-kicker"><span class="capital-property-swatch" style="background:#e05a6b"></span>${en?"CANNOT PAY":"НЕ МОЖЕТ ОПЛАТИТЬ"}</div>
+      <h3 style="margin:6px 0 2px">${escapeHtml(reason||(en?"Payment due":"Платёж"))}</h3>
+      <div class="capital-debt-figures">
+        <div><span>${en?"Owed":"Долг"}</span><strong>$${owed}</strong></div>
+        <div><span>${en?"Cash":"Деньги"}</span><strong>$${cash}</strong></div>
+        <div><span>${en?"Short":"Не хватает"}</span><strong style="color:${short?"#ff8a96":"#5ee3a0"}">$${short}</strong></div>
+      </div>
+      ${creditor?`<div style="font-size:11px;color:#7f8da0;margin:2px 0 10px">${en?`Paid to ${playerLabel(creditor)}`:`Получатель: ${escapeHtml(playerLabel(creditor))}`}</div>`:""}
+      <div class="capital-debt-assets">${assetHtml}</div>
+      <div class="modal-btns">
+        <button class="btn yes" id="debtPay" ${canPay?"":"disabled"}>${en?`Pay $${owed}`:`Заплатить $${owed}`}</button>
+        <button class="btn no" id="debtGiveUp">${en?"Declare bankruptcy":"Объявить банкротство"}</button>
+      </div>
+    </div></div>`;
+  }
+  function playerLiquidations(p){
+    const buildings=[];
+    TILES.forEach(t=>{
+      if(t.owner!==p.id||t.type!=="prop")return;
+      if(t.hotel)buildings.push({t,kind:"hotel",amount:Math.round(HOUSE_COST[t.group]/2)});
+      else if(t.houses>0)buildings.push({t,kind:"house",amount:Math.round(HOUSE_COST[t.group]/2)});
+    });
+    // Cheapest first: covering a debt should cost the player as little as
+    // possible, and the property they part with should be the one they mind least.
+    const props=TILES.filter(t=>t.owner===p.id&&!t.mortgaged&&["prop","station","util"].includes(t.type)&&!groupHasBuildings(t))
+      .sort((a,b)=>(a.price||0)-(b.price||0))
+      .map(t=>({t,kind:"mortgage",amount:Math.round((t.price||0)/2)}));
+    return [...buildings,...props];
+  }
+  function applyLiquidation(p,entry){
+    const t=entry.t;
+    if(entry.kind==="hotel"){t.hotel=false;t.houses=4;}
+    else if(entry.kind==="house"){t.houses=Math.max(0,(t.houses||0)-1);}
+    else t.mortgaged=true;
+    p.money=Math.max(0,p.money+entry.amount);
+  }
+  function openDebtDialog(p,amount,creditorId,reason,onDone){
+    let done=false;
+    const finish=(settled)=>{if(done)return;done=true;try{clearModal();}catch(_){}onDone&&onDone(settled);};
+    const render=()=>{
+      if(done)return;
+      /* Re-render by closing first. openModal refuses to open while a dialog is
+         already up - it returns null and leaves the old markup in place - so
+         swapping the contents without closing would silently do nothing, and the
+         shortfall and the pay button would stay frozen on the figures from the
+         moment the dialog first appeared. */
+      clearModal();
+      const bg=openModal(debtDialogHtml(p,amount,creditorId,reason),"debt");
+      if(!bg)return;
+      bg.addEventListener("click",e=>{
+        const b=e.target.closest("[data-kind]");
+        if(b&&!b.disabled){
+          const t=TILES[Number(b.dataset.tile)];
+          if(!t)return;
+          const entry={t,kind:b.dataset.kind,amount:0};
+          if(entry.kind==="hotel")entry.amount=Math.round(HOUSE_COST[t.group]/2);
+          else if(entry.kind==="house")entry.amount=Math.round(HOUSE_COST[t.group]/2);
+          else entry.amount=Math.round((t.price||0)/2);
+          applyLiquidation(p,entry);
+          playSellSfx();
+          log(lang==="en"?`${playerLabel(p)} ${entry.kind==="mortgage"?"mortgages":"sells"} on «${tileLabel(t)}» to cover a debt.`:`${playerLabel(p)} ${entry.kind==="mortgage"?"закладывает":"продаёт застройку на"} «${tileLabel(t)}», чтобы покрыть долг.`);
+          renderTokens();renderPlayers();
+          render();
+          return;
+        }
+        // Clicking the backdrop must not decide the player's money for them.
+        if(e.target===bg)return;
+      });
+      const pay=bg.querySelector("#debtPay");
+      if(pay)pay.onclick=()=>{
+        const owed=Math.max(0,Math.floor(Number(amount)||0));
+        const creditor=creditorId!=null?players[creditorId]:null;
+        if(p.money<owed)return;
+        p.money-=owed;
+        if(creditor&&!creditor.bankrupt)creditor.money+=owed;
+        log(lang==="en"?`${playerLabel(p)} pays $${owed}.`:`${playerLabel(p)} расплачивается на $${owed}.`);
+        SFX.coin();renderTokens();renderPlayers();saveGame();
+        finish(true);
+      };
+      const give=bg.querySelector("#debtGiveUp");
+      if(give)give.onclick=()=>{
+        declareBankruptcy(p,creditorId);
+        saveGame();
+        finish(false);
+      };
+    };
+    render();
+  }
+  /* The host's side of the debt dialog. The host parks the turn, publishes the
+     facts, and waits; every button the guest presses arrives back here as an
+     action and is re-checked against live state before anything moves. When the
+     money finally covers the figure, the parked callback runs and the turn
+     carries on exactly as if the player had paid from cash on hand. */
+  let mpPendingDebt=null;
+  function mpDebtSettle(){
+    const d=mpPendingDebt;
+    if(!d)return;
+    const p=players.find(x=>x&&x.id===Number(d.playerId));
+    mpPendingDebt=null;
+    authoritativeModalData=null;
+    if(!p||p.bankrupt){try{modalRoot.innerHTML="";}catch(_){}modalOpen=false;modalKind=null;updateBadge();mpPublishSnapshot(true);return;}
+    const owed=Math.max(0,Math.floor(Number(d.amount)||0));
+    const creditor=d.creditorId!=null?players[d.creditorId]:null;
+    if(p.money>=owed){
+      p.money-=owed;
+      if(creditor&&!creditor.bankrupt)creditor.money+=owed;
+      log(lang==="en"?`${playerLabel(p)} pays $${owed}.`:`${playerLabel(p)} расплачивается на $${owed}.`);
+      SFX.coin();renderTokens();renderPlayers();saveGame();
+    }else{
+      declareBankruptcy(p,d.creditorId);
+      saveGame();
+    }
+    try{modalRoot.innerHTML="";}catch(_){}
+    modalOpen=false;modalKind=null;updateBadge();
+    mpPublishSnapshot(true);
+    if(typeof d.onDone==="function")d.onDone(p.money>=0&&!p.bankrupt);
+  }
+  /* One entry point for every payment. Cash that is already in hand is spent
+     straight away; anything else asks the player to find the rest, and only
+     falls back to the automatic liquidation if there is nobody to ask. */
+  function requirePayment(p,amount,creditorId,reason,onDone){
+    const owed=Math.max(0,Math.floor(Number(amount)||0));
+    if(!p||p.bankrupt){onDone&&onDone(false);return;}
+    if(p.money>=owed){p.money-=owed;if(owed&&creditorId!=null){const c=players[creditorId];if(c&&!c.bankrupt)c.money+=owed;}onDone&&onDone(true);return;}
+    const canAsk=(!mp.active&&!!p.human)||(mp.active&&mpIsLocalPlayer(p));
+    /* A remote player is asked through the snapshot, exactly like the jail and
+       the purchase dialog: the host keeps the turn parked and publishes facts
+       only, the guest rebuilds the dialog in its own language from its own state,
+       and every button comes back as an action the host re-checks. */
+    if(mp.active&&mp.host&&!mpIsLocalPlayer(p)&&p.mpClientId){
+      mpPendingDebt={playerId:p.id,amount:owed,creditorId:creditorId==null?null:Number(creditorId),reason:reason||"",onDone};
+      authoritativeModalData={kind:"debt",playerId:p.id,amount:owed,creditorId:mpPendingDebt.creditorId,reason:mpPendingDebt.reason};
+      modalRoot.innerHTML="";modalOpen=false;modalKind="debt";updateBadge();
+      mpPublishSnapshot(true);
+      return;
+    }
+    if(!canAsk){
+      botRaiseCash(p,owed,Infinity);
+      if(p.money>=owed){p.money-=owed;const c=creditorId!=null?players[creditorId]:null;if(owed&&c&&!c.bankrupt)c.money+=owed;onDone&&onDone(true);return;}
+      declareBankruptcy(p,creditorId);onDone&&onDone(false);return;
+    }
+    openDebtDialog(p,owed,creditorId,reason,settled=>{onDone&&onDone(settled);});
+  }
+
+  /* A player who closes their tab is not bankrupt and must not be treated as
+     such. They are removed from play and their assets go back to the bank, which
+     is what makes the rule the caller wants come out right on its own: leave two
+     players, one drops, and the survivor is the only one left in alive(), so
+     maybeEndGame() names them the winner. Leave four, one drops, three carry on.
+
+     The host is the only client that acts on this. Presence leave is slow and can
+     be missed entirely by a tab that was closed, so this is driven by the room
+     roster rather than by the leave event, and it runs on a short delay so a
+     reload does not look like an exit.
+
+     `left` is not the same as bankrupt and is kept apart from it: bankrupt feeds
+     the win/lose logic, while left only records that the roster changed, so a
+     returning player is not confused with somebody who was eliminated. */
+  const MP_EXIT_GRACE_MS=4000;
+  let mpExitTimer=null;
+  /* The explicit "leave" message: presence has already dropped the client by the
+     time this arrives, but presence alone cannot be trusted, so the leaver is
+     taken out of play directly instead of waiting for the roster sweep. */
+  function mpDropLeaverNow(clientId){
+    if(!clientId)return;
+    const p=players.find(x=>x&&x.mpClientId===clientId&&!x.left);
+    if(!p)return;
+    p.left=true;
+    TILES.forEach(t=>{if(t.owner===p.id){t.owner=null;t.houses=0;t.hotel=false;t.mortgaged=false;}});
+    log(lang==="en"?`${playerLabel(p)} left the game. Their property returns to the bank.`:`${playerLabel(p)} вышел из игры. Его недвижимость возвращается банку.`);
+    showActionEvent("playerleft",p,{titleEn:"PLAYER LEFT",titleRu:"ИГРОК ВЫШЕЛ",detailEn:lang==="en"?`${playerLabel(p)} left the game.`:`${playerLabel(p)} вышел из игры.`,icon:"🚪",tone:"red",duration:2800});
+    renderTokens();renderPlayers();
+    if(maybeEndGame())return;
+    if(!validTurn(currentPlayer()))nextTurn();
+  }
+  function mpReconcileRoster(){
+    if(!mp.active||!mp.host||!mpGameRunning())return;
+    const present=new Set(mpPresentClientIds());
+    const gone=players.filter(p=>p&&p.mpClientId&&!p.left&&!present.has(String(p.mpClientId)));
+    if(!gone.length)return;
+    gone.forEach(p=>{
+      p.left=true;
+      TILES.forEach(t=>{if(t.owner===p.id){t.owner=null;t.houses=0;t.hotel=false;t.mortgaged=false;}});
+      log(lang==="en"?`${playerLabel(p)} left the game. Their property returns to the bank.`:`${playerLabel(p)} вышел из игры. Его недвижимость возвращается банку.`);
+      showActionEvent("playerleft",p,{titleEn:"PLAYER LEFT",titleRu:"ИГРОК ВЫШЕЛ",detailEn:lang==="en"?`${playerLabel(p)} closed the game.`:`${playerLabel(p)} закрыл игру.`,icon:"🚪",tone:"red",duration:2800});
+    });
+    renderTokens();renderPlayers();
+    // Publish before deciding the winner: the snapshot is what tells the
+    // remaining clients the player is gone, and it carries the turn the winner
+    // screen is about to be read against.
+    mpPublishSnapshot(true);
+    if(maybeEndGame())return;
+    // The turn may have belonged to somebody who just left.
+    if(!validTurn(currentPlayer()))nextTurn();
+  }
+  function mpScheduleRosterCheck(){
+    if(mpExitTimer)clearTimeout(mpExitTimer);
+    mpExitTimer=setTimeout(()=>{mpExitTimer=null;try{mpReconcileRoster();}catch(err){try{console.warn("CAPITAL roster reconcile failed",err);}catch(_){}}},MP_EXIT_GRACE_MS);
+  }
   function maybeEndGame(){
     const a=alive();
     if(a.length<=1){showGameOver(a[0]||null);mpServerGameFinished();return true;}
@@ -8658,7 +9027,14 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     if(!validTurn(p)||state!==STATES.TILE_ACTION)return;
     updateFastPace();
     const t=TILES[p.pos];if(!t){completeTileAction(p);return;}
-    if(t.type==="tax"){p.money-=t.amount;playTaxSfx();log(`${playerLabel(p)} платит налог $${t.amount}.`);toast(`💸 ${playerLabel(p)} −$${t.amount}`,'warn');showActionEvent("tax",p,{titleEn:"TAX PAID",titleRu:"ОПЛАЧЕН НАЛОГ",detailEn:`${tileLabel(t)} · mandatory payment`,detailRu:`${tileLabel(t)} · обязательный платёж`,amount:-t.amount,icon:"💸",tone:"red",duration:1550});renderPlayers();if(checkBankrupt(p,null)){completeTileAction(p);return;}completeTileAction(p);return;}
+    if(t.type==="tax"){
+      requirePayment(p,t.amount,null,lang==="en"?`Income tax · ${tileLabel(t)}`:`Налог на доход · «${tileLabel(t)}»`,settled=>{
+        if(settled){playTaxSfx();log(`${playerLabel(p)} платит налог $${t.amount}.`);toast(`💸 ${playerLabel(p)} −$${t.amount}`,'warn');showActionEvent("tax",p,{titleEn:"TAX PAID",titleRu:"ОПЛАЧЕН НАЛОГ",detailEn:`${tileLabel(t)} · mandatory payment`,detailRu:`${tileLabel(t)} · обязательный платёж`,amount:-t.amount,icon:"💸",tone:"red",duration:1550});}
+        renderPlayers();
+        completeTileAction(p);
+      });
+      return;
+    }
     if(t.type==="gotojail"){sendToJail(p);completeTileAction(p);return;}
     if(t.type==="chance"||t.type==="chest"){drawCard(p,t);return;}
     if(["prop","station","util"].includes(t.type)){
@@ -8669,9 +9045,16 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
       }
       if(t.owner===p.id){completeTileAction(p);return;}
       const owner=players[t.owner],rent=calcRent(t);
-      if(rent>0&&owner&&!owner.bankrupt){p.money-=rent;owner.money+=rent;SFX.rentPay();log(`${playerLabel(p)} платит ренту $${rent} игроку ${playerLabel(owner)}.`);toast(`🏠 ${playerLabel(p)} → ${playerLabel(owner)}  $${rent}`,'warn');showActionEvent("rent",p,{titleEn:"RENT PAID",titleRu:"ОПЛАЧЕНА РЕНТА",detailEn:`To ${playerLabel(owner)} · ${tileLabel(t)}`,detailRu:`Игроку ${playerLabel(owner)} · ${tileLabel(t)}`,amount:-rent,icon:"🏠",tone:"red",duration:1500});}
-      else log(`${playerLabel(p)} попадает на заложенную собственность — рента $0.`);
-      renderPlayers();checkBankrupt(p,owner?owner.id:null);completeTileAction(p);return;
+      if(rent>0&&owner&&!owner.bankrupt){
+        requirePayment(p,rent,owner.id,lang==="en"?`Rent · ${tileLabel(t)}`:`Рента · «${tileLabel(t)}»`,settled=>{
+          if(settled){SFX.rentPay();log(`${playerLabel(p)} платит ренту $${rent} игроку ${playerLabel(owner)}.`);toast(`🏠 ${playerLabel(p)} → ${playerLabel(owner)}  $${rent}`,'warn');showActionEvent("rent",p,{titleEn:"RENT PAID",titleRu:"ОПЛАЧЕНА РЕНТА",detailEn:`To ${playerLabel(owner)} · ${tileLabel(t)}`,detailRu:`Игроку ${playerLabel(owner)} · ${tileLabel(t)}`,amount:-rent,icon:"🏠",tone:"red",duration:1500});}
+          renderPlayers();
+          completeTileAction(p);
+        });
+        return;
+      }
+      log(`${playerLabel(p)} попадает на заложенную собственность — рента $0.`);
+      renderPlayers();completeTileAction(p);return;
     }
     completeTileAction(p);
   }
@@ -9264,18 +9647,31 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     const price=Math.max(0,Math.floor(a.currentBid));
     clearModal();
 
-    if(winner&&!winner.bankrupt&&price>=AUCTION_STEP&&winner.money>=price&&tIsFree(a.tile)){
-      winner.money-=price;
-      a.tile.owner=winner.id;
-      SFX.coin();
-      log(`Аукцион: ${playerLabel(winner)} выиграл «${tileLabel(a.tile)}» за $${price}.`);
-      showPropertyAcquiredFx(winner,a.tile);
-      toast(`🔨 ${playerLabel(winner)} → ${tileLabel(a.tile)}  $${price}`,"good");
-    }else{
-      log(`Аукцион по «${tileLabel(a.tile)}» не состоялся — участок остаётся свободным.`);
-      toast("🔨 Аукцион завершён без победителя");
+    if(winner&&!winner.bankrupt&&price>=AUCTION_STEP&&tIsFree(a.tile)){
+      // The winning bid is already committed, so the winner owes it whether or not
+      // the cash is in hand. requirePayment takes the same road as rent: the
+      // player finds the money or goes bankrupt, and the tile only changes hands
+      // once the price is actually covered.
+      requirePayment(winner,price,null,lang==="en"?`Auction · ${tileLabel(a.tile)}`:`Аукцион · «${tileLabel(a.tile)}»`,settled=>{
+        if(settled){
+          a.tile.owner=winner.id;
+          SFX.coin();
+          log(`Аукцион: ${playerLabel(winner)} выиграл «${tileLabel(a.tile)}» за $${price}.`);
+          showPropertyAcquiredFx(winner,a.tile);
+          toast(`🔨 ${playerLabel(winner)} → ${tileLabel(a.tile)}  $${price}`,"good");
+        }else{
+          log(lang==="en"?`The auction for «${tileLabel(a.tile)}» collapsed — the winner could not pay.`:`Аукцион по «${tileLabel(a.tile)}» не состоялся — победитель не смог заплатить.`);
+          toast(lang==="en"?"🔨 Auction ended without a winner":"🔨 Аукцион завершён без победителя");
+        }
+        renderPlayers();renderTokens();
+        if(mp.active&&mp.host)mpRealtimeEvent("AUCTION_FINISHED",{tileId:a.tile.id,winnerIndex:winner?.id??null,winnerPlayerId:winner?.mpClientId||null,price});
+        saveGame();
+        completeTileAction(a.turnPlayer);
+      });
+      return;
     }
-
+    log(`Аукцион по «${tileLabel(a.tile)}» не состоялся — участок остаётся свободным.`);
+    toast("🔨 Аукцион завершён без победителя");
     renderPlayers();
     renderTokens();
     if(mp.active&&mp.host)mpRealtimeEvent("AUCTION_FINISHED",{tileId:a.tile.id,winnerIndex:winner?.id??null,winnerPlayerId:winner?.mpClientId||null,price});
@@ -9416,32 +9812,75 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
      title is written once when the modal is built, and only the small numeric
      readouts are updated in place. The countdown keeps its own interval, which is
      the one thing that genuinely needs a timer. */
+
   /* Bidding controls.
 
-     There used to be one "+$10" button next to a number box, so raising a bid
-     meant either a single small step or typing an exact figure. Anyone coming
-     from richup expects a row of ready-made raises that get bigger as the
-     bidding climbs, so that is what this is: a ladder of raises, each one
-     placing a bid of the current price plus that raise.
+     There used to be one "+$10" button next to a number box. That is gone, and
+     with it two things that made bidding feel like accounting rather than a
+     fight over an object:
 
-     The ladder is not a list of absolute bids - each button is a step up from
-     whatever the price is now, so the row keeps working after the price has
-     moved. The first rung is the minimum legal raise; later rungs are the
-     shortcuts that matter once two people are actually competing. */
-  // The first rung is derived from the minimum raise so the two cannot drift
-  // apart if AUCTION_STEP ever changes; the rest scale off it.
-  const AUCTION_BID_LADDER=[AUCTION_STEP,AUCTION_STEP*5,AUCTION_STEP*10,AUCTION_STEP*25,AUCTION_STEP*50];
+       - The buttons labelled the *increase* ("+$10"), so the player had to add
+         the current price in their head to find out what they were bidding. Each
+         button now shows the total it will place.
+       - The steps were fixed at +10/+50/+100/+250/+500, which is meaningless once
+         the price is past a few hundred: five buttons all doing roughly nothing.
+         The rungs are now multiples of the current price, so they stay useful at
+         any level, and the row rescales itself as the auction climbs.
+
+     Rungs are computed from the price rather than stored, because a stored ladder
+     has to be invalidated every time the price moves; here it cannot drift from
+     what is actually on screen.
+
+     Three rungs, not five. The row is a shortcut, and a shortcut stops being one
+     when it is a menu: with the minimum raise plus four multipliers the buttons
+     crowded each other, the two small rungs sat next to each other and offered
+     almost the same bid, and reading the row cost more than typing the figure.
+     Two multipliers either side of the useful middle - 1.5x to press, 2.5x to
+     swing - leave three readable choices with real gaps between them, and MAX
+     beside them covers the case nobody wants to arithmetic.
+
+     Every rung is rounded UP to the minimum step, so a bid is always legal no
+     matter how the price is sitting relative to AUCTION_STEP. Rungs a player
+     cannot afford are dimmed rather than hidden, so the row keeps its shape and
+     the greyed-out rungs explain themselves. */
+
+  const AUCTION_BID_MULTIPLIERS=[1.5,2.5];
+  function auctionRoundUp(v){const s=AUCTION_STEP;return Math.ceil(v/s)*s;}
+  /* The rungs for the current price, as absolute amounts, de-duplicated. The
+     minimum raise is always the first rung so there is always something legal to
+     click.
+
+     Every candidate is floored at the minimum, and that floor is not cosmetic:
+     a multiplier of an empty board is 0, which roundUp leaves at 0 - a button
+     labelled "$0" that the engine would reject, and the only other rung left.
+
+     Capped at three so the count cannot creep back up with the multipliers: a
+     short price can collapse two rungs onto the same figure after rounding, and
+     that collapse must cost a rung rather than widen the row. */
+  const AUCTION_MAX_RUNGS=3;
+  function auctionBidRungs(a){
+    const min=a.currentBid+AUCTION_STEP;
+    const set=new Set([min]);
+    AUCTION_BID_MULTIPLIERS.forEach(m=>{const v=auctionRoundUp(a.currentBid*m);set.add(Math.max(min,v));});
+    return [...set].sort((x,y)=>x-y).slice(0,AUCTION_MAX_RUNGS);
+  }
   function auctionBidControlsHtml(a,canBid,minBid,me){
     const en=lang==="en";
     const cash=Math.max(0,Math.floor(me?.money||0));
-    const buttons=AUCTION_BID_LADDER.map(step=>{
+    const rungs=auctionBidRungs(a);
+    const buttons=rungs.map((bid,i)=>{
       // Dim the rungs a player cannot afford instead of hiding them, so the
       // ladder keeps its shape and the greyed-out rungs explain themselves.
-      const afford=canBid&&cash>=a.currentBid+step;
-      return `<button class="btn yes auction-bid-step${step===AUCTION_BID_LADDER[0]?"":" auction-bid-step-lg"}" data-bid-step="${step}" ${afford?"":"disabled"}>+$${step}</button>`;
+      const afford=canBid&&cash>=bid;
+      // The label is the amount this button places, not the increase.
+      return `<button class="btn yes auction-bid-step${i?" auction-bid-step-lg":""}" data-bid-amount="${bid}" ${afford?"":"disabled"}>$${bid}</button>`;
     }).join("");
+    // Max is the whole purse: one tap takes the price as high as it can go.
+    // Capped at nothing else - the bid still has to be legal and affordable, and
+    // auctionPlaceBid enforces both, so this cannot overreach.
+    const maxBtn=`<button class="btn yes auction-bid-max" data-bid-amount="${Math.min(cash,Math.max(0,cash))}" ${(canBid&&cash>=minBid)?"":"disabled"}>${en?"MAX":"МАКС"}</button>`;
     return `<div class="auction-bid-controls">
-            <div class="auction-bid-ladder">${buttons}</div>
+            <div class="auction-bid-ladder">${buttons}${maxBtn}</div>
             <div class="auction-bid-custom">
               <input id="auctionBidInput" class="setup-input" type="number" min="${minBid}" max="${cash}" step="${AUCTION_STEP}" value="${Math.min(cash,minBid)}" ${canBid?"":"disabled"}>
               <button class="btn yes" id="auctionBidCustom" ${canBid?"":"disabled"}>${en?"Bid":"Ставка"}</button>
@@ -9452,9 +9891,11 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     if(!bg)return;
     const ladder=bg.querySelector(".auction-bid-ladder");
     if(ladder)ladder.addEventListener("click",e=>{
-      const b=e.target.closest("[data-bid-step]");
+      const b=e.target.closest("[data-bid-amount]");
       if(!b||b.disabled)return;
-      auctionPlaceBid(a,me,a.currentBid+Number(b.dataset.bidStep));
+      // The button carries the total it places, so the click is that amount and
+      // not a step added to the current price.
+      auctionPlaceBid(a,me,Number(b.dataset.bidAmount));
     });
     bg.querySelector("#auctionBidCustom").onclick=()=>{
       const input=bg.querySelector("#auctionBidInput");
@@ -9502,14 +9943,25 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
         historyEl.innerHTML=auctionHistoryRows(a)||`<div class="auction-empty">${lang==="en"?"No bids yet. Be the first to bid.":"Ставок пока нет. Сделай первую ставку."}</div>`;
       }
     }
-    // Each rung is a step up from the current price, so it has to be re-enabled
-    // or greyed out as the price climbs and the player's cash shrinks.
+    /* The rungs are multiples of the current price, so they are different numbers
+     every time the price moves: this cannot just re-enable the buttons it finds,
+     it has to rebuild the row whenever the rung set has actually changed. It is
+     rebuilt on a string key rather than on every tick, so a 350ms sync that did
+     not change the price does not replace the nodes the player is aiming at -
+     which would drop the hover and the click. */
     if(stepBtn){
       const cash=Math.max(0,Math.floor(me?.money||0));
-      stepBtn.querySelectorAll("[data-bid-step]").forEach(b=>{
-        const on=canBid&&cash>=a.currentBid+Number(b.dataset.bidStep);
-        if(b.disabled===on)b.disabled=!on;
-      });
+      const rungs=auctionBidRungs(a);
+      const key=rungs.join(",")+"|"+cash+"|"+(canBid?1:0);
+      if(key!==stepBtn._bidKey){
+        stepBtn._bidKey=key;
+        const buttons=rungs.map((bid,i)=>{
+          const afford=canBid&&cash>=bid;
+          return `<button class="btn yes auction-bid-step${i?" auction-bid-step-lg":""}" data-bid-amount="${bid}" ${afford?"":"disabled"}>$${bid}</button>`;
+        }).join("");
+        const en=lang==="en";
+        stepBtn.innerHTML=buttons+`<button class="btn yes auction-bid-max" data-bid-amount="${cash}" ${(canBid&&cash>=minBid)?"":"disabled"}>${en?"MAX":"МАКС"}</button>`;
+      }
     }
     if(customBtn)customBtn.disabled=!canBid;
     if(input){
@@ -9736,9 +10188,32 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     checkBankrupt(p,null);completeTileAction(p);
   }
 
+  /* Every action in this dialog ends in refresh(), which reopens the same dialog
+     so the player sees the result. Two things made that a dead end.
+
+     First, refresh() used to flip modalOpen by hand before calling back in. If
+     openPropertyModal then returned early on its own guard - or threw anywhere
+     in its body - the flag said "no dialog" while a dialog was still painted on
+     screen, and its handlers were attached to nodes about to be discarded. The
+     board underneath stayed unclickable, which is the "game froze" report. It now
+     closes properly with clearModal() and reopens, so a failed reopen leaves no
+     dialog at all rather than a convincing-looking dead one.
+
+     Second, the body was a single unbroken expression chain with no try/catch,
+     and this file swallows exceptions with empty catch blocks everywhere else,
+     so a throw here was invisible. It now reports itself and closes. */
   function openPropertyModal(tid){
-    if(state!==STATES.WAITING_FOR_ROLL||modalOpen||!players.length)return;
-    const t=TILES[tid];if(!t)return;
+    let bg=null;
+    try{bg=openPropertyModalInner(tid);}catch(err){
+      try{console.warn("CAPITAL property modal failed",err);}catch(_){}
+      try{clearModal();}catch(_){}
+      bg=null;
+    }
+    return bg;
+  }
+  function openPropertyModalInner(tid){
+    if(state!==STATES.WAITING_FOR_ROLL||modalOpen||!players.length)return null;
+    const t=TILES[tid];if(!t)return null;
     const owner=t.owner!=null?players[t.owner]:null,me=mp.active?mpLocalPlayer():(players.find(x=>x.human)||players[0]);
     const isProp=t.type==="prop", color=GROUP_UI[t.group]||"#6d7cff", glow=color+"55";
     const progress=isProp&&owner?propertyGroupProgress(t,owner.id):{owned:0,total:isProp?groupTiles(t).length:0,complete:false};
@@ -9763,8 +10238,18 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     }
     if(!actions)actions=`<div style="grid-column:1/-1;padding:10px 12px;border-radius:11px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06);color:#8491a3;font-size:11px;text-align:center">${owner&&owner.id!==me?.id?(lang==="en"?"This property belongs to another player.":"Эта недвижимость принадлежит другому игроку."):(lang==="en"?"No actions available right now.":"Сейчас действий нет.")}</div>`;
     const bg=openModal(`<div class="modal-bg capital-property-modal-bg" data-tile-id="${t.id}"><div class="modal capital-property-modal" style="--property-color:${color};--property-glow:${glow}"><div class="capital-property-hero"><div class="capital-property-kicker"><span class="capital-property-swatch" style="background:${color}"></span>${escapeHtml(propertyGroupLabel(t))}</div><div class="capital-property-title">${escapeHtml(tileLabel(t))}</div><div class="capital-property-price">$${t.price||0}</div><div class="capital-property-owner"><span class="capital-property-owner-dot" style="background:${ownerColor}"></span>${ownerName}${t.mortgaged?` · 🔒 ${T("mortgage")}`:""}</div></div><div class="capital-property-body"><div class="capital-property-stats"><div class="capital-property-stat"><span>${lang==="en"?"Purchase":"Цена"}</span><strong>$${t.price||0}</strong></div><div class="capital-property-stat"><span>${lang==="en"?"Current rent":"Текущая рента"}</span><strong>$${currentRent}</strong></div><div class="capital-property-stat"><span>${lang==="en"?"Buildings":"Застройка"}</span><strong>${escapeHtml(buildings)}</strong></div></div>${groupBlock}<div class="capital-property-actions">${actions}<button class="btn no" id="mClose" style="grid-column:1/-1">✕ ${T("close")}</button></div></div></div></div>` ,"property");
-    if(!bg)return;
-    const refresh=()=>{modalOpen=false;openPropertyModal(tid);renderTokens();renderPlayers();saveGame();};
+    if(!bg)return null;
+    /* Reopen after an action so the player sees the result. clearModal() instead
+       of a bare `modalOpen=false`: it drops the flag, the kind and the stale
+       markup together, so the reopen cannot land on a dialog whose handlers are
+       already gone. */
+    const refresh=()=>{
+      try{
+        clearModal();
+        openPropertyModal(tid);
+        renderTokens();renderPlayers();saveGame();
+      }catch(err){try{console.warn("CAPITAL property action refresh failed",err);}catch(_){}try{clearModal();}catch(_){}}
+    };
     const close=bg.querySelector("#mClose");if(close)close.onclick=()=>clearModal();
     // Guests ask the host to perform the action; the result arrives in the next snapshot.
     if(mp.active&&!mp.host){
@@ -9779,6 +10264,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     const mo=bg.querySelector("#mMortgage");if(mo)mo.onclick=()=>{if(!canMortgage(t))return;t.mortgaged=true;me.money+=Math.round(t.price/2);playMortgageSfx();log(`${playerLabel(me)} закладывает «${tileLabel(t)}».`);showActionEvent("mortgage",me,{titleEn:"PROPERTY MORTGAGED",titleRu:"НЕДВИЖИМОСТЬ ЗАЛОЖЕНА",detailEn:tileLabel(t),detailRu:tileLabel(t),amount:Math.round(t.price/2),icon:"🏦",tone:"blue",duration:1350});refresh();};
     const um=bg.querySelector("#mUnmortgage");if(um)um.onclick=()=>{const cost=Math.round(t.price*.55);if(me&&me.money>=cost){me.money-=cost;t.mortgaged=false;playUnmortgageSfx();log(`${playerLabel(me)} снимает залог с «${tileLabel(t)}».`);showActionEvent("unmortgage",me,{titleEn:"MORTGAGE CLEARED",titleRu:"ЗАЛОГ СНЯТ",detailEn:tileLabel(t),detailRu:tileLabel(t),amount:-cost,icon:"🔓",tone:"blue",duration:1300});refresh();}};
     bg.onclick=e=>{if(e.target===bg)clearModal();};
+    return bg;
   }
 
   window.openTradeModal=()=>openTradeModal();
@@ -10474,4 +10960,4 @@ document.addEventListener("keydown",e=>{
 </body>
 
 </html>
-
+
