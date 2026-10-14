@@ -1190,27 +1190,19 @@ body{
    is labelled with the total it places, and the rungs are multiples of the
    current price so they stay meaningful however high the auction has climbed.
    The last rung is MAX - one tap for the whole purse. */
-.auction-bid-controls{display:grid!important;gap:10px}
-/* Three rungs plus MAX: four across, which is wide enough that each figure gets
-   room to breathe instead of being clipped. */
-.auction-bid-ladder{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+/* Bidding is three buttons and nothing else - no field, no Bid button. The row
+   is rebuilt whenever the price or the purse changes, and it only ever offers
+   bids the player can actually pay for, so it shortens rather than greying out.
+   The column count is written inline from the number of live buttons, which is
+   what keeps them filling the width instead of sitting in empty slots. */
+.auction-bid-controls{display:grid!important;gap:8px}
+.auction-bid-ladder{display:grid;gap:7px}
 .auction-bid-ladder .auction-bid-step{
-  padding:11px 4px!important;font-size:14px;font-weight:900;font-variant-numeric:tabular-nums;
+  padding:12px 6px!important;font-size:15px;font-weight:900;font-variant-numeric:tabular-nums;
   letter-spacing:-.02em;white-space:nowrap
 }
-/* With only three rungs the larger figures fit without shrinking, so every
-   button is the same size and the row reads as one set. */
-.auction-bid-ladder .auction-bid-step-lg{font-size:14px}
-.auction-bid-ladder .auction-bid-step:disabled{opacity:.34}
-/* MAX is the loud one: it is the move that ends an auction, so it is set apart
-   from the ladder and reads as an action rather than another figure. */
-.auction-bid-ladder .auction-bid-max{
-  padding:11px 4px!important;font-size:13px;font-weight:900;letter-spacing:.04em;
-  white-space:nowrap;background:linear-gradient(135deg,#f7d36a,#dfa83c)!important;
-  color:#151a21!important;border-color:transparent!important
-}
-.auction-bid-ladder .auction-bid-max:disabled{opacity:.3}
-.auction-bid-custom{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+.auction-bid-ladder .auction-bid-step-lg{font-size:15px}
+.auction-bid-none{padding:12px 8px;text-align:center;color:#78869a;font-size:12px;line-height:1.35}
 @media (max-width:520px){
   .auction-bid-ladder{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
@@ -1237,6 +1229,29 @@ body{
 @keyframes auctionTimerPulse{
   to{transform:scale(1.08)}
 }
+/* The auction clock. The bar IS the timer and the digits above are only its
+   readout, which is what lets it drain every frame instead of stepping once a
+   second - and gives the refill somewhere to play. Scaled rather than resized so
+   the drain costs no layout. */
+.auction-clock{
+  position:relative;height:8px;margin:0 0 13px;border-radius:99px;overflow:hidden;
+  background:#131c28;
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.04);
+}
+.auction-clock-fill{
+  position:absolute;inset:0;transform-origin:left center;transform:scaleX(1);
+  border-radius:99px;will-change:transform;
+  background:linear-gradient(90deg,#f7d36a,#e4a936);
+}
+.auction-clock.danger .auction-clock-fill{background:linear-gradient(90deg,#ff8090,#e03d58)}
+/* One ring per bid, so a refill reads as an event rather than a wobble. The end
+   value is the resting box-shadow, so the pulse hands the bar back cleanly.
+   prefers-reduced-motion below turns this off; the bar itself still drains. */
+.auction-clock.hit{animation:capitalClockHit .42s ease-out}
+@keyframes capitalClockHit{
+  0%{box-shadow:inset 0 1px 2px rgba(0,0,0,.55),0 0 0 0 rgba(245,196,81,.5)}
+  100%{box-shadow:inset 0 1px 2px rgba(0,0,0,.55),0 0 0 12px rgba(245,196,81,0)}
+}
 .auction-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
 .auction-stats>div{padding:10px;border:1px solid #29374a;border-radius:11px;background:#0e151f}
 .auction-stats span{display:block;font-size:10px;color:#7f8c9f;margin-bottom:4px}
@@ -1254,13 +1269,9 @@ body{
 .auction-history-row:last-child{border-bottom:0}
 .auction-history-row strong{color:#f4c95d}
 .auction-empty{padding:14px 5px;text-align:center;color:#78869a;font-size:12px}
-.auction-bid-controls{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center}
-.auction-bid-controls .setup-input{min-width:0}
 .auction-rule{margin-top:10px;color:#77859a;font-size:11px;line-height:1.4;text-align:center}
 @media (max-width:560px){
   .auction-stats{grid-template-columns:1fr 1fr}
-  .auction-bid-controls{grid-template-columns:1fr 1fr}
-  .auction-bid-controls .setup-input{grid-column:1/-1}
   .auction-head{gap:10px}
   .auction-live-modal{padding:16px!important}
 }
@@ -1376,6 +1387,11 @@ body{
   box-shadow:0 16px 36px rgba(245,196,81,.28),inset 0 1px 0 rgba(255,255,255,.45)!important;
 }
 .capital-property-auction{border-color:rgba(245,196,81,.28)!important;color:#f5d477!important;background:rgba(245,196,81,.07)!important}
+/* The purchase dialog has exactly two decisions, so it runs as two stacked rows:
+   Buy fills the first and Skip fills the second. It needs its own class because
+   .capital-property-actions is also the management dialog's grid, where several
+   actions sit side by side and must keep doing that. */
+.capital-property-actions-buy .capital-property-auction{grid-column:1/-1}
 .capital-property-note{margin:11px 0 0!important;text-align:center;color:#758398!important;font-size:10px!important;line-height:1.45!important}
 .capital-acquired-fx{
   position:fixed;
@@ -4186,7 +4202,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   /* ---------- Realtime multiplayer ---------- */
   const mp = {
     active:false, host:false, room:"", clientId:("c_"+Math.random().toString(36).slice(2,10)),
-    channel:null, members:[], pendingStart:null, lastSnapshot:"", lastModalSig:"", connected:false, publishTimer:null, auctionTimer:null, snapshotSeq:0, lastAppliedSeq:0, pendingSnapshotSeq:0, realtimeStateSeq:0, lastRealtimeStateSeq:0, syncTimer:null, hostId:null, hostWatchTimer:null, claimTimer:null, lastTickAt:0, restorePending:false, authoritySettled:false
+    channel:null, members:[], pendingStart:null, lastSnapshot:"", lastModalSig:"", connected:false, publishTimer:null, auctionTimer:null, auctionClockIsRaf:false, snapshotSeq:0, lastAppliedSeq:0, pendingSnapshotSeq:0, realtimeStateSeq:0, lastRealtimeStateSeq:0, syncTimer:null, hostId:null, hostWatchTimer:null, claimTimer:null, lastTickAt:0, restorePending:false, authoritySettled:false
   };
   function mpLocalPlayer(){return players.find(p=>p&&p.mpClientId===mp.clientId)||null;}
   function mpIsLocalPlayer(p){return !!(p&&mp.active&&p.mpClientId===mp.clientId);}
@@ -4571,7 +4587,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       lastDice:Array.isArray(lastDice)?lastDice.slice(0,2):[1,1],
       players:players.map(p=>({id:p.id,mpClientId:p.mpClientId||null,pos:Number(p.pos)||0,money:Number(p.money)||0,bankrupt:!!p.bankrupt,left:!!p.left,inJail:!!p.inJail,jailAttempts:Number(p.jailAttempts)||0,getOutCards:Number(p.getOutCards)||0,doubles:Number(p.doubles)||0})),
       movement:mpAuthoritativeMovement?{...mpAuthoritativeMovement}:null,
-      auction:activeAuction&&!activeAuction.closed?{tileId:activeAuction.tile?.id,turnPlayerId:activeAuction.turnPlayer?.id??null,currentBid:Number(activeAuction.currentBid)||0,highestBidder:activeAuction.highestBidder==null?null:Number(activeAuction.highestBidder),remainingMs:Math.max(0,(activeAuction.endsAt||performance.now())-performance.now()),history:Array.isArray(activeAuction.history)?activeAuction.history.slice(-12):[]}:null
+      auction:activeAuction&&!activeAuction.closed?{tileId:activeAuction.tile?.id,turnPlayerId:activeAuction.turnPlayer?.id??null,currentBid:Number(activeAuction.currentBid)||0,highestBidder:activeAuction.highestBidder==null?null:Number(activeAuction.highestBidder),clockSeq:Number(activeAuction.clockSeq)||0,remainingMs:Math.max(0,(activeAuction.endsAt||performance.now())-performance.now()),history:Array.isArray(activeAuction.history)?activeAuction.history.slice(-12):[]}:null
     };
   }
   function mpStartRealtimeHeartbeat(){
@@ -4822,7 +4838,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       if(Array.isArray(st.players)){const byId=new Map(st.players.map(x=>[Number(x.id),x]));players.forEach(p=>{const x=byId.get(Number(p.id));if(!x)return;p.pos=Number(x.pos)||0;p.money=Number(x.money)||0;p.bankrupt=!!x.bankrupt;p.inJail=!!x.inJail;p.jailAttempts=Number(x.jailAttempts)||0;p.getOutCards=Number(x.getOutCards)||0;p.doubles=Number(x.doubles)||0;});}
       turn=Number(st.turn)||0;state=st.state||state;extraTurnPending=!!st.extraTurnPending;lastRollTotal=Number(st.lastRollTotal)||0;if(Array.isArray(st.lastDice))lastDice=st.lastDice.slice(0,2);
       const movement=st.movement&&st.movement.playerId!=null?st.movement:null;if(movement){const same=mpRemoteMovement&&mpRemoteMovement.id===movement.id;if(!same)startRemoteMovement(movement);}else if(mpRemoteMovement&&state!==STATES.MOVING)finishRemoteMovement(true);
-      if(st.auction&&st.auction.tileId!=null){const at=TILES[Number(st.auction.tileId)];if(at){const nextTurnPlayer=players.find(x=>x&&x.id===st.auction.turnPlayerId)||currentPlayer();if(!activeAuction||activeAuction.tile?.id!==at.id){activeAuction={tile:at,turnPlayer:nextTurnPlayer,currentBid:Number(st.auction.currentBid)||0,highestBidder:st.auction.highestBidder==null?null:Number(st.auction.highestBidder),closed:false,endsAt:performance.now()+Math.max(0,Number(st.auction.remainingMs)||0),lastBidAt:performance.now(),history:Array.isArray(st.auction.history)?st.auction.history:[],bots:[],botTimers:new Set(),rafIds:new Set()};renderAuction(activeAuction);}else{activeAuction.turnPlayer=nextTurnPlayer;activeAuction.currentBid=Number(st.auction.currentBid)||0;activeAuction.highestBidder=st.auction.highestBidder==null?null:Number(st.auction.highestBidder);activeAuction.endsAt=performance.now()+Math.max(0,Number(st.auction.remainingMs)||0);activeAuction.history=Array.isArray(st.auction.history)?st.auction.history:[];syncAuctionModal(activeAuction,modalRoot.querySelector(".auction-live-bg"));}}}else if(activeAuction&&!mp.host){activeAuction=null;clearInterval(mp.auctionTimer);if(modalKind==="auction"){modalRoot.innerHTML="";modalOpen=false;modalKind=null;}}
+      if(st.auction&&st.auction.tileId!=null){const at=TILES[Number(st.auction.tileId)];if(at){const nextTurnPlayer=players.find(x=>x&&x.id===st.auction.turnPlayerId)||currentPlayer();if(!activeAuction||activeAuction.tile?.id!==at.id){activeAuction={tile:at,turnPlayer:nextTurnPlayer,currentBid:Number(st.auction.currentBid)||0,highestBidder:st.auction.highestBidder==null?null:Number(st.auction.highestBidder),clockSeq:Number(st.auction.clockSeq)||0,closed:false,endsAt:performance.now()+Math.max(0,Number(st.auction.remainingMs)||0),lastBidAt:performance.now(),history:Array.isArray(st.auction.history)?st.auction.history:[],bots:[],botTimers:new Set(),rafIds:new Set()};renderAuction(activeAuction);}else{activeAuction.turnPlayer=nextTurnPlayer;activeAuction.currentBid=Number(st.auction.currentBid)||0;activeAuction.highestBidder=st.auction.highestBidder==null?null:Number(st.auction.highestBidder);const clockSeq=Number(st.auction.clockSeq)||0;/* The clock is RE-SEEDED only when a bid actually re-armed it, not corrected on every packet. Re-basing it from each snapshot makes the bar twitch once per snapshot - the correction is about as big as the gap between snapshots - and none of it is real drift: both clocks started from the same remainingMs, and latency does not grow over the seconds an auction lasts. The digits and the bid buttons still update from every packet; only the clock is left alone. */if(clockSeq!==activeAuction.clockSeq){activeAuction.clockSeq=clockSeq;activeAuction.endsAt=performance.now()+Math.max(0,Number(st.auction.remainingMs)||0);}activeAuction.history=Array.isArray(st.auction.history)?st.auction.history:[];syncAuctionModal(activeAuction,modalRoot.querySelector(".auction-live-bg"));}}}else if(activeAuction&&!mp.host){activeAuction=null;mpStopAuctionClock();if(modalKind==="auction"){modalRoot.innerHTML="";modalOpen=false;modalKind=null;}}
       renderPlayers();if(state!==STATES.ROLLING)renderDice();updateBadge();return;
     }
     if(msg.kind==="realtimeEvent"&&!mp.host){
@@ -5011,7 +5027,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       modalOwnerClientId:turnPlayer?.mpClientId||null,
       movement:mpAuthoritativeMovement?{...mpAuthoritativeMovement}:null,
       logHistory:gameLog.slice(-80),
-      auction:activeAuction&&!activeAuction.closed?{tileId:activeAuction.tile?.id,turnPlayerId:activeAuction.turnPlayer?.id??null,currentBid:activeAuction.currentBid,highestBidder:activeAuction.highestBidder,remainingMs:Math.max(0,(activeAuction.endsAt||performance.now())-performance.now()),history:activeAuction.history||[]}:null,
+      auction:activeAuction&&!activeAuction.closed?{tileId:activeAuction.tile?.id,turnPlayerId:activeAuction.turnPlayer?.id??null,currentBid:activeAuction.currentBid,highestBidder:activeAuction.highestBidder,clockSeq:Number(activeAuction.clockSeq)||0,remainingMs:Math.max(0,(activeAuction.endsAt||performance.now())-performance.now()),history:activeAuction.history||[]}:null,
       trade:mpPendingTrade?{...mpPendingTrade,giveTileIds:[...(mpPendingTrade.giveTileIds||[])],getTileIds:[...(mpPendingTrade.getTileIds||[])]}:null,
       room:mp.room,
       // Who the authority was when this was written. A host that comes back
@@ -5148,14 +5164,25 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       if(s.auction&&s.auction.tileId!=null){
         const at=TILES[Number(s.auction.tileId)];
         if(at){
-          activeAuction={tile:at,turnPlayer:players.find(x=>x&&x.id===s.auction.turnPlayerId)||currentPlayer(),currentBid:Number(s.auction.currentBid)||0,highestBidder:s.auction.highestBidder==null?null:Number(s.auction.highestBidder),closed:false,endsAt:performance.now()+Math.max(0,Number(s.auction.remainingMs)||0),lastBidAt:performance.now(),history:Array.isArray(s.auction.history)?s.auction.history:[],bots:[],botTimers:new Set(),rafIds:new Set()};
+          activeAuction={tile:at,turnPlayer:players.find(x=>x&&x.id===s.auction.turnPlayerId)||currentPlayer(),currentBid:Number(s.auction.currentBid)||0,highestBidder:s.auction.highestBidder==null?null:Number(s.auction.highestBidder),clockSeq:Number(s.auction.clockSeq)||0,closed:false,endsAt:performance.now()+Math.max(0,Number(s.auction.remainingMs)||0),lastBidAt:performance.now(),history:Array.isArray(s.auction.history)?s.auction.history:[],bots:[],botTimers:new Set(),rafIds:new Set()};
           modalRoot.innerHTML="";modalOpen=false;modalKind=null;mp.lastModalSig="";
           renderAuction(activeAuction);
-          const timer=modalRoot.querySelector("#auctionTimer");
-          if(timer){clearInterval(mp.auctionTimer);mp.auctionTimer=setInterval(()=>{if(!activeAuction||activeAuction.closed||!modalOpen||modalKind!=="auction"){clearInterval(mp.auctionTimer);return;}const left=Math.max(0,activeAuction.endsAt-performance.now());const sec=Math.ceil(left/1000);timer.textContent=String(sec);timer.classList.toggle("danger",sec<=3);},120);}
+          const clock=modalRoot.querySelector("#auctionClock");
+          if(clock){
+            mpStopAuctionClock();
+            mp.auctionClockIsRaf=true;
+            const gtick=()=>{
+              // Ends by not rescheduling, so a closed dialog costs nothing and
+              // nothing has to reach in here to stop it.
+              if(!activeAuction||activeAuction.closed||!modalOpen||modalKind!=="auction"){mp.auctionTimer=null;return;}
+              auctionPaintTimer(activeAuction,performance.now());
+              mp.auctionTimer=requestAnimationFrame(gtick);
+            };
+            mp.auctionTimer=requestAnimationFrame(gtick);
+          }
         }
       }else if(activeAuction){
-        activeAuction=null;clearInterval(mp.auctionTimer);
+        activeAuction=null;mpStopAuctionClock();
         if(modalKind==="auction"){modalRoot.innerHTML="";modalOpen=false;modalKind=null;}
       }
     }
@@ -5185,7 +5212,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       }
     }
     if(!mp.host&&s.auction){modalKind="auction";modalOpen=true;}
-    if(!s.auction&&modalKind==="auction"){activeAuction=null;clearInterval(mp.auctionTimer);modalRoot.innerHTML="";modalOpen=false;modalKind=null;mp.lastModalSig="";}
+    if(!s.auction&&modalKind==="auction"){activeAuction=null;mpStopAuctionClock();modalRoot.innerHTML="";modalOpen=false;modalKind=null;mp.lastModalSig="";}
     mpPendingTrade=s.trade?{...s.trade,giveTileIds:[...(s.trade.giveTileIds||[])],getTileIds:[...(s.trade.getTileIds||[])]}:null;
     try{refreshDevPlayers();}catch(_){}
     try{syncActionPanel();}catch(_){}
@@ -5228,7 +5255,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
         const houseCost=isProp?HOUSE_COST[t.group]:0;
         const rentLine=isProp?`<div class="capital-monopoly-card"><div class="capital-monopoly-head"><span>${lang==="en"?"MONOPOLY PROGRESS":"ПРОГРЕСС МОНОПОЛИИ"}</span><strong>${escapeHtml(groupLine)}</strong></div><div class="capital-monopoly-track"><div class="capital-monopoly-fill" style="--property-color:${color};--property-glow:${glow};width:${progress.total?Math.round(progress.owned/progress.total*100):0}%"></div></div></div>${propertyRentLadderHtml(t)}`:"";
         const extra=isProp?`<div class="capital-property-stats"><div class="capital-property-stat"><span>${lang==="en"?"Base rent":"Базовая рента"}</span><strong>$${t.rent}</strong></div><div class="capital-property-stat"><span>${lang==="en"?"Monopoly rent":"Рента монополии"}</span><strong>$${t.rent*2}</strong></div><div class="capital-property-stat"><span>${lang==="en"?"House cost":"Дом"}</span><strong>$${houseCost}</strong></div></div>`:`<div class="capital-property-stats"><div class="capital-property-stat"><span>${lang==="en"?"Purchase":"Покупка"}</span><strong>$${t.price}</strong></div><div class="capital-property-stat"><span>${lang==="en"?"Current rent":"Текущая рента"}</span><strong>$${calcRent(t)}</strong></div><div class="capital-property-stat"><span>${lang==="en"?"Type":"Тип"}</span><strong>${escapeHtml(propertyGroupLabel(t))}</strong></div></div>`;
-        return `<div class="modal-bg capital-property-modal-bg" data-action-close="1" data-tile-id="${t.id}"><div class="modal capital-property-modal" style="--property-color:${color};--property-glow:${glow}"><div class="capital-property-hero"><div class="capital-property-kicker"><span class="capital-property-swatch" style="background:${color}"></span>${escapeHtml(propertyGroupLabel(t))}</div><div class="capital-property-title">${escapeHtml(tileLabel(t))}</div><div class="capital-property-price">$${t.price}</div><div class="capital-property-owner"><span class="capital-property-owner-dot" style="background:${color}"></span>${lang==="en"?"Available to buy":"Свободно для покупки"}</div></div><div class="capital-property-body">${extra}${rentLine}<div class="capital-property-actions"><button class="btn yes capital-property-buy capital-primary-action" id="buyYes" ${p.money<t.price?"disabled":""}>💰 ${lang==="en"?`Buy for $${t.price}`:`Купить за $${t.price}`}</button><button class="btn no capital-property-auction" id="buyNo">${lang==="en"?"↳ Skip purchase → auction":"↳ Не покупать → аукцион"}</button><button class="btn no" id="buyClose">✕ ${T("close")}</button></div><p class="capital-property-note">${lang==="en"?"If you skip a free property, it immediately goes to a live auction. Every bid resets the timer.":"Если отказаться от свободной недвижимости, она сразу отправляется на живой аукцион. Каждая ставка сбрасывает таймер."}</p></div></div></div>`;
+        return `<div class="modal-bg capital-property-modal-bg" data-action-close="1" data-tile-id="${t.id}"><div class="modal capital-property-modal" style="--property-color:${color};--property-glow:${glow}"><div class="capital-property-hero"><div class="capital-property-kicker"><span class="capital-property-swatch" style="background:${color}"></span>${escapeHtml(propertyGroupLabel(t))}</div><div class="capital-property-title">${escapeHtml(tileLabel(t))}</div><div class="capital-property-price">$${t.price}</div><div class="capital-property-owner"><span class="capital-property-owner-dot" style="background:${color}"></span>${lang==="en"?"Available to buy":"Свободно для покупки"}</div></div><div class="capital-property-body">${extra}${rentLine}<div class="capital-property-actions capital-property-actions-buy"><button class="btn yes capital-property-buy capital-primary-action" id="buyYes" ${p.money<t.price?"disabled":""}>💰 ${lang==="en"?`Buy for $${t.price}`:`Купить за $${t.price}`}</button><button class="btn no capital-property-auction" id="buyNo">${lang==="en"?"↳ Skip purchase → auction":"↳ Не покупать → аукцион"}</button></div><p class="capital-property-note">${lang==="en"?"If you skip a free property, it immediately goes to a live auction. Every bid resets the timer.":"Если отказаться от свободной недвижимости, она сразу отправляется на живой аукцион. Каждая ставка сбрасывает таймер."}</p></div></div></div>`;
       }
       if(kind==="debt"){
         const p=players.find(x=>x&&x.id===Number(d.playerId))||currentPlayer();
@@ -5256,14 +5283,6 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       const tileId=Number(root.dataset.tileId);
       root.querySelector("#buyYes")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"buyProperty",tileId}});},{once:true});
       root.querySelector("#buyNo")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"declineProperty",tileId}});},{once:true});
-      root.querySelector("#buyClose")?.addEventListener("click",e=>{
-        e.preventDefault();
-        // Closing is a decision, so it has to reach the host. Clearing only the
-        // local dialog left the host still holding an unanswered buy modal for
-        // this player, and the turn stalled for both of them.
-        mpSend({kind:"action",playerId:mp.clientId,action:{type:"dismissProperty",tileId}});
-        clearModal();modalOpen=false;modalKind=null;
-      },{once:true});
     }else if(modalKind==="jail"){
       root.querySelector("#jRoll")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"jailRoll"}});},{once:true});
       root.querySelector("#jPay")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"jailPay"}});},{once:true});
@@ -5335,6 +5354,10 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     }
 
     if(a.type==="dismissProperty"){
+      /* No current client sends this - the guest's Close button is gone. It stays
+         because a client running an older build can still be in the room, and a
+         host that dropped this branch would hold the buy modal for that player
+         forever and stall their turn. Cheap to keep, expensive to lose. */
       const t=TILES[Number(a.tileId)];
       if(!isTurn||state!==STATES.TILE_ACTION||modalKind!=="buy"||!t||p.pos!==t.id||t.owner!=null)return;
       // Same distinction as the single-player dialog: the property stays with
@@ -5521,7 +5544,20 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
      3D never duplicates logic/state/turns/sync. It visualizes authoritative state.
      Clicks in 3D call the SAME functions as 2D (openPropertyModal). */
   const BOARD_VIEW_KEY="capital.view.v1";
-  let cap3d={ready:false,loading:false,failed:false,running:false,raf:0,renderer:null,scene:null,camera:null,raycaster:null,pointerNDC:null,tmpV:null,tiles:new Map(),tokens:new Map(),dice:[],hitMeshes:[],hovered:-1,lastTileSig:new Map(),lastTokSig:new Map(),prevStateKey:"",prevDiceKey:"",cam:{theta:Math.PI*0.25,phi:0.88,radius:17,tTheta:Math.PI*0.25,tPhi:0.88,tRadius:17,target:null},drag:null,pinch:0,centerSlot:null,ro:null,spin:0,userZoom:false,halfH:14,tHalfH:14,vw:0,vh:0,hudH:0,FILL:0.85,boardDiag:8.42};
+  /* The default 3D camera angle.
+
+     Isometric means a 35.264deg elevation - arctan(1/sqrt2), the angle where the
+     three axes foreshorten equally and a cube still reads as a cube. The board was
+     being framed from 39.6deg, which is not isometric and, more to the point,
+     squashes the diamond LESS than isometric does: the board is square, so at a
+     lower elevation its silhouette gets wider relative to its height and more of
+     the viewport width can be used. This is the angle that fills the screen best
+     while still showing plenty of the side walls.
+
+     phi is the POLAR angle from +Y, so it is the complement: 90 - 35.264. */
+  const CAP3D_ISO_ELEV=Math.atan(1/Math.SQRT2);          // 35.264deg
+  const CAP3D_ISO_PHI=Math.PI/2-CAP3D_ISO_ELEV;          // 54.736deg
+  let cap3d={ready:false,loading:false,failed:false,running:false,raf:0,renderer:null,scene:null,camera:null,raycaster:null,pointerNDC:null,tmpV:null,tiles:new Map(),tokens:new Map(),dice:[],hitMeshes:[],hovered:-1,lastTileSig:new Map(),lastTokSig:new Map(),prevStateKey:"",prevDiceKey:"",cam:{theta:Math.PI*0.25,phi:CAP3D_ISO_PHI,tTheta:Math.PI*0.25,tPhi:CAP3D_ISO_PHI,dist:60,radius:17,tRadius:17,target:null},drag:null,pinch:0,centerSlot:null,ro:null,spin:0,userZoom:false,halfH:14,tHalfH:14,vw:0,vh:0,boardBox:null};
   // Evaluated once: matchMedia() constructs + evaluates on every call, so it
   // must never run per frame (perf audit).
   let cap3dReducedMotion=false;
@@ -5648,7 +5684,31 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
     renderer.outputEncoding=THREE.sRGBEncoding;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
     const scene=new THREE.Scene();scene.background=new THREE.Color(0x04070d);scene.fog=new THREE.Fog(0x04070d,70,130);
-    const camera=new THREE.OrthographicCamera(-8,8,8,-8,1,200);
+    /* Orthographic, and that is a deliberate choice rather than a leftover.
+
+       Isometric projection IS orthographic - the two are the same idea - and this
+       is a board game, where the thing you are reading is a grid of named tiles
+       with prices on them. Under perspective the far corner shrinks, the far row
+       of tiles turns away and its labels compress, and the board stops reading as
+       a board you can count squares on. Depth here comes from what an ortho view
+       still gives fully: the tilt shows the near side walls and the board's
+       0.83 of thickness, the lights and shadows are perspective-free, and the
+       tokens occlude correctly.
+
+       The frustum is NOT left at the -8..8 here - cap3dApplyFrustum owns it and
+       derives it from the real projected bounds of the board (see cap3dFitCamera).
+       These numbers only have to be valid enough for one frame before that runs. */
+    const camera=new THREE.OrthographicCamera(-8,8,8,-8,0.1,400);
+    /* Orbit distance does not affect an orthographic camera's framing at all -
+       only near/far care - so this is NOT a "move the camera closer" knob. It is
+       60 for one real reason: the scene fog starts at 70. The board spans about
+       9 units of depth either side of the target, so at 60 it occupies roughly
+       51..69 and sits entirely in front of the fog. Pushing the orbit out - 90
+       reads like it should be safe for an ortho camera - silently fogs the whole
+       board 33% toward the background and washes the navy tiles out.
+
+       Kept clear of the plinth at every tilt too: tPhi is clamped 0.35..1.25, and
+       near is 0.1. */
     cap3d.renderer=renderer;cap3d.scene=scene;cap3d.camera=camera;
     cap3d.raycaster=new THREE.Raycaster();cap3d.pointerNDC=new THREE.Vector2();cap3d.tmpV=new THREE.Vector3();
     cap3d.cam.target=new THREE.Vector3(0,0.15,0);
@@ -5680,8 +5740,16 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     try{
       const bb=new THREE.Box3().setFromObject(base);
       bb.getCenter(cap3d.cam.target);cap3d.cam.target.y=0.1;
-      const bs=bb.getSize(new THREE.Vector3());
-      cap3d.boardDiag=Math.hypot(bs.x,bs.z)/2;
+      /* The real world-space bounds of everything that must stay on screen: the
+         gold trim and the plinth for the footprint (the plinth is the widest),
+         and the tiles, houses and tokens above the base so the framing never
+         crops a player's head or a hotel off the top of a tile.
+         This box is what cap3dFitCamera projects, which is why it has to be the
+         true bounds and not a diagonal shortcut. */
+      bb.union(new THREE.Box3().setFromObject(trim));
+      bb.union(new THREE.Box3().setFromObject(plinth));
+      bb.max.y=Math.max(bb.max.y,0.62);
+      cap3d.boardBox=bb;
     }catch(_){}
     const plazaCv=document.createElement("canvas");plazaCv.width=512;plazaCv.height=512;
     const px=plazaCv.getContext("2d");
@@ -5827,32 +5895,118 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     cap3dSync(true);
     return true;
   }
+  /* How much of the viewport the board is allowed to fill on whichever axis binds.
+
+     This is not "the board should be 94% of the screen" - it is "the board takes
+     94% of the tighter of the two axes", because a square board seen from an
+     isometric angle is a WIDE diamond (about 1.56:1) and almost no viewport is
+     that shape. On a canvas narrower than 1.56:1 the width runs out first, so the
+     board ends up filling 94% of the width and whatever height that leaves; on a
+     wide one the height runs out first and it fills 94% of the height. Either way
+     it is as large as it can be without cropping a corner, which is the most a
+     fixed board at a fixed angle can ever be. */
+  const CAP3D_VIEW_FILL=0.94;
+  /* The camera basis for an orbit at (theta, phi), using the same convention as
+     cap3dLoop: the eye sits at target + dist*(sin(phi)cos(theta), cos(phi),
+     sin(phi)sin(theta)) and looks back at the target. Returned as plain arrays so
+     the fit can do its own arithmetic without allocating a Vector3 per corner,
+     eight times, on every resize. */
+  function cap3dCamBasis(theta,phi){
+    const sp=Math.sin(phi),cp=Math.cos(phi);
+    const f=[-sp*Math.cos(theta),-cp,-sp*Math.sin(theta)];      // forward, target -> eye is -f
+    // right = normalise(cross(forward, worldUp)) with worldUp = (0,1,0), which is
+    // (-f.z, 0, f.x); its length is sin(phi), never zero for a clamped phi.
+    const rl=Math.hypot(-f[2],f[0])||1;
+    const r=[-f[2]/rl,0,f[0]/rl];
+    // up = cross(right, forward), right is unit so no re-normalise needed
+    const u=[r[1]*f[2]-r[2]*f[1],r[2]*f[0]-r[0]*f[2],r[0]*f[1]-r[1]*f[0]];
+    return {f:f,r:r,u:u};
+  }
+  /* One clamp for the frustum half-height, shared by the fit and by both zoom
+     gestures. The three call sites each had their own literal, and the zoom ones
+     capped at 24 while the fit allowed 26 - so on a narrow viewport the fit could
+     produce a frame the wheel could not even reach, and zooming out from a fitted
+     frame silently cropped a corner. The floor sits well under anything the fit
+     can ask for, so it never binds on a fitted frame; the ceiling has to clear
+     the fit, so both live in one place. */
+  function cap3dClampHalfH(v){
+    const n=Number(v);
+    if(!isFinite(n)||n<=0)return 4.2;
+    return Math.min(30,Math.max(4.2,n));
+  }
+  /* Size the frustum so the whole board sits inside it with a margin.
+
+     The old version of this was the whole reason the board looked like it was
+     floating in a void. It measured the board as a circle of radius "diag" and
+     then used that SAME number as the frustum's HALF-HEIGHT:
+
+         const need = Math.max(ey/FILL, ex/FILL);   // ex is a width!
+         hh = need;
+
+     The horizontal extent was being compared against the vertical half-height and
+     then applied to it, and the width was never divided by the aspect ratio at
+     all. On a 16:9 viewport that asked for a half-height of 10.5 world units when
+     the board only needs 6.3 - so the board was drawn at 47% of the width and
+     roughly half the height, with a field of empty background around it.
+
+     The fix is to do what any camera fit has to do: measure the board in the
+     camera's own axes, then choose the single half-height that satisfies BOTH
+     constraints given the real aspect ratio.
+
+     For an orthographic camera the projected size does not depend on distance, so
+     this is exact rather than an approximation - eight corners in, one number
+     out, and the result is correct for any orbit angle and any viewport shape. */
   function cap3dFitCamera(snap){
-    if(!cap3d.camera)return;
-    // Fit against the FULL canvas at BOARD_VIEWPORT_FILL. The compact HUD
-    // overlay is translucent; the frustum shift in cap3dApplyFrustum keeps
-    // the board centered in the free area without shrinking it.
-    const FILL=cap3d.FILL||0.85;
-    const el=Math.PI/2-(cap3d.cam.tPhi||0.88);
-    const diag=cap3d.boardDiag||8.42;
-    const ey=Math.abs(diag*Math.cos(el))+1.4*Math.abs(Math.sin(el))+0.3;
-    const ex=diag+0.5;
-    const need=Math.max(ey/FILL,ex/FILL);
-    const hh=Math.min(26,Math.max(4.2,need));
-    cap3d.tHalfH=hh;
-    if(snap){cap3d.halfH=hh;cap3dApplyFrustum();}
+    if(!cap3d.camera||!cap3d.boardBox)return;
+    const bb=cap3d.boardBox;
+    const phi=Math.min(1.25,Math.max(0.35,cap3d.cam.tPhi||CAP3D_ISO_PHI));
+    const B=cap3dCamBasis(cap3d.cam.tTheta||0,phi);
+    const t=cap3d.cam.target;
+    let hw=0,hh=0;
+    for(let i=0;i<8;i++){
+      const x=i&1?bb.max.x:bb.min.x;
+      const y=i&2?bb.max.y:bb.min.y;
+      const z=i&4?bb.max.z:bb.min.z;
+      // Corner relative to the point the camera orbits: target.
+      const vx=x-t.x,vy=y-t.y,vz=z-t.z;
+      const px=vx*B.r[0]+vy*B.r[1]+vz*B.r[2];
+      const py=vx*B.u[0]+vy*B.u[1]+vz*B.u[2];
+      if(Math.abs(px)>hw)hw=Math.abs(px);
+      if(Math.abs(py)>hh)hh=Math.abs(py);
+    }
+    const w=cap3d.vw||0,h=cap3d.vh||0;
+    const aspect=h>0?w/h:1.6;
+    /* half-width is halfH*aspect, so needing hw of width means needing
+       hw/aspect of height. Whichever constraint is larger decides the frame. */
+    const need=Math.max(hh,hw/Math.max(0.2,aspect))/CAP3D_VIEW_FILL;
+    const halfH=cap3dClampHalfH(need);
+    cap3d.tHalfH=halfH;
+    /* Remember what this fit was for, so the render loop can tell whether the
+       orbit has moved since and re-fit (rather than re-fitting every frame). */
+    cap3d._fitTheta=cap3d.cam.tTheta;cap3d._fitPhi=phi;
+    if(snap){cap3d.halfH=halfH;cap3dApplyFrustum();}
   }
   function cap3dApplyFrustum(){
     if(!cap3d.camera)return;
     const w=cap3d.vw||50,h=cap3d.vh||50;
     const aspect=h>0?w/h:1,hh=cap3d.halfH||14;
-    const frac=h>0?(cap3d.hudH||0)/h:0;
-    const d=hh*frac;
-    const key=w+"x"+h+"|"+hh.toFixed(4)+"|"+frac.toFixed(4);
+    const key=w+"x"+h+"|"+hh.toFixed(4);
     if(key===cap3d._frustumKey)return;
     cap3d._frustumKey=key;
+    /* Symmetric about the target, so the board lands dead centre in the canvas -
+       and the canvas IS the game viewport, so it is centred in the viewport.
+
+       This used to subtract a HUD offset from top and bottom to push the board up
+       out from under the floating control panel. That panel moved out of #cap3dHud
+       and into the right-hand column some time ago (see the CSS comment there),
+       which left the guard in cap3dResize always reading zero - so the offset was
+       dead weight. Worse, an asymmetric frustum is not something cap3dFitCamera
+       accounted for: the fit sized for the full height and then the frustum slid,
+       so on any layout where the offset HAD been live the board would sit off
+       centre and off screen. With nothing over the canvas, centred is correct and
+       the fit is finally allowed to mean what it says. */
     cap3d.camera.left=-hh*aspect;cap3d.camera.right=hh*aspect;
-    cap3d.camera.top=hh-d;cap3d.camera.bottom=-hh-d;
+    cap3d.camera.top=hh;cap3d.camera.bottom=-hh;
     cap3d.camera.updateProjectionMatrix();
   }
   function cap3dResize(){
@@ -5862,11 +6016,12 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     const w=Math.max(50,wrap.clientWidth),h=Math.max(50,wrap.clientHeight);
     cap3d.renderer.setSize(w,h,false);
     cap3d.vw=w;cap3d.vh=h;
-    let hudH=0;
-    try{
-      if(centerEl&&centerEl.parentNode&&centerEl.parentNode.id==="cap3dHud")hudH=Math.min(h*0.45,centerEl.clientHeight+20);
-    }catch(_){}
-    cap3d.hudH=hudH;
+    /* Re-fit on every resize. The board is a fixed size in world units and the
+       viewport is not, so this is the only thing keeping it filling the frame
+       instead of shrinking on a big monitor or overflowing on a small one.
+       ResizeObserver plus the window listener both funnel here, and this is also
+       reached from cap3dShow/ResizeObserver when the 3D view is first switched on,
+       so the first frame the player sees is already fitted. */
     if(!cap3d.userZoom)cap3dFitCamera(false);
     cap3dApplyFrustum();
   }
@@ -5887,7 +6042,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       if(pts.size===2){
         const a=Array.from(pts.values());
         const d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
-        if(cap3d.pinch>0){cap3d.tHalfH=Math.min(24,Math.max(4.2,cap3d.tHalfH*(cap3d.pinch/Math.max(1,d))));cap3d.userZoom=true;}
+        if(cap3d.pinch>0){cap3d.tHalfH=cap3dClampHalfH(cap3d.tHalfH*(cap3d.pinch/Math.max(1,d)));cap3d.userZoom=true;}
         cap3d.pinch=d;return;
       }
       if(cap3d.drag&&pts.size===1){
@@ -5914,7 +6069,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     canvas.addEventListener("pointerup",up);
     canvas.addEventListener("pointercancel",up);
     canvas.addEventListener("pointerleave",function(){try{clearHover();}catch(_){}try{if(cap3d.hoverEntry&&cap3d.hoverEntry.entry){cap3d.hoverEntry.entry.group.position.y=0;cap3d.hoverEntry.entry.mesh.material[2].emissive.setHex(0x000000);}}catch(_){}cap3d.hoverEntry=null;cap3d.hovered=-1;});
-    canvas.addEventListener("wheel",function(e){e.preventDefault();cap3d.tHalfH=Math.min(24,Math.max(4.2,cap3d.tHalfH*(1+e.deltaY*0.001)));cap3d.userZoom=true;},{passive:false});
+    canvas.addEventListener("wheel",function(e){e.preventDefault();cap3d.tHalfH=cap3dClampHalfH(cap3d.tHalfH*(1+e.deltaY*0.001));cap3d.userZoom=true;},{passive:false});
   }
   function cap3dHover(e){
     if(!cap3d.ready||boardView!=="3d")return;
@@ -6717,9 +6872,16 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       const c=cap3d.cam;
       const k=reduced?1:Math.min(1,dt*7);
       c.theta+=(c.tTheta-c.theta)*k;c.phi+=(c.tPhi-c.phi)*k;
+      /* Re-fit when the orbit has moved since the last fit, so tilting the board
+         keeps it framed instead of letting a corner slide off the edge. Keyed on
+         the TARGET angle, not the animated one, so it runs once per drag rather
+         than once per frame, and skipped entirely once the player has zoomed -
+         their framing is theirs. The existing halfH lerp then eases the change in
+         instead of snapping. */
+      if(!cap3d.userZoom&&(c.tTheta!==cap3d._fitTheta||c.tPhi!==cap3d._fitPhi))cap3dFitCamera(false);
       cap3d.halfH+=(cap3d.tHalfH-cap3d.halfH)*k;
       cap3dApplyFrustum();
-      const sp=Math.sin(c.phi),y=Math.cos(c.phi),dist=60;
+      const sp=Math.sin(c.phi),y=Math.cos(c.phi),dist=c.dist;
       cap3d.camera.position.set(c.target.x+dist*sp*Math.cos(c.theta),c.target.y+dist*y,c.target.z+dist*sp*Math.sin(c.theta));
       cap3d.camera.lookAt(c.target);
       cap3dSync(false);
@@ -7270,7 +7432,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     try{localStorage.setItem(PREFS_KEY,JSON.stringify({speed:gameSpeed,music:musicVolume,sfx:sfxVolume}));}catch(e){}
   }
   function isFast(){return gameSpeed==="fast"&&!mp.active;}
-  function auctionSeconds(){return isFast()?7:10;}
+  function auctionSeconds(){return isFast()?4:5;}
   function setGameSpeed(v){
     gameSpeed=v==="fast"?"fast":"normal";
     savePrefs();
@@ -9345,7 +9507,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     const houseCost=isProp?HOUSE_COST[t.group]:0;
     const rentLine=isProp?`<div class="capital-monopoly-card"><div class="capital-monopoly-head"><span>${lang==="en"?"MONOPOLY PROGRESS":"ПРОГРЕСС МОНОПОЛИИ"}</span><strong>${escapeHtml(groupLine)}</strong></div><div class="capital-monopoly-track"><div class="capital-monopoly-fill" style="--property-color:${color};--property-glow:${glow};width:${progress.total?Math.round(progress.owned/progress.total*100):0}%"></div></div></div>${propertyRentLadderHtml(t)}`:"";
     const extra=isProp?`<div class="capital-property-stats"><div class="capital-property-stat"><span>${lang==="en"?"Base rent":"Базовая рента"}</span><strong>$${t.rent}</strong></div><div class="capital-property-stat"><span>${lang==="en"?"Monopoly rent":"Рента монополии"}</span><strong>$${t.rent*2}</strong></div><div class="capital-property-stat"><span>${lang==="en"?"House cost":"Дом"}</span><strong>$${houseCost}</strong></div></div>`:`<div class="capital-property-stats"><div class="capital-property-stat"><span>${lang==="en"?"Purchase":"Покупка"}</span><strong>$${t.price}</strong></div><div class="capital-property-stat"><span>${lang==="en"?"Current rent":"Текущая рента"}</span><strong>$${calcRent(t)}</strong></div><div class="capital-property-stat"><span>${lang==="en"?"Type":"Тип"}</span><strong>${escapeHtml(propertyGroupLabel(t))}</strong></div></div>`;
-    const buyModalHtml=`<div class="modal-bg capital-property-modal-bg" data-action-close="1" data-tile-id="${t.id}"><div class="modal capital-property-modal" style="--property-color:${color};--property-glow:${glow}"><div class="capital-property-hero"><div class="capital-property-kicker"><span class="capital-property-swatch" style="background:${color}"></span>${escapeHtml(propertyGroupLabel(t))}</div><div class="capital-property-title">${escapeHtml(tileLabel(t))}</div><div class="capital-property-price">$${t.price}</div><div class="capital-property-owner"><span class="capital-property-owner-dot" style="background:${color}"></span>${lang==="en"?"Available to buy":"Свободно для покупки"}</div></div><div class="capital-property-body">${extra}${rentLine}<div class="capital-property-actions"><button class="btn yes capital-property-buy capital-primary-action" id="buyYes" ${p.money<t.price?"disabled":""}>💰 ${lang==="en"?`Buy for $${t.price}`:`Купить за $${t.price}`}</button><button class="btn no capital-property-auction" id="buyNo">${lang==="en"?"↳ Skip purchase → auction":"↳ Не покупать → аукцион"}</button><button class="btn no" id="buyClose">✕ ${T("close")}</button></div><p class="capital-property-note">${lang==="en"?"If you skip a free property, it immediately goes to a live auction. Every bid resets the timer.":"Если отказаться от свободной недвижимости, она сразу отправляется на живой аукцион. Каждая ставка сбрасывает таймер."}</p></div></div></div>`;
+    const buyModalHtml=`<div class="modal-bg capital-property-modal-bg" data-action-close="1" data-tile-id="${t.id}"><div class="modal capital-property-modal" style="--property-color:${color};--property-glow:${glow}"><div class="capital-property-hero"><div class="capital-property-kicker"><span class="capital-property-swatch" style="background:${color}"></span>${escapeHtml(propertyGroupLabel(t))}</div><div class="capital-property-title">${escapeHtml(tileLabel(t))}</div><div class="capital-property-price">$${t.price}</div><div class="capital-property-owner"><span class="capital-property-owner-dot" style="background:${color}"></span>${lang==="en"?"Available to buy":"Свободно для покупки"}</div></div><div class="capital-property-body">${extra}${rentLine}<div class="capital-property-actions capital-property-actions-buy"><button class="btn yes capital-property-buy capital-primary-action" id="buyYes" ${p.money<t.price?"disabled":""}>💰 ${lang==="en"?`Buy for $${t.price}`:`Купить за $${t.price}`}</button><button class="btn no capital-property-auction" id="buyNo">${lang==="en"?"↳ Skip purchase → auction":"↳ Не покупать → аукцион"}</button></div><p class="capital-property-note">${lang==="en"?"If you skip a free property, it immediately goes to a live auction. Every bid resets the timer.":"Если отказаться от свободной недвижимости, она сразу отправляется на живой аукцион. Каждая ставка сбрасывает таймер."}</p></div></div></div>`;
     // For a remote turn the host must keep the authoritative modal state,
     // but must NOT display that modal to the host. The actual player receives
     // the same HTML in the next snapshot and sees it locally.
@@ -9373,11 +9535,12 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     };
     const buy=bg.querySelector("#buyYes");if(buy)buy.onclick=finishBuy;
     const no=bg.querySelector("#buyNo");if(no)no.onclick=()=>{if(remoteTurn)return;clearModal();startHumanAuction(p,t);};
-    // Close used to be wired to the same action as Skip purchase, so both buttons
-    // put the property straight into an auction and the second one was a lie.
-    // Closing now just dismisses the dialog: the property stays with the bank,
-    // and landing on it again offers the purchase again.
-    //
+    /* The dialog offers exactly two decisions: buy, or skip to auction. A Close
+       button used to sit beside them, and it was a third way out that decided
+       nothing the player could see - the property silently stayed with the bank
+       and the turn ended without an auction or a purchase. It is gone.
+
+       dismissBuy survives for the backdrop only. */
     // Dismissing still has to END THE TILE ACTION. Roll Dice requires
     // WAITING_FOR_ROLL and this dialog only ever appears during TILE_ACTION, so
     // clearing the dialog on its own parked the turn in TILE_ACTION with nothing
@@ -9390,10 +9553,9 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
       const localRun=runId;
       setTimeout(()=>{if(validRun(localRun)&&validTurn(p)&&state===STATES.TILE_ACTION&&!modalOpen)completeTileAction(p);},isFast()?300:700);
     };
-    const close=bg.querySelector("#buyClose");if(close)close.onclick=dismissBuy;
-    // Clicking outside the dialog dismisses it, exactly like Close. It used to
-    // start the auction, so a stray click next to the buttons put the property
-    // up for sale - the same accident the duplicate Close button invited.
+    // Clicking outside the dialog dismisses it: the property stays with the bank and
+    // landing on it again offers the purchase again. It used to start the auction,
+    // so a stray click next to the buttons put the property up for sale.
     bg.onclick=e=>{if(e.target===bg)dismissBuy();};
   }
 
@@ -9520,9 +9682,11 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
 
   /* ---------- Smart AI for live auctions ---------- */
   const AUCTION_STEP = 10;
-  const AUCTION_TIME = 10;
-  const AUCTION_BOT_DELAY_MIN = 1000;
-  const AUCTION_BOT_DELAY_MAX = 3000;
+  /* How long an auction runs is auctionSeconds(), and how long a bot waits to
+     answer is a fraction of that - see auctionScheduleBotReaction. The three
+     constants that used to sit here (AUCTION_TIME, AUCTION_BOT_DELAY_MIN,
+     AUCTION_BOT_DELAY_MAX) were already unreferenced, and AUCTION_TIME = 10 in
+     particular sat next to a five second auction reading like it was the rule. */
   let activeAuction = null;
   let mpPendingCard = null;
 
@@ -9635,6 +9799,12 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
   function auctionResetTimer(a){
     a.endsAt=performance.now()+auctionSeconds()*1000;
     a.lastBidAt=performance.now();
+    // Bumped on every reset and published with the auction. The bar has to know a
+    // bid landed rather than infer it from the clock jumping: a guest re-bases its
+    // own endsAt from every snapshot, so "the bar went up" is network jitter about
+    // as often as it is a bid, and inferring it flashes at nothing. A counter is
+    // carried over the wire instead, which is exact and costs one number.
+    a.clockSeq=(Number(a.clockSeq)||0)+1;
   }
 
   function auctionFinish(a){
@@ -9679,20 +9849,105 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     completeTileAction(a.turnPlayer);
   }
 
+  /* ---------- The auction clock ----------
+     The bar is the timer and the digits are only its readout, so the fill is
+     driven from rAF: it drains smoothly rather than stepping once a second, and
+     it gives the refill somewhere to happen.
+
+     A new bid sends the clock back to full, which on its own is a jump, and a
+     jump reads as a glitch. So the fill is not set straight to 100 - it keeps the
+     width it had and eases up to full over AUCTION_CLOCK_REFILL_MS. The drain
+     runs underneath the whole time and the tween aims at the LIVE target rather
+     than a frozen one, so the refill finishes exactly where the clock is instead
+     of overshooting it and dropping back a frame later. */
+
+  const AUCTION_CLOCK_REFILL_MS=420;
+  /* Where the bar is drawn from, and how it got there. seq is the last clock
+     reset this screen has seen - comparing it against the auction's own clockSeq
+     is what decides a refill, on the host and on a guest alike. */
+  const auctionClock={pct:1,from:1,at:-1e9,seq:0};
+
+  function auctionClockTotal(){return auctionSeconds()*1000;}
+
+  /* The guest's clock handle. It used to be a 120ms interval; it is a rAF loop
+     now, because the bar has to move every frame and 120ms of stepping is
+     exactly the chop the bar exists to remove. A guest never settles the auction
+     - the host owns the result - so the loop only paints and is allowed to end
+     itself when the dialog goes. */
+  function mpStopAuctionClock(){
+    const id=mp.auctionTimer;
+    if(!id)return;
+    if(mp.auctionClockIsRaf)cancelAnimationFrame(id);else clearInterval(id);
+    mp.auctionTimer=null;mp.auctionClockIsRaf=false;
+  }
+
+  /* A new auction starts with a full bar. Called when the dialog is built, which
+     for the host is createLiveAuction -> renderAuction and for a guest is the
+     snapshot that opens the dialog, so both get here without a special case.
+     Seeded from the auction's own sequence, so the first painted frame is not
+     mistaken for a refill of the auction that ran before it. */
+  function auctionClockHardReset(a){
+    auctionClock.pct=1;auctionClock.from=1;auctionClock.at=-1e9;
+    auctionClock.seq=a?(Number(a.clockSeq)||0):0;
+    const bar=document.getElementById("auctionClock");
+    if(bar)bar.classList.remove("hit","danger");
+    const fill=document.getElementById("auctionClockFill");
+    if(fill)fill.style.transform="scaleX(1)";
+  }
+
+  /* Paints the clock and returns what is left, in ms. The CALLER decides whether
+     running out means anything: the host settles the auction, a guest just lets
+     the bar reach empty and waits to be told, because the host owns the result. */
+  function auctionPaintTimer(a,now){
+    const total=auctionClockTotal();
+    const left=Math.max(0,(a.endsAt||now)-now);
+    const target=total>0?Math.min(1,left/total):0;
+
+    const bar=document.getElementById("auctionClock");
+    const fill=document.getElementById("auctionClockFill");
+    const timerEl=document.getElementById("auctionTimer");
+
+    // clockSeq moves when a bid re-arms the clock. That, and not a jump in the
+    // bar, is what starts a refill: see auctionResetTimer for why the bar can't be
+    // trusted to tell the two apart on a client.
+    if((Number(a.clockSeq)||0)!==auctionClock.seq){
+      auctionClock.seq=Number(a.clockSeq)||0;
+      auctionClock.from=auctionClock.pct;
+      auctionClock.at=now;
+      if(bar){
+        // Remove, reflow, re-add. Two bids inside the window have to give the
+        // pulse their own, rather than the second one inheriting the first.
+        bar.classList.remove("hit");
+        void bar.offsetWidth;
+        bar.classList.add("hit");
+      }
+    }
+    auctionClock.pct=target;
+
+    const since=now-auctionClock.at;
+    const refilling=since<AUCTION_CLOCK_REFILL_MS;
+    if(bar&&!refilling&&bar.classList.contains("hit"))bar.classList.remove("hit");
+    const shown=refilling
+      ? auctionClock.from+(target-auctionClock.from)*(1-Math.pow(1-since/AUCTION_CLOCK_REFILL_MS,3))
+      : target;
+
+    if(fill)fill.style.transform=`scaleX(${Math.max(0,Math.min(1,shown)).toFixed(4)})`;
+    if(bar)bar.classList.toggle("danger",total>0&&left/total<=0.4);
+    if(timerEl){
+      const seconds=Math.ceil(left/1000);
+      const txt=`${seconds}`;
+      if(timerEl.textContent!==txt)timerEl.textContent=txt;
+      timerEl.classList.toggle("danger",seconds<=2);
+    }
+    return left;
+  }
+
   function auctionStartTimer(a){
     const tick=()=>{
       if(!a||a.closed||activeAuction!==a)return;
       // The clock is frozen while a single-player game is paused.
       if(a.pausedLeft!=null){const id=requestAnimationFrame(tick);a.rafIds.add(id);return;}
-      const left=Math.max(0,a.endsAt-performance.now());
-      a.timeLeft=left;
-      const seconds=Math.ceil(left/1000);
-      const timerEl=document.getElementById("auctionTimer");
-      if(timerEl){
-        timerEl.textContent=`${seconds}`;
-        timerEl.classList.toggle("danger",seconds<=3);
-      }
-      if(left<=0){auctionFinish(a);return;}
+      if(auctionPaintTimer(a,performance.now())<=0){auctionFinish(a);return;}
       const id=requestAnimationFrame(tick);
       a.rafIds.add(id);
     };
@@ -9705,6 +9960,12 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     const min=a.currentBid+AUCTION_STEP;
     const bid=Math.floor(Number(amount)||0);
     if(bid<min||bid>p.money)return false;
+    /* Outbidding yourself spends money for nothing, so it is refused here rather
+       than merely hidden by the buttons. auctionCanBid already keeps the row from
+       offering it; this is the same rule enforced where it cannot be bypassed -
+       a stale button clicked before the next snapshot, or a bot reaction landing
+       after the human has already taken the lead. */
+    if(a.highestBidder===p.id)return false;
     if(mp.active&&!mp.host){
       if(!mpIsLocalPlayer(p)||!mp.connected)return false;
       mpSend({kind:"action",playerId:mp.clientId,action:{type:"auctionBid",amount:bid,tileId:a.tile.id}});
@@ -9786,7 +10047,13 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     if(!bot)return;
 
     const localRun=runId;
-    const minD=isFast()?400:AUCTION_BOT_DELAY_MIN,maxD=isFast()?1000:AUCTION_BOT_DELAY_MAX;
+    /* Bots think in fractions of the clock, not in fixed milliseconds. The auction
+       got shorter, so fixed delays would have silently halved how many reactions
+       fit into one: on a five second bar these give the same three or four turns a
+       ten second one used to. Fast mode lands on the 400-1000ms it always used. */
+    const span=auctionClockTotal();
+    const minD=isFast()?Math.round(span*.10):Math.round(span*.15);
+    const maxD=isFast()?Math.round(span*.25):Math.round(span*.45);
     const delay=minD+Math.floor(Math.random()*(maxD-minD+1));
 
     const id=setTimeout(()=>{
@@ -9831,13 +10098,19 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
      has to be invalidated every time the price moves; here it cannot drift from
      what is actually on screen.
 
-     Three rungs, not five. The row is a shortcut, and a shortcut stops being one
-     when it is a menu: with the minimum raise plus four multipliers the buttons
-     crowded each other, the two small rungs sat next to each other and offered
-     almost the same bid, and reading the row cost more than typing the figure.
-     Two multipliers either side of the useful middle - 1.5x to press, 2.5x to
-     swing - leave three readable choices with real gaps between them, and MAX
-     beside them covers the case nobody wants to arithmetic.
+     Three rungs and a field, and nothing else. The row is a shortcut, and a
+     shortcut stops being one when it is a menu: with the minimum raise plus four
+     multipliers the buttons crowded each other, the two small rungs sat next to
+     each other and offered almost the same bid, and reading the row cost more
+     than typing the figure. Two multipliers either side of the useful middle -
+     1.5x to press, 2.5x to swing - leave three readable choices with real gaps
+     between them.
+
+     A MAX button sat here for a while and was wrong for the same reason. It made
+     a fourth option that was not a decision - it was just "your whole purse",
+     and it invited the mistake of bidding everything by accident. Anything above
+     the top rung is a typed bid, which is what a player actually wants when they
+     mean to go big.
 
      Every rung is rounded UP to the minimum step, so a bid is always legal no
      matter how the price is sitting relative to AUCTION_STEP. Rungs a player
@@ -9861,48 +10134,78 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
   function auctionBidRungs(a){
     const min=a.currentBid+AUCTION_STEP;
     const set=new Set([min]);
-    AUCTION_BID_MULTIPLIERS.forEach(m=>{const v=auctionRoundUp(a.currentBid*m);set.add(Math.max(min,v));});
+    /* Scaled off the current price, except before the first bid - where the price
+       is zero and every multiple of it is zero too, which would collapse the row
+       to a single $10 button at the exact moment the player is looking for an
+       opening. With nothing on the table the minimum raise is the base instead, so
+       an opening row reads $10 / $20 / $30. */
+    const base=a.currentBid>0?a.currentBid:min;
+    AUCTION_BID_MULTIPLIERS.forEach(m=>{const v=auctionRoundUp(base*m);set.add(Math.max(min,v));});
     return [...set].sort((x,y)=>x-y).slice(0,AUCTION_MAX_RUNGS);
   }
-  function auctionBidControlsHtml(a,canBid,minBid,me){
-    const en=lang==="en";
-    const cash=Math.max(0,Math.floor(me?.money||0));
-    const rungs=auctionBidRungs(a);
-    const buttons=rungs.map((bid,i)=>{
-      // Dim the rungs a player cannot afford instead of hiding them, so the
-      // ladder keeps its shape and the greyed-out rungs explain themselves.
-      const afford=canBid&&cash>=bid;
-      // The label is the amount this button places, not the increase.
-      return `<button class="btn yes auction-bid-step${i?" auction-bid-step-lg":""}" data-bid-amount="${bid}" ${afford?"":"disabled"}>$${bid}</button>`;
-    }).join("");
-    // Max is the whole purse: one tap takes the price as high as it can go.
-    // Capped at nothing else - the bid still has to be legal and affordable, and
-    // auctionPlaceBid enforces both, so this cannot overreach.
-    const maxBtn=`<button class="btn yes auction-bid-max" data-bid-amount="${Math.min(cash,Math.max(0,cash))}" ${(canBid&&cash>=minBid)?"":"disabled"}>${en?"MAX":"МАКС"}</button>`;
-    return `<div class="auction-bid-controls">
-            <div class="auction-bid-ladder">${buttons}${maxBtn}</div>
-            <div class="auction-bid-custom">
-              <input id="auctionBidInput" class="setup-input" type="number" min="${minBid}" max="${cash}" step="${AUCTION_STEP}" value="${Math.min(cash,minBid)}" ${canBid?"":"disabled"}>
-              <button class="btn yes" id="auctionBidCustom" ${canBid?"":"disabled"}>${en?"Bid":"Ставка"}</button>
-            </div>
-          </div>`;
+  /* Whether this player may raise at all right now.
+
+     Two auction rules live here rather than in the markup, because the markup is
+     only one of the callers: a player who already leads has nothing to outbid,
+     and a player who cannot cover the minimum raise has no move at all.
+     auctionPlaceBid re-checks the money side, so this only decides what is drawn. */
+  function auctionCanBid(a,me){
+    if(!a||a.closed||!me||me.bankrupt||!tIsFree(a.tile))return false;
+    if(a.highestBidder===me.id)return false;
+    return me.money>=a.currentBid+AUCTION_STEP;
   }
+  /* The live buttons: the rungs this player can actually pay for, in order.
+     A rung beyond the purse is not drawn. richup shortens the row for a short
+     purse instead of greying out the far end, and that also stops the row
+     offering a bid the engine would refuse. */
+  function auctionBidOptions(a,me){
+    if(!auctionCanBid(a,me))return [];
+    const cash=Math.max(0,Math.floor(me.money));
+    return auctionBidRungs(a).filter(bid=>bid<=cash);
+  }
+  function auctionBidLadderHtml(a,me){
+    const opts=auctionBidOptions(a,me);
+    if(!opts.length){
+      const why=(me&&a.highestBidder===me.id)
+        ?(lang==="en"?"You are already the highest bidder.":"Вы уже лидируете.")
+        :(lang==="en"?"Not enough cash to raise the bid.":"Недостаточно денег для повышения ставки.");
+      return `<div class="auction-bid-ladder"></div><div class="auction-bid-none">${why}</div>`;
+    }
+    // The column count follows the number of live buttons so they always fill
+    // the width - two buttons spread over the row read better than two of three.
+    const cols=`grid-template-columns:repeat(${opts.length},minmax(0,1fr))`;
+    const buttons=opts.map((bid,i)=>`<button class="btn yes auction-bid-step${i?" auction-bid-step-lg":""}" data-bid-amount="${bid}">$${bid}</button>`).join("");
+    return `<div class="auction-bid-ladder" style="${cols}">${buttons}</div>`;
+  }
+  function auctionBidControlsHtml(a,me){
+    return `<div class="auction-bid-controls">${auctionBidLadderHtml(a,me)}</div>`;
+  }
+  /* One click, one bid.
+
+     The lock keeps a double click from placing two bids. The engine already
+     refuses the second - after the first, the amount clicked sits below the new
+     minimum - but a guest would still put two messages on the wire before the
+     snapshot came back, and the host would be rejecting the second for the wrong
+     reason. The key includes the amount, so a click on a different rung is never
+     swallowed, and a rejected bid releases the lock immediately. */
   function wireAuctionBidControls(a,me,bg){
     if(!bg)return;
-    const ladder=bg.querySelector(".auction-bid-ladder");
-    if(ladder)ladder.addEventListener("click",e=>{
+    // Bound on the wrapper, which the sync never replaces, and delegated to the
+    // button. The row itself IS rebuilt whenever the price moves, so a listener on
+    // the row would be thrown away with the first rebuild.
+    const host=bg.querySelector(".auction-bid-controls");
+    if(!host)return;
+    host.addEventListener("click",e=>{
       const b=e.target.closest("[data-bid-amount]");
       if(!b||b.disabled)return;
+      const amount=Number(b.dataset.bidAmount);
+      const guardKey=a.currentBid+"|"+amount;
+      if(host._lastKey===guardKey)return;
+      host._lastKey=guardKey;
       // The button carries the total it places, so the click is that amount and
       // not a step added to the current price.
-      auctionPlaceBid(a,me,Number(b.dataset.bidAmount));
+      if(auctionPlaceBid(a,me,amount)===false)host._lastKey=null;
     });
-    bg.querySelector("#auctionBidCustom").onclick=()=>{
-      const input=bg.querySelector("#auctionBidInput");
-      auctionPlaceBid(a,me,Number(input.value));
-    };
-    const input=bg.querySelector("#auctionBidInput");
-    input?.addEventListener("keydown",e=>{if(e.key==="Enter")bg.querySelector("#auctionBidCustom")?.click();});
   }
   let auctionLastHistoryKey="";
   function auctionHistoryKey(a){return (a.history||[]).map(h=>h.playerId+":"+h.amount).join("|");}
@@ -9920,16 +10223,12 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
   function syncAuctionModal(a,bg){
     if(!a||!bg)return;
     const leader=a.highestBidder==null?null:players[a.highestBidder];
-    const minBid=a.currentBid+AUCTION_STEP;
     const me=(mp.active?mpLocalPlayer():players.find(x=>x.human&&!x.bankrupt))||null;
-    const canBid=!!me&&!me.bankrupt&&me.money>=minBid&&tIsFree(a.tile);
     const currentEl=bg.querySelector("[data-auction-current]");
     const leaderEl=bg.querySelector("[data-auction-leader]");
     const cashEl=bg.querySelector("[data-auction-cash]");
     const historyEl=bg.querySelector(".auction-history");
-    const stepBtn=bg.querySelector(".auction-bid-ladder");
-    const customBtn=bg.querySelector("#auctionBidCustom");
-    const input=bg.querySelector("#auctionBidInput");
+    const stepBtn=bg.querySelector(".auction-bid-controls");
     // Text nodes are cheap to compare and cheap to skip: a write that changes
     // nothing still costs a style recalculation.
     const setText=(el,v)=>{if(el&&el.textContent!==v)el.textContent=v;};
@@ -9943,35 +10242,25 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
         historyEl.innerHTML=auctionHistoryRows(a)||`<div class="auction-empty">${lang==="en"?"No bids yet. Be the first to bid.":"Ставок пока нет. Сделай первую ставку."}</div>`;
       }
     }
-    /* The rungs are multiples of the current price, so they are different numbers
-     every time the price moves: this cannot just re-enable the buttons it finds,
-     it has to rebuild the row whenever the rung set has actually changed. It is
-     rebuilt on a string key rather than on every tick, so a 350ms sync that did
-     not change the price does not replace the nodes the player is aiming at -
-     which would drop the hover and the click. */
+    /* The row is a function of the price, the purse and who leads, so it is rebuilt
+     whenever any of those change. Rebuilding on a string key rather than on every
+     tick matters: a 350ms sync that did not change anything must not replace the
+     nodes the player is aiming at, which would drop the hover and the click. */
     if(stepBtn){
-      const cash=Math.max(0,Math.floor(me?.money||0));
-      const rungs=auctionBidRungs(a);
-      const key=rungs.join(",")+"|"+cash+"|"+(canBid?1:0);
+      const opts=auctionBidOptions(a,me);
+      const leading=!!me&&a.highestBidder===me.id;
+      const key=opts.join(",")+"|"+(leading?"lead":"bid");
       if(key!==stepBtn._bidKey){
         stepBtn._bidKey=key;
-        const buttons=rungs.map((bid,i)=>{
-          const afford=canBid&&cash>=bid;
-          return `<button class="btn yes auction-bid-step${i?" auction-bid-step-lg":""}" data-bid-amount="${bid}" ${afford?"":"disabled"}>$${bid}</button>`;
-        }).join("");
-        const en=lang==="en";
-        stepBtn.innerHTML=buttons+`<button class="btn yes auction-bid-max" data-bid-amount="${cash}" ${(canBid&&cash>=minBid)?"":"disabled"}>${en?"MAX":"МАКС"}</button>`;
+        // A fresh row must not inherit the double-click lock of the old one.
+        stepBtn._lastKey=null;
+        // The whole block is rewritten, buttons and the note together, so the two
+        // cannot fall out of step: previously the note was only written into a
+        // node that existed if the very first render had produced one, and a
+        // player who took the lead on the first click got an empty row and no
+        // explanation at all.
+        stepBtn.innerHTML=auctionBidLadderHtml(a,me);
       }
-    }
-    if(customBtn)customBtn.disabled=!canBid;
-    if(input){
-      input.min=String(minBid);
-      input.max=String(Math.max(0,Math.floor(me?.money||0)));
-      input.step=String(AUCTION_STEP);
-      if(!document.activeElement||document.activeElement!==input || Number(input.value)<minBid || Number(input.value)>Number(input.max)){
-        input.value=String(Math.min(Math.max(0,Math.floor(me?.money||0)),minBid));
-      }
-      input.disabled=!canBid;
     }
     const rule=bg.querySelector(".auction-rule");
     setText(rule,lang==="en"?`Minimum raise: $${AUCTION_STEP}. Every new bid resets the ${auctionSeconds()}-second timer.`:`Минимальный шаг: $${AUCTION_STEP}. Каждая новая ставка сбрасывает таймер на ${auctionSeconds()} секунд.`);
@@ -10018,9 +10307,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     }
 
     const leader=a.highestBidder==null?null:players[a.highestBidder];
-    const minBid=a.currentBid+AUCTION_STEP;
     const me=(mp.active?mpLocalPlayer():players.find(x=>x.human&&!x.bankrupt))||null;
-    const canBid=!!me&&!me.bankrupt&&me.money>=minBid&&tIsFree(a.tile);
     // Any auction the preview hook leaves behind belongs to a different dialog;
     // renderAuction records its own key below, so clear the old one first.
     auctionLastHistoryKey="";
@@ -10037,12 +10324,16 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
               <div><span>${T("yourCash")}</span><strong data-auction-cash>$${Math.max(0,Math.floor(me?.money||0))}</strong></div>
             </div>
           </div>
+          <div class="auction-clock" id="auctionClock"><div class="auction-clock-fill" id="auctionClockFill"></div></div>
           <div class="auction-history">${auctionHistoryRendered(a)||`<div class="auction-empty">${lang==="en"?"No bids yet. Be the first to bid.":"Ставок пока нет. Сделай первую ставку."}</div>`}</div>
-          ${auctionBidControlsHtml(a,canBid,minBid,me)}
+          ${auctionBidControlsHtml(a,me)}
           <div class="auction-rule">${lang==="en"?`Minimum raise: $${AUCTION_STEP}. Every new bid resets the ${auctionSeconds()}-second timer.`:`Минимальный шаг: $${AUCTION_STEP}. Каждая новая ставка сбрасывает таймер на ${auctionSeconds()} секунд.`}</div>`;
 
     const bg=openModal(auctionShellHtml(a,bidsHtml,""),"auction");
     if(!bg)return;
+    // Fresh dialog, so a fresh clock. This is the only point the bar is filled
+    // outright: every other refill is the eased one in auctionPaintTimer.
+    auctionClockHardReset(a);
     wireAuctionBidControls(a,me,bg);
     return bg;
   }
@@ -10055,6 +10346,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
       currentBid:0,
       highestBidder:null,
       closed:false,
+      clockSeq:0,
       endsAt:performance.now()+auctionSeconds()*1000,
       lastBidAt:performance.now(),
       history:[],
@@ -10522,7 +10814,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     pausedByUser=false;syncPause();renderPauseUI();
     // A live auction keeps its own timers; left running it would close dialogs in the next game.
     if(activeAuction){activeAuction.closed=true;auctionCancelTimers(activeAuction);activeAuction=null;}
-    clearInterval(mp.auctionTimer);mpPendingCard=null;authoritativeModalData=null;mp.lastModalSig="";mpPendingTrade=null;mpLastTradeId=null;
+    mpStopAuctionClock();mpPendingCard=null;authoritativeModalData=null;mp.lastModalSig="";mpPendingTrade=null;mpLastTradeId=null;
     if(toastStack){toastStack.remove();toastStack=null;}clearActionEventQueue();if(modalRoot)modalRoot.innerHTML="";if(howModalRoot)howModalRoot.innerHTML="";if(tooltip)tooltip.classList.remove("show");tutorialClearFocus();document.getElementById("capitalTutorial")?.remove();tutorialActive=false;tutorialStep=0;
     document.querySelectorAll("#gameWrap .cap-hover-main,#gameWrap .cap-hover-group,#gameWrap .cap-hover-dim").forEach(e=>e.classList.remove("cap-hover-main","cap-hover-group","cap-hover-dim"));
     TILES.forEach(t=>{if(["prop","station","util"].includes(t.type)){t.owner=null;t.houses=0;t.hotel=false;t.mortgaged=false;}});
@@ -10856,27 +11148,27 @@ document.addEventListener("keydown",e=>{
       const tile=TILES[11];
       const fake={
         tile:tile,turnPlayer:players[0],currentBid:120,highestBidder:2,closed:false,
-        endsAt:performance.now()+7000,lastBidAt:performance.now(),
+        clockSeq:0,endsAt:performance.now()+auctionClockTotal(),lastBidAt:performance.now(),
         history:[{playerId:0,amount:100},{playerId:2,amount:120}]
       };
       auctionLastHistoryKey="";
       const en=lang==="en";
       const me=players.find(x=>x.human&&!x.bankrupt)||players[0]||null;
-      const canBid=!!me&&!me.bankrupt;
-      const minBid=fake.currentBid+AUCTION_STEP;
       const bids=`
           <div class="auction-body-top">
-            <div class="auction-timer-wrap"><span>${en?"Time":"Время"}</span><strong id="auctionTimer">7</strong></div>
+            <div class="auction-timer-wrap"><span>${en?"Time":"Время"}</span><strong id="auctionTimer">${auctionSeconds()}</strong></div>
             <div class="auction-stats">
               <div><span>${en?"Current bid":"Текущая ставка"}</span><strong data-auction-current>$${fake.currentBid}</strong></div>
               <div><span>${en?"Highest bidder":"Лидер"}</span><strong data-auction-leader>${escapeHtml(playerLabel(players[2]||players[0]))}</strong></div>
               <div><span>${T("yourCash")}</span><strong data-auction-cash>$${Math.max(0,Math.floor(me?.money||0))}</strong></div>
             </div>
           </div>
+          <div class="auction-clock" id="auctionClock"><div class="auction-clock-fill" id="auctionClockFill"></div></div>
           <div class="auction-history">${auctionHistoryRendered(fake)||`<div class="auction-empty">${en?"No bids yet. Be the first to bid.":"Ставок пока нет."}</div>`}</div>
-          ${auctionBidControlsHtml(fake,canBid,minBid,me)}
+          ${auctionBidControlsHtml(fake,me)}
           <div class="auction-rule">${en?`Minimum raise: $${AUCTION_STEP}. Every new bid resets the ${auctionSeconds()}-second timer.`:`Минимальный шаг: $${AUCTION_STEP}. Каждая новая ставка сбрасывает таймер на ${auctionSeconds()} секунд.`}</div>`;
       window.__auctionPreviewRef=fake;
+      auctionClockHardReset(fake);
       window.__auctionPreviewWire=()=>{
         const bg=modalRoot&&modalRoot.querySelector?modalRoot.querySelector(".auction-live-bg"):null;
         if(bg)wireAuctionBidControls(fake,players.find(x=>x.human&&!x.bankrupt)||players[0]||null,bg);
@@ -10890,7 +11182,11 @@ document.addEventListener("keydown",e=>{
       const bg=modalRoot&&modalRoot.querySelector?modalRoot.querySelector(".auction-live-bg"):null;
       if(!bg||!window.__auctionPreviewRef)return null;
       syncAuctionModal(window.__auctionPreviewRef,bg);
-      return {rows:bg.querySelectorAll(".auction-history-row").length};
+      // Painted once per call so the hook shows the clock where it really is,
+      // rather than whatever the dialog was built with.
+      auctionPaintTimer(window.__auctionPreviewRef,performance.now());
+      const fill=bg.querySelector("#auctionClockFill");
+      return {rows:bg.querySelectorAll(".auction-history-row").length,clock:fill?fill.style.transform:null};
     },
     tradeOfferPreview:function(o){
       const opt=o||{};
