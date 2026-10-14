@@ -515,7 +515,7 @@ body{
   box-shadow:0 14px 40px rgba(0,0,0,.23)!important;
   padding:15px!important;
 }
-#gameWrap .panel h3{color:#718096!important;font-size:10px!important;letter-spacing:.14em!important;margin-bottom:11px!important}
+#gameWrap .panel h3{color:#8d9aad!important;font-size:10px!important;letter-spacing:.14em!important;margin-bottom:11px!important}
 #gameWrap .player-row{position:relative!important;transition:background .18s ease,transform .18s ease,border-color .18s ease!important}
 #gameWrap .player-row.active{transform:translateX(2px)!important}
 #gameWrap .player-row.active:before{
@@ -848,9 +848,9 @@ body{
 .cap-music-label{font-size:12px;color:#aab6c7;font-weight:750}
 .cap-music-value{font-size:13px;font-weight:900;color:#f4c84f;min-width:42px;text-align:right}
 #capitalMusicRange{width:100%;accent-color:#f4c84f;cursor:pointer}
-.cap-music-ticks{display:grid;grid-template-columns:repeat(11,1fr);gap:0;margin-top:3px;color:#69788e;font-size:8px;font-weight:800;text-align:center}
+.cap-music-ticks{display:grid;grid-template-columns:repeat(11,1fr);gap:0;margin-top:3px;color:#8d9aad;font-size:8px;font-weight:800;text-align:center}
 .cap-music-ticks span.active{color:#f4c84f}
-.cap-music-hint{margin-top:12px;color:#718096;font-size:10px;line-height:1.4}
+.cap-music-hint{margin-top:12px;color:#8d9aad;font-size:10px;line-height:1.4}
 @media (max-width:760px){
   #capitalMusicSettings{top:auto;bottom:74px;right:10px;width:min(330px,calc(100vw - 20px))}
 }
@@ -1202,7 +1202,7 @@ body{
   letter-spacing:-.02em;white-space:nowrap
 }
 .auction-bid-ladder .auction-bid-step-lg{font-size:15px}
-.auction-bid-none{padding:12px 8px;text-align:center;color:#78869a;font-size:12px;line-height:1.35}
+.auction-bid-none{padding:12px 8px;text-align:center;color:#8d9aad;font-size:12px;line-height:1.35}
 @media (max-width:520px){
   .auction-bid-ladder{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
@@ -1268,8 +1268,8 @@ body{
 }
 .auction-history-row:last-child{border-bottom:0}
 .auction-history-row strong{color:#f4c95d}
-.auction-empty{padding:14px 5px;text-align:center;color:#78869a;font-size:12px}
-.auction-rule{margin-top:10px;color:#77859a;font-size:11px;line-height:1.4;text-align:center}
+.auction-empty{padding:14px 5px;text-align:center;color:#8d9aad;font-size:12px}
+.auction-rule{margin-top:10px;color:#8d9aad;font-size:11px;line-height:1.4;text-align:center}
 @media (max-width:560px){
   .auction-stats{grid-template-columns:1fr 1fr}
   .auction-head{gap:10px}
@@ -1392,7 +1392,7 @@ body{
    .capital-property-actions is also the management dialog's grid, where several
    actions sit side by side and must keep doing that. */
 .capital-property-actions-buy .capital-property-auction{grid-column:1/-1}
-.capital-property-note{margin:11px 0 0!important;text-align:center;color:#758398!important;font-size:10px!important;line-height:1.45!important}
+.capital-property-note{margin:11px 0 0!important;text-align:center;color:#8d9aad!important;font-size:10px!important;line-height:1.45!important}
 .capital-acquired-fx{
   position:fixed;
   left:50%;
@@ -1756,9 +1756,12 @@ html[lang="ru"] #gameWrap .tile .build-badge{font-size:7px!important}
 html[lang="ru"] #gameWrap .panel{padding:13px!important}
 html[lang="ru"] #gameWrap .panel h3{font-size:10px!important;letter-spacing:.09em!important;margin-bottom:9px!important}
 html[lang="ru"] #gameWrap .player-row{gap:8px!important;padding:8px 7px!important;line-height:1.15!important}
-html[lang="ru"] #gameWrap .player-row .pname{font-size:12px!important;line-height:1.15!important}
-html[lang="ru"] #gameWrap .player-row .pmoney{font-size:12px!important;white-space:nowrap!important}
-html[lang="ru"] #gameWrap .capital-personality{font-size:9px!important;padding:2px 4px!important;max-width:100%!important}
+html[lang="ru"] #gameWrap .player-row .pname{font-size:13px!important;line-height:1.15!important}
+/* A balance is a number and does not get longer in Russian, so there is no
+   reason for it to render three pixels smaller than it does in English. This
+   was the largest language-dependent size difference in the whole interface. */
+html[lang="ru"] #gameWrap .player-row .pmoney{font-size:14px!important;white-space:nowrap!important}
+html[lang="ru"] #gameWrap .capital-personality{font-size:10px!important;padding:2px 4px!important;max-width:100%!important}
 html[lang="ru"] #gameWrap .eventlog{font-size:11px!important;line-height:1.38!important}
 html[lang="ru"] #gameWrap .eventlog li{padding:7px 0!important}
 html[lang="ru"] #gameWrap .action-panel .btn{min-height:40px!important;padding:9px 10px!important;font-size:12px!important}
@@ -1774,17 +1777,22 @@ html[lang="ru"] #modalRoot .capital-property-title{
   max-width:90%!important;
   text-wrap:balance!important;
 }
-html[lang="ru"] #modalRoot .capital-property-kicker{font-size:9px!important;letter-spacing:.11em!important}
+/* The labels below all sat a pixel under their English counterparts purely
+   because the Russian selector block shrank them. Cyrillic sets wider than Latin
+   at the same size, which is a real reason to be careful - but not a reason to
+   start from 9px and go down to 8px on top of it. These are now level with the
+   English sizes, which is also one fewer thing to keep in step. */
+html[lang="ru"] #modalRoot .capital-property-kicker{font-size:10px!important;letter-spacing:.1em!important}
 html[lang="ru"] #modalRoot .capital-property-price{font-size:28px!important}
-html[lang="ru"] #modalRoot .capital-property-stat span{font-size:9px!important;letter-spacing:.05em!important}
+html[lang="ru"] #modalRoot .capital-property-stat span{font-size:10px!important;letter-spacing:.04em!important}
 html[lang="ru"] #modalRoot .capital-property-stat strong{font-size:14px!important}
-html[lang="ru"] #modalRoot .capital-rent-step span{font-size:8px!important}
+html[lang="ru"] #modalRoot .capital-rent-step span{font-size:9px!important}
 html[lang="ru"] #modalRoot .capital-rent-step strong{font-size:10px!important}
 html[lang="ru"] #modalRoot .capital-property-actions .btn{font-size:12px!important;line-height:1.15!important}
 html[lang="ru"] #modalRoot .capital-property-note{font-size:11px!important;line-height:1.4!important}
-html[lang="ru"] #modalRoot .auction-kicker{font-size:9px!important;letter-spacing:.12em!important}
+html[lang="ru"] #modalRoot .auction-kicker{font-size:10px!important;letter-spacing:.11em!important}
 html[lang="ru"] #modalRoot .auction-head h3{font-size:18px!important;line-height:1.1!important}
-html[lang="ru"] #modalRoot .auction-stats span{font-size:9px!important}
+html[lang="ru"] #modalRoot .auction-stats span{font-size:10px!important}
 html[lang="ru"] #modalRoot .auction-stats strong{font-size:14px!important}
 html[lang="ru"] #modalRoot .auction-rule{font-size:10px!important;line-height:1.4!important}
 html[lang="ru"] #modalRoot .modal h3{line-height:1.15!important}
@@ -1983,7 +1991,7 @@ html[lang="ru"] #capitalDevPanel{font-family:Inter,system-ui,-apple-system,"Sego
 }
 .capital-defeat-rank-v2 span{font-size:11px}
 .capital-defeat-rank-v2 strong{font-size:21px;color:#f6c84e}
-.capital-defeat-rank-v2 em{font-style:normal;font-size:10px;color:#718096}
+.capital-defeat-rank-v2 em{font-style:normal;font-size:10px;color:#8d9aad}
 .capital-defeat-modal-v2 .capital-win-standing.is-human{border-color:rgba(255,255,255,.12)}
 html[lang="ru"] .capital-action-copy b{font-size:14px}
 @media (max-width:560px){
@@ -2215,7 +2223,7 @@ html,body{height:100vh!important;overflow:hidden!important}
 .capital-pause-card h3{margin:0 0 8px;color:#fff;font-size:20px;font-weight:800;letter-spacing:-.03em}
 .capital-pause-card p{margin:0 0 18px;color:#99a5b5;font-size:13px;line-height:1.5}
 .capital-pause-card .btn{width:100%;padding:12px 16px;font-size:14px}
-.capital-pause-card small{display:block;margin-top:10px;color:#6f7c90;font-size:11px}
+.capital-pause-card small{display:block;margin-top:10px;color:#8d9aad;font-size:11px}
 @keyframes capitalPauseIn{
   from{opacity:0}
   to{opacity:1}
@@ -2260,7 +2268,7 @@ html,body{height:100vh!important;overflow:hidden!important}
 #capitalDevPanel.open{display:block}
 .cap-dev-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
 .cap-dev-title{font-size:12px;font-weight:900;letter-spacing:.08em;color:#cbd5e1}
-.cap-dev-sub{font-size:10px;color:#718096}
+.cap-dev-sub{font-size:10px;color:#8d9aad}
 .cap-dev-label{display:block;margin:8px 0 4px;font-size:10px;color:#94a3b8;font-weight:700}
 .cap-dev-select,.cap-dev-input{
   width:100%;
@@ -3168,7 +3176,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   font-variant-numeric:tabular-nums;
   white-space:nowrap!important;
 }
-#gameWrap #players .player-row.bankrupt .pmoney{font-size:11px!important;color:#ff8a96!important;text-transform:uppercase;letter-spacing:.06em}
+#gameWrap #players .player-row.bankrupt .pmoney{font-size:12px!important;color:#ff8a96!important;text-transform:uppercase;letter-spacing:.06em}
 #gameWrap #players .capital-inventory{margin:7px 0 0 37px!important;gap:4px!important;min-height:0!important}
 #gameWrap #players .capital-prop-chip{
   -webkit-appearance:none;
@@ -3388,7 +3396,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 .capital-trade-modal .ct-name{font-size:13px;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .capital-trade-modal .ct-name em{display:block;font-style:normal;font-size:10.5px;font-weight:800;color:#f5cc62;margin-top:1px}
 .capital-trade-modal .ct-price{font-size:12px;font-weight:800;color:#aeb9c8;font-variant-numeric:tabular-nums}
-.capital-trade-modal .ct-empty{padding:14px;text-align:center;font-size:12px;color:#6f7c90;border:1px dashed #2a3547;border-radius:10px}
+.capital-trade-modal .ct-empty{padding:14px;text-align:center;font-size:12px;color:#8d9aad;border:1px dashed #2a3547;border-radius:10px}
 .capital-trade-modal .ct-cash{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:4px 10px;margin-top:auto}
 .capital-trade-modal .ct-cash span{font-size:12px;font-weight:800;color:#aeb9c8}
 .capital-trade-modal .ct-cash input{
@@ -3405,7 +3413,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   outline:0;
 }
 .capital-trade-modal .ct-cash input:focus{border-color:#6d7cff;box-shadow:0 0 0 3px rgba(109,124,255,.18)}
-.capital-trade-modal .ct-cash small{grid-column:2;font-size:10.5px;color:#6f7c90}
+.capital-trade-modal .ct-cash small{grid-column:2;font-size:10.5px;color:#8d9aad}
 .capital-trade-modal .ct-meter{display:grid;gap:7px}
 .capital-trade-modal .ct-bar{height:8px;border-radius:99px;background:#0e141c;overflow:hidden;border:1px solid rgba(255,255,255,.05)}
 .capital-trade-modal .ct-bar i{
@@ -3509,7 +3517,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 .capital-trade-offer .cto-item span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @keyframes ctoItemIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
 .capital-trade-offer .cto-nothing{
-  padding:11px;font-size:11.5px;color:#6f7c90;border:1px dashed #2a3547;border-radius:9px;text-align:center
+  padding:11px;font-size:11.5px;color:#8d9aad;border:1px dashed #2a3547;border-radius:9px;text-align:center
 }
 /* Balance line: the single most useful number on an offer, so it is the biggest. */
 .capital-trade-offer .cto-balance{
@@ -3722,7 +3730,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 #gameWrap.view-3d .cap-controls-slot #turnHint{font-size:10px!important}
 /* 3D-mode sidebar: premium glass HUD. All rules scoped to .view-3d — 2D untouched. */
 #gameWrap.view-3d .side .panel{background:rgba(13,19,29,.68)!important;border:1px solid rgba(244,201,93,.14)!important;border-radius:16px!important;box-shadow:0 18px 50px rgba(0,0,0,.45)!important;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
-#gameWrap.view-3d .side .panel h3{color:#718096!important}
+#gameWrap.view-3d .side .panel h3{color:#8d9aad!important}
 #gameWrap.view-3d .player-row{border:1px solid transparent!important;border-radius:12px!important;transition:box-shadow .25s ease,border-color .25s ease,background .25s ease!important}
 #gameWrap.view-3d .player-row:hover{border-color:rgba(255,255,255,.14)!important}
 #gameWrap.view-3d .player-row.active{background:rgba(244,201,93,.07)!important;border-color:rgba(244,201,93,.45)!important;box-shadow:0 0 18px rgba(244,201,93,.16)!important}
@@ -5589,35 +5597,244 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     return cap3d.loadPromise;
   }
   function cap3dMakeTextCanvas(w,h){const c=document.createElement("canvas");c.width=w;c.height=h;return [c,c.getContext("2d")];}
+  /* ---------- 3D tile typography ----------
+
+     Everything here exists because of one measured fact. At the default framing a
+     0.96-unit tile projects to roughly an 84x48px diamond, and the tile top is a
+     flat texture, so:
+
+         on-screen text height = (fontPx / textureSize) * 43.5
+
+     The old renderer drew the name and the price at 30px into a 256px texture,
+     which is 30/256*43.5 = 5.1 physical pixels. Five-pixel text is not a
+     contrast problem or a 3D-transform problem, it is simply too small to read,
+     and nothing about lighting or material would have fixed it.
+
+     The texture's two axes foreshorten EQUALLY under this camera (both map to a
+     50.3px vector), so the text is rotated ~30 degrees and mildly squashed but not
+     distorted, and no corrective scaling is needed - it only has to be bigger.
+
+     The hard limit that follows: the tile's baseline is ~50px long, so at a
+     readable cap height only ~6-7 characters fit per line. The real names run
+     10-18 characters, so the board can carry a SHORT label and nothing more. The
+     full name is not lost - the tile already has a crisp DOM tooltip on hover
+     and a full property panel on click - it is just not available from the board
+     itself, which is a property of the geometry rather than of this code. */
+
+  const CAP3D_TILE_TEX=512;
+  const CAP3D_TILE_FONT='Inter,"SF Pro Display","Segoe UI",system-ui,-apple-system,sans-serif';
+  /* Text is kept inside this box. The outer margin is not decoration: the tile's
+     own gold colour rail is a separate mesh sitting on the top face near one
+     edge, and anything painted in the outer band can end up underneath it. */
+  const CAP3D_TILE_SAFE_X=0.925;
+  const cap3dMaxAnisotropy=function(){
+    // Called from cap3dInit, after the renderer exists - not eagerly, because
+    // capabilities are not available until then.
+    try{return cap3d.renderer&&cap3d.renderer.capabilities?cap3d.renderer.capabilities.getMaxAnisotropy():8;}
+    catch(_){return 8;}
+  };
+  /* Shorten the street-type suffixes rather than truncating mid-word.
+     "Concert Boulevard" becomes "Concert Blvd" instead of "Concert B…", which is
+     the difference between a label a player can read and one they have to guess
+     at. Russian names already carry the abbreviation themselves ("ул.", "наб."),
+     so those only lose the trailing full stop. */
+  const CAP3D_STREET_EN=[["Boulevard","Blvd"],["Avenue","Ave"],["Street","St"],["Promenade","Prom"],
+                         ["Company","Co"],["Square","Sq"],["Lane","Ln"],["Works","Works"],["Quay","Quay"]];
+  const CAP3D_STREET_RU=/\s(улица|набережная|переулок|площадь|проспект|улица)\b/gi;
+  const CAP3D_STREET_SHORT_RU=/\s(ул|наб|пер|пл|пр-т|б-р)\.?(?=\s|$)/gi;
+  function cap3dShortLabel(s){
+    let x=" "+String(s==null?"":s).trim()+" ";
+    if(CAP3D_STREET_RU.test(x)){CAP3D_STREET_RU.lastIndex=0;x=x.replace(CAP3D_STREET_RU," $1 ");}
+    CAP3D_STREET_RU.lastIndex=0;
+    if(CAP3D_STREET_SHORT_RU.test(x)){CAP3D_STREET_SHORT_RU.lastIndex=0;x=x.replace(CAP3D_STREET_SHORT_RU," $1");}
+    CAP3D_STREET_SHORT_RU.lastIndex=0;
+    for(let i=0;i<CAP3D_STREET_EN.length;i++){
+      x=x.replace(new RegExp("\\b"+CAP3D_STREET_EN[i][0]+"\\b","gi"),CAP3D_STREET_EN[i][1]);
+    }
+    return x.replace(/\s+/g," ").trim().replace(/\.$/,"");
+  }
+  /* The special squares are not properties and have no price line, so they get a
+     compact label of their own instead of a name squeezed into the property
+     layout. Long stock phrases collapse to the one word that identifies them:
+     "FREE PARKING" and "JAIL / JUST VISITING" would otherwise be the two longest
+     labels on the board and would shrink every other tile to match them. */
+  const CAP3D_SPECIAL_LABEL={
+    chest:{en:["COMMUNITY","CHEST"],ru:["КАЗНА"]},
+    chance:{en:["CHANCE"],ru:["ШАНС"]},
+    parking:{en:["PARKING"],ru:["ПАРКОВКА"]},
+    gotojail:{en:["TO","JAIL"],ru:["В ТЮРЬМУ"]},
+    jail:{en:["JAIL"],ru:["ТЮРЬМА"]},
+    go:{en:["GO","START"],ru:["СТАРТ"]}
+  };
+  /* Choose the largest font size at which every line fits the safe width.
+     The old code picked a size from the character count, which is a guess; at 13
+     characters it dropped to 24px and at 21 to 20px regardless of whether those
+     actually fitted, and then handed fillText a 230px maxWidth that silently
+     condensed anything still too wide. measureText does not guess. */
+  function cap3dFitFont(ctx,lines,maxW,hi,lo,weight){
+    let f=hi;
+    while(f>lo){
+      ctx.font=weight+" "+f+"px "+CAP3D_TILE_FONT;
+      let widest=0;
+      for(let i=0;i<lines.length;i++)widest=Math.max(widest,ctx.measureText(lines[i]).width);
+      if(widest<=maxW)return f;
+      f-=2;
+    }
+    ctx.font=weight+" "+lo+"px "+CAP3D_TILE_FONT;
+    return lo;
+  }
+  /* Break one over-long word across two lines with a hyphen.
+
+     Splitting dead in the middle gives "Императ-/орская". Looking a few characters
+     either side of the midpoint for a vowel boundary gives "Импера-/торская",
+     which is a real syllable boundary in both Latin and Cyrillic and reads as a
+     word being broken rather than as corruption. Falls back to the midpoint when
+     the word offers no vowel anywhere near it. */
+  function cap3dHyphenSplit(word){
+    const s=String(word);
+    const vowels="aeiouyаеёиоуыэюяAEIOUYАЕЁИОУЫЭЮЯ";
+    const mid=Math.ceil(s.length/2);
+    let best=-1;
+    for(let d=0;d<=3;d++){
+      const a=mid-d,b=mid+d;
+      if(a>=3&&a<=s.length-3&&vowels.indexOf(s[a-1])>=0){best=a;break;}
+      if(b>=3&&b<=s.length-3&&vowels.indexOf(s[b-1])>=0){best=b;break;}
+    }
+    if(best<0)best=mid;
+    return [s.slice(0,best)+"-",s.slice(best)];
+  }
+  /* Split a label over at most two lines, balanced, so "Copper Street" reads as
+     COPPER / STREET rather than one long line and one stub. */
+  function cap3dWrapLabel(s){
+    const words=String(s).split(" ").filter(Boolean);
+    if(words.length<2)return [s];
+    let best=words,bestCost=Infinity;
+    for(let i=1;i<words.length;i++){
+      const a=words.slice(0,i).join(" "),b=words.slice(i).join(" ");
+      const cost=Math.abs(a.length-b.length);
+      if(cost<bestCost){bestCost=cost;best=[a,b];}
+    }
+    return best;
+  }
+  function cap3dTileParts(t){
+    let raw="";try{raw=boardTileLabel(t)||tileLabel(t)||"";}catch(_){raw=t.name||"";}
+    const en=lang==="en";
+    const isProp=t.type==="prop"||t.type==="station"||t.type==="util";
+    /* The only tile that carries a number instead of a word, and the one players
+       land on most, so it keeps a price plate. */
+    if(t.type==="go")return {lines:(CAP3D_SPECIAL_LABEL.go[en?"en":"ru"]).slice(),price:"+$200"};
+    if(isProp)return {lines:cap3dWrapLabel(cap3dShortLabel(raw)),price:"$"+(t.price||0)};
+    if(t.type==="tax")return {lines:cap3dWrapLabel(cap3dShortLabel(raw)),price:"$"+(t.amount||0)};
+    const sp=CAP3D_SPECIAL_LABEL[t.type];
+    if(sp)return {lines:sp[en?"en":"ru"].slice(),price:""};
+    return {lines:cap3dWrapLabel(cap3dShortLabel(raw)),price:""};
+  }
+  function cap3dTileGroupColour(t){
+    return (t.type==="prop")?(GROUP_UI[t.group]||"#7183ff")
+      :t.type==="station"?"#8391a7":t.type==="util"?"#35d3c0"
+      :t.type==="tax"?"#e8b64c":t.type==="chance"?"#7b86ff":t.type==="chest"?"#f4c95d":"#3b4a61";
+  }
+  function cap3dRoundRect(ctx,x,y,w,h,r){
+    if(ctx.roundRect){ctx.beginPath();ctx.roundRect(x,y,w,h,r);return;}
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+    ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+    ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+    ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);
+    ctx.closePath();
+  }
   function cap3dTileTopTexture(t){
     const entry=cap3d.tiles.get(t.id);
+    if(!entry)return;
     const cv=entry.cv,ctx=entry.ctx;
-    const W=256,H=256;
+    const W=CAP3D_TILE_TEX,H=CAP3D_TILE_TEX;
     ctx.clearRect(0,0,W,H);
-    ctx.fillStyle="#182233";ctx.fillRect(0,0,W,H);
-    const col=(t.type==="prop")?(GROUP_UI[t.group]||"#7183ff"):t.type==="station"?"#8391a7":t.type==="util"?"#35d3c0":t.type==="tax"?"#e8b64c":t.type==="chance"?"#7b86ff":t.type==="chest"?"#f4c95d":"#3b4a61";
-    ctx.fillStyle=col;ctx.fillRect(0,0,W,44);
-    ctx.fillStyle="rgba(255,255,255,.14)";ctx.fillRect(0,44,W,6);
-    ctx.fillStyle="#eef3f9";ctx.textAlign="center";ctx.textBaseline="middle";
-    let name="";try{name=boardTileLabel(t)||tileLabel(t)||"";}catch(_){name=t.name||"";}
-    ctx.font="700 30px Inter,system-ui,sans-serif";
-    if(name.length>14)ctx.font="700 24px Inter,system-ui,sans-serif";
-    if(name.length>20)ctx.font="700 20px Inter,system-ui,sans-serif";
-    const words=String(name).split(" ");
-    if(String(name).length>16&&words.length>1){const mid=Math.ceil(words.length/2);ctx.fillText(words.slice(0,mid).join(" "),W/2,110,230);ctx.fillText(words.slice(mid).join(" "),W/2,142,230);}
-    else ctx.fillText(String(name).slice(0,26),W/2,126,230);
-    ctx.font="800 30px Inter,system-ui,sans-serif";ctx.fillStyle="#f4c95d";
-    let sub="";
-    if(t.type==="prop"||t.type==="station"||t.type==="util")sub="$"+(t.price||0);
-    else if(t.type==="tax")sub="$"+(t.amount||0);
-    else if(t.type==="go")sub="+$200";
-    else if(t.type==="jail")sub="JAIL";
-    else if(t.type==="parking")sub="FREE";
-    else if(t.type==="gotojail")sub="GO JAIL";
-    else if(t.type==="chance")sub="? CHANCE";
-    else if(t.type==="chest")sub="CHEST";
-    if(sub)ctx.fillText(sub,W/2,196,230);
-    if(t.mortgaged){ctx.fillStyle="rgba(10,14,22,.55)";ctx.fillRect(0,0,W,H);ctx.fillStyle="#ff8a96";ctx.font="800 26px Inter,system-ui,sans-serif";ctx.fillText("MORTGAGED",W/2,226,230);}
+    /* A shallow vertical lift instead of a flat fill. The tile must still read
+       as the same navy it always was; this is a few percent of range, not a
+       different colour. */
+    const bg=ctx.createLinearGradient(0,0,0,H);
+    bg.addColorStop(0,"#1e2a3c");bg.addColorStop(1,"#111a28");
+    ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+
+    const col=cap3dTileGroupColour(t);
+    /* Colour band, down from 17% of the tile. Every point of that is text height
+       the name cannot have, and the group is already carried by the gold rail
+       mesh on the tile's edge and by the plaza colour. */
+    const band=Math.round(H*0.105);
+    ctx.fillStyle=col;ctx.fillRect(0,0,W,band);
+    ctx.fillStyle="rgba(255,255,255,.26)";ctx.fillRect(0,band,W,Math.round(H*0.011));
+
+    const parts=cap3dTileParts(t);
+    const safeW=W*CAP3D_TILE_SAFE_X;
+    ctx.textAlign="center";ctx.textBaseline="middle";
+
+    /* Name. One line is centred a little above the middle; two lines straddle it,
+       so the block reads the same whichever way a label falls. */
+    let lines=parts.lines.filter(Boolean);
+    const priceOn=!!parts.price;
+    const nameTop=band+Math.round(H*0.045);
+    const nameBottom=priceOn?Math.round(H*0.60):Math.round(H*0.88);
+    const nameH=nameBottom-nameTop;
+    if(lines.length){
+      const lo=Math.max(70,Math.round(H*0.135));
+      const hi=Math.max(lo,Math.round(nameH/(lines.length*1.18)));
+      let fs=cap3dFitFont(ctx,lines,safeW,hi,lo,"800");
+      /* One word with no space to break on that still will not fit even at the
+         floor size - "Электростанция" is thirteen characters, "Императорская" is
+         thirteen more. Handing that to fillText as a maxWidth, which is what the
+         old renderer did, condenses the glyphs sideways into something narrower
+         and no easier to read. Break it across two lines with a hyphen instead,
+         which keeps every letter and gives the word back some height. */
+      ctx.font="800 "+fs+"px "+CAP3D_TILE_FONT;
+      if(lines.length===1&&lines[0].length>9&&ctx.measureText(lines[0]).width>safeW){
+        lines=cap3dHyphenSplit(lines[0]);
+        fs=cap3dFitFont(ctx,lines,safeW,Math.max(lo,Math.round(nameH/2.36)),lo,"800");
+      }
+      const lh=fs*1.16;
+      const y0=nameTop+(nameH-lines.length*lh)/2+lh/2;
+      /* A soft dark shadow. At 30 degrees of rake and ~10px of cap height the
+         glyphs sit over a busy lit surface, and a one-pixel offset lift is the
+         difference between crisp and muddy without touching the colour. */
+      ctx.fillStyle="rgba(4,8,14,.55)";
+      for(let i=0;i<lines.length;i++)ctx.fillText(lines[i],W/2,y0+i*lh+Math.max(2,fs*0.055),safeW);
+      ctx.fillStyle="#f4f8fd";
+      for(let i=0;i<lines.length;i++)ctx.fillText(lines[i],W/2,y0+i*lh,safeW);
+    }
+
+    /* Price. This is the single most useful thing on a tile and it used to get
+       exactly the same treatment as the name, in a muted gold, with no plate. It
+       now gets its own ground, a larger size and a heavier weight, which is worth
+       more than any amount of extra contrast tuning on the name. The plate is
+       sized from the type so the number is the largest element on the tile. */
+    if(priceOn){
+      const txt=parts.price;
+      const ph=Math.round(H*0.31);
+      const pfs=Math.round(ph*0.82);
+      ctx.font="900 "+pfs+"px "+CAP3D_TILE_FONT;
+      const tw=ctx.measureText(txt).width;
+      const pw=Math.min(W*0.92,tw+Math.round(H*0.13));
+      const px=Math.round((W-pw)/2),py=Math.round(H*0.605);
+      ctx.fillStyle="rgba(6,11,19,.74)";
+      cap3dRoundRect(ctx,px,py,pw,ph,Math.round(ph*0.3));ctx.fill();
+      ctx.strokeStyle="rgba(244,201,93,.38)";ctx.lineWidth=Math.max(2,Math.round(H*0.006));
+      cap3dRoundRect(ctx,px,py,pw,ph,Math.round(ph*0.3));ctx.stroke();
+      ctx.textAlign="center";ctx.textBaseline="middle";
+      ctx.fillStyle="#ffd873";
+      ctx.shadowColor="rgba(0,0,0,.6)";ctx.shadowBlur=Math.round(H*0.022);
+      ctx.fillText(txt,W/2,py+ph/2+Math.round(ph*0.03),pw-Math.round(H*0.035));
+      ctx.shadowBlur=0;ctx.shadowColor="transparent";
+    }
+
+    /* Mortgaged. The old version scrimmed the whole tile and printed MORTGAGED at
+       y=226, straight over the price. It now sits in the band under the price
+       plate and leaves both the name and the number legible underneath - you
+       still need to see what a mortgaged property costs. */
+    if(t.mortgaged){
+      const bh=Math.round(H*0.085);
+      ctx.fillStyle="rgba(8,12,20,.66)";ctx.fillRect(0,H-bh,W,bh);
+      ctx.fillStyle="#ff9aa6";ctx.font="800 "+Math.round(bh*0.62)+"px "+CAP3D_TILE_FONT;
+      ctx.fillText(t.type==="prop"||t.type==="station"||t.type==="util"?"MORTGAGED":"ЗАЛОЖЕНО",W/2,H-bh/2,W*0.94);
+    }
     entry.tex.needsUpdate=true;
   }
   function cap3dPipTexture(v){
@@ -5775,9 +5992,17 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     TILES.forEach(function(t){
       const p=cap3dBoardXZ(t.id);
       const g=new THREE.Group();g.position.set(p.x,0,p.z);
-      const topCv=document.createElement("canvas");topCv.width=256;topCv.height=256;
+      /* 512, not 256. A tile is ~84px on screen at the default framing and ~170px
+         at full zoom-in, but it is also being read at a 30deg rake, where every
+         pixel is a blend of several texels. 256 was visibly soft there, and there
+         was no headroom left for larger type. 40 tiles at 512 is ~56MB with
+         mipmaps, which is a fair price for the board being the main screen.
+         Anisotropy now comes from the device rather than a hardcoded 8. */
+      const topCv=document.createElement("canvas");topCv.width=CAP3D_TILE_TEX;topCv.height=CAP3D_TILE_TEX;
       const topCtx=topCv.getContext("2d");
-      const tex=new THREE.CanvasTexture(topCv);tex.anisotropy=8;tex.encoding=THREE.sRGBEncoding;
+      const tex=new THREE.CanvasTexture(topCv);
+      tex.anisotropy=Math.min(16,cap3dMaxAnisotropy());
+      tex.encoding=THREE.sRGBEncoding;
       const sideMat=new THREE.MeshStandardMaterial({color:0x1a2536,roughness:0.6,metalness:0.25});
       const topMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.55,metalness:0.2,map:tex});
       const botMat=new THREE.MeshStandardMaterial({color:0x0b1220,roughness:0.8,metalness:0.1});
@@ -8175,7 +8400,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     const rentValue=t?.type==="prop"?`$${rent}`:(t?.type==="station"||t?.type==="util"?`$${rent||0}`:"—");
     return `
       <div class="tt-top">
-        <div class="tt-color" style="background:${GROUP_UI[t?.group]||"#718096"}"></div>
+        <div class="tt-color" style="background:${GROUP_UI[t?.group]||"#8d9aad"}"></div>
         <div class="tt-name">${escapeHtml(tileLabel(t))}
           <div class="tt-kind">${escapeHtml(propertyGroupLabel(t))} · ${kind}</div>
         </div>
@@ -11044,7 +11269,7 @@ document.addEventListener("keydown",e=>{
     }
     rows+=`<span>${lang==="en"?"Status":"Статус"}</span><span>${propertyStatusLabel(t)}</span>`;
     if(fastPace)rows+=`<span>${lang==="en"?"Fast mode":"Ускоренный режим"}</span><span>+25%</span>`;
-    tt.innerHTML=`<div class="tt-top"><div class="tt-color" style="background:${GROUP_UI[t.group]||"#718096"}"></div><div class="tt-name">${escapeHtml(tileLabel(t))}<div class="tt-kind">${escapeHtml(propertyGroupLabel(t))} · ${kind}</div></div><div class="tt-price">$${t.price||0}</div></div><div class="tt-grid">${rows}</div>${t.mortgaged?`<div class="tt-mortgage">${lang==="en"?"This property is currently mortgaged.":"Этот объект сейчас заложен."}</div>`:""}`;
+    tt.innerHTML=`<div class="tt-top"><div class="tt-color" style="background:${GROUP_UI[t.group]||"#8d9aad"}"></div><div class="tt-name">${escapeHtml(tileLabel(t))}<div class="tt-kind">${escapeHtml(propertyGroupLabel(t))} · ${kind}</div></div><div class="tt-price">$${t.price||0}</div></div><div class="tt-grid">${rows}</div>${t.mortgaged?`<div class="tt-mortgage">${lang==="en"?"This property is currently mortgaged.":"Этот объект сейчас заложен."}</div>`:""}`;
     tt.classList.add("show");moveTooltip(e);
   }
   function showInventoryTooltip(t,e){
