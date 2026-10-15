@@ -5170,7 +5170,27 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   function finishRemoteMovement(force=false){
     const rm=mpRemoteMovement;
     if(!rm)return;
-    if(!force && !rm.done)return;
+    /* The authoritative "move finished" and the local walk are two clocks, and
+       the authoritative one always wins the race: the guest starts walking only
+       after the event arrives, so by the time the host declares the move over the
+       guest has barely left the starting tile.
+
+       Tearing the animation down at that point is why a remote piece TELEPORTED
+       instead of walking - it appeared on its destination with no visible motion
+       at all, which reads as "only the host's models move". So record that the
+       game state has caught up and let the walk run out its last frames. The
+       frame below does the real cleanup when it reaches the end. */
+    if(!rm.done){
+      if(!rm.settled){rm.settled=true;renderPlayers();updateBadge();}
+      return;
+    }
+    dropRemoteMovement();
+  }
+  /* Unconditional teardown, for the cases where the walk really must not
+     continue: a new movement replacing it, or the room going away. */
+  function dropRemoteMovement(){
+    const rm=mpRemoteMovement;
+    if(!rm)return;
     if(rm.raf)cancelWalkFrame(rm.raf);
     if(rm.el?.isConnected)rm.el.remove();
     mpRemoteMovement=null;
@@ -5183,7 +5203,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   function startRemoteMovement(m){
     if(mp.host)return;
     if(mpRemoteMovement&&mpRemoteMovement.id===m.id)return;
-    if(mpRemoteMovement)finishRemoteMovement(true);
+    if(mpRemoteMovement)dropRemoteMovement();
     const p=players.find(x=>x&&x.mpClientId===m.playerId)||players.find(x=>x&&x.id===m.playerIndex);
     if(!p||!boardEl)return;
     const fromPos=((Number(m.fromPos)||0)%40+40)%40;
@@ -5212,7 +5232,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     // Start from local reception time. Using the host timestamp made a
     // 450ms movement arrive already finished whenever network latency was high.
     const duration=path?Math.max(1,Number(m.duration)||tokenWalkDuration(steps)):0;
-    const rm={id:String(m.id),el,p,from,to:target,started,duration,raf:null,done:false};
+    const rm={id:String(m.id),el,p,from,to:target,started,duration,raf:null,done:false,settled:false};
     mpRemoteMovement=rm;
     // No walkable path (missing geometry, or a zero-tile move): settle the piece
     // on the destination and report the movement as finished, so the turn can
@@ -5232,6 +5252,9 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       if(t<1){rm.raf=scheduleWalkFrame(frame);return;}
       el.style.setProperty("transform",`translate3d(${target.x}px,${target.y}px,0)`,'important');
       rm.done=true;rm.raf=null;
+      // The authoritative finish may already have arrived; if so this is where
+      // the deferred cleanup happens.
+      if(rm.settled)dropRemoteMovement();
     };
     rm.raf=scheduleWalkFrame(frame);
   }
@@ -5257,7 +5280,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     }catch(_){}
   }
 
-  function mpApplySnapshot(s){
+    function mpApplySnapshot(s){
     if(!s||!Array.isArray(s.players)||!Array.isArray(s.tiles))return;
     const seq=Number(s.seq)||0;
     // A realtime event may announce the sequence of the snapshot that is
@@ -5306,26 +5329,54 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       if(s.auction&&s.auction.tileId!=null){
         const at=TILES[Number(s.auction.tileId)];
         if(at){
-          activeAuction={tile:at,turnPlayer:players.find(x=>x&&x.id===s.auction.turnPlayerId)||currentPlayer(),currentBid:Number(s.auction.currentBid)||0,highestBidder:s.auction.highestBidder==null?null:Number(s.auction.highestBidder),clockSeq:Number(s.auction.clockSeq)||0,closed:false,endsAt:performance.now()+Math.max(0,Number(s.auction.remainingMs)||0),lastBidAt:performance.now(),history:Array.isArray(s.auction.history)?s.auction.history:[],bots:[],botTimers:new Set(),rafIds:new Set()};
-          modalRoot.innerHTML="";modalOpen=false;modalKind=null;mp.lastModalSig="";
-          renderAuction(activeAuction);
-          const clock=modalRoot.querySelector("#auctionClock");
-          if(clock){
-            mpStopAuctionClock();
-            mp.auctionClockIsRaf=true;
-            const gtick=()=>{
-              // Ends by not rescheduling, so a closed dialog costs nothing and
-              // nothing has to reach in here to stop it.
-              if(!activeAuction||activeAuction.closed||!modalOpen||modalKind!=="auction"){mp.auctionTimer=null;return;}
-              auctionPaintTimer(activeAuction,performance.now());
+          const nextTurnPlayer=players.find(x=>x&&x.id===s.auction.turnPlayerId)||currentPlayer();
+          if(!activeAuction||activeAuction.tile?.id!==at.id){
+            activeAuction={tile:at,turnPlayer:nextTurnPlayer,currentBid:Number(s.auction.currentBid)||0,highestBidder:s.auction.highestBidder==null?null:Number(s.auction.highestBidder),clockSeq:Number(s.auction.clockSeq)||0,closed:false,endsAt:performance.now()+Math.max(0,Number(s.auction.remainingMs)||0),lastBidAt:performance.now(),history:Array.isArray(s.auction.history)?s.auction.history:[],bots:[],botTimers:new Set(),rafIds:new Set()};
+            modalRoot.innerHTML="";modalOpen=false;modalKind=null;mp.lastModalSig="";
+            renderAuction(activeAuction);
+            const clock=modalRoot.querySelector("#auctionClock");
+            if(clock){
+              mpStopAuctionClock();
+              mp.auctionClockIsRaf=true;
+              const gtick=()=>{
+                // Ends by not rescheduling, so a closed dialog costs nothing and
+                // nothing has to reach in here to stop it.
+                if(!activeAuction||activeAuction.closed||!modalOpen||modalKind!=="auction"){mp.auctionTimer=null;return;}
+                auctionPaintTimer(activeAuction,performance.now());
+                mp.auctionTimer=requestAnimationFrame(gtick);
+              };
               mp.auctionTimer=requestAnimationFrame(gtick);
-            };
-            mp.auctionTimer=requestAnimationFrame(gtick);
+            }
+          }else{
+            /* Same auction, later snapshot: update the open dialog in place.
+
+               This block used to clear modalRoot and call renderAuction again on
+               every snapshot. The guest threw away the dialog the stateTick
+               handler had just updated in place and built a new one - which is
+               what a guest sees as the auction window closing and reopening on
+               every bid, while the host (who skips all of this) sees it steady.
+               Two implementations of one update, and the destructive one ran last.
+
+               renderAuction already reuses a live dialog, so all that is left is to
+               copy the new numbers across and let it paint in place. The clock is
+               re-seeded only when clockSeq says a bid re-armed it; re-basing it
+               from every packet makes the bar twitch once per packet. The same
+               reasoning, in the same words, is in the stateTick handler. */
+            activeAuction.turnPlayer=nextTurnPlayer;
+            activeAuction.currentBid=Number(s.auction.currentBid)||0;
+            activeAuction.highestBidder=s.auction.highestBidder==null?null:Number(s.auction.highestBidder);
+            const clockSeq=Number(s.auction.clockSeq)||0;
+            if(clockSeq!==activeAuction.clockSeq){
+              activeAuction.clockSeq=clockSeq;
+              activeAuction.endsAt=performance.now()+Math.max(0,Number(s.auction.remainingMs)||0);
+            }
+            activeAuction.history=Array.isArray(s.auction.history)?s.auction.history:[];
+            renderAuction(activeAuction);
           }
         }
       }else if(activeAuction){
         activeAuction=null;mpStopAuctionClock();
-        if(modalKind==="auction"){modalRoot.innerHTML="";modalOpen=false;modalKind=null;}
+        if(modalKind==="auction"){modalRoot.innerHTML="";modalOpen=false;modalKind=null;mp.lastModalSig="";}
       }
     }
 
@@ -11715,4 +11766,5 @@ document.addEventListener("keydown",e=>{
 </body>
 
 </html>
-
+
+
