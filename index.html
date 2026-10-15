@@ -1163,28 +1163,167 @@ body{
 .auction-prop-meta b{color:#e6ebf2;font-weight:850;font-variant-numeric:tabular-nums;margin-left:4px}
 .auction-body{padding:18px 22px 20px;display:grid;gap:13px}
 .auction-body>.auction-kicker{margin:0}
-/* Debt settlement dialog: what is owed, what is in hand, and one button per
-   asset that can be turned into cash. The shortfall is the number that matters,
-   so it gets its own colour and flips green the moment the debt is coverable. */
-#gameWrap .capital-debt-figures{
-  display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0 12px
+/* Debt settlement dialog.
+
+   Every rule here is scoped to #modalRoot, and that is not a style choice. These
+   used to be written `#gameWrap .capital-debt-*`, and #modalRoot is a SIBLING of
+   #gameWrap - it is a sibling in the markup, so none of those selectors ever
+   matched anything and the dialog rendered with no styles of its own at all. It
+   inherited bare .btn styling, which is most of why it read as cluttered: the
+   asset list was a stack of full-width buttons with the amount hanging off the
+   end of the label, and the three figures were plain text on the panel.
+
+   The layout now separates the three things a player has to decide between:
+   what is owed, what is in hand, and what is missing. The missing figure is the
+   one they have to act on, so it carries the emphasis, the colour and the
+   largest type, and it is what the Pay button is disabled against. */
+#modalRoot .capital-debt-modal{
+  width:min(560px,calc(100vw - 24px))!important;
+  padding:0!important;
+  overflow:hidden!important;
+  border-color:rgba(228,90,107,.26)!important;
+  /* .modal centres its text. Every panel in CAPITAL that reads like a document
+     rather than a notice has to say so explicitly - the auction dialog does the
+     same - and without it the bullet list in the bankruptcy confirmation comes
+     out centred with its markers stranded out on the left. */
+  text-align:left!important;
 }
-#gameWrap .capital-debt-figures > div{
-  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);
-  border-radius:12px;padding:9px 10px;display:flex;flex-direction:column;gap:3px
+/* Header */
+#modalRoot .capital-debt-head{
+  padding:17px 20px 15px;
+  background:linear-gradient(180deg,rgba(224,90,107,.11),rgba(224,90,107,0));
+  border-bottom:1px solid rgba(255,255,255,.07);
 }
-#gameWrap .capital-debt-figures span{font-size:9.5px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#7f8da0}
-#gameWrap .capital-debt-figures strong{font-size:17px;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
-#gameWrap .capital-debt-assets{
-  display:flex;flex-direction:column;gap:7px;max-height:36vh;overflow-y:auto;
-  padding-right:4px;margin-bottom:12px
+#modalRoot .capital-debt-kicker{
+  display:flex;align-items:center;gap:8px;
+  font-size:10px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:#ff9aa5;
+  justify-content:flex-start;
 }
-#gameWrap .capital-debt-asset{
-  display:flex!important;align-items:center!important;justify-content:space-between!important;
-  gap:10px;text-align:left!important;padding:10px 12px!important;font-size:12.5px!important;
-  line-height:1.25!important;white-space:normal!important
+#modalRoot .capital-debt-kicker::before{
+  content:"";width:7px;height:7px;flex:0 0 7px;border-radius:50%;
+  background:#e05a6b;box-shadow:0 0 0 3px rgba(224,90,107,.2);
 }
-#gameWrap .capital-debt-asset span{flex:0 0 auto;font-weight:900;font-variant-numeric:tabular-nums;color:#7ddca0}
+#modalRoot .capital-debt-title{
+  margin:8px 0 0!important;font-size:22px!important;line-height:1.14!important;
+  font-weight:800;letter-spacing:-.025em;color:#f4f7fb;
+}
+/* #modalRoot .modal h3::before puts a gold ✦ badge in front of every modal
+   heading. It is right for the property and auction dialogs, which announce a
+   single object, and wrong here: this screen opens with a red PAYMENT REQUIRED
+   kicker already, so the badge is a second piece of chrome saying nothing, and
+   it sits on its own line at this width. Dropped rather than restyled. */
+#modalRoot .capital-debt-title::before{content:none!important;display:none!important}
+#modalRoot .capital-debt-sub{margin:5px 0 0;font-size:12.5px;line-height:1.4;color:#8d9aad}
+#modalRoot .capital-debt-sub b{color:#cbd3df;font-weight:700}
+/* The three figures, with the shortfall given the extra column and the extra
+   weight. grid-template-columns 1fr 1fr 1.3fr is doing the visual work here.
+   The labels WRAP rather than ellipsise: at 9.5px with .12em tracking,
+   "AMOUNT OWED" does not fit a third of a 560px modal on one line, and an
+   ellipsised label ("AMOUNT OW…") defeats the entire point of the panel, which
+   is that the three numbers are self-explanatory without the dialog around them. */
+#modalRoot .capital-debt-summary{
+  display:grid;grid-template-columns:1fr 1fr 1.25fr;gap:1px;
+  background:rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.07);
+}
+#modalRoot .capital-debt-fig{
+  background:#141c28;padding:13px 14px;display:flex;flex-direction:column;gap:5px;min-width:0;
+}
+#modalRoot .capital-debt-fig span{
+  font-size:9.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#8d9aad;
+  line-height:1.25;
+}
+#modalRoot .capital-debt-fig strong{
+  font-size:21px;line-height:1.05;font-weight:900;
+  font-variant-numeric:tabular-nums;letter-spacing:-.03em;color:#eef2f8;
+}
+#modalRoot .capital-debt-fig--gap{background:linear-gradient(180deg,rgba(224,90,107,.14),rgba(224,90,107,.05))}
+#modalRoot .capital-debt-fig--gap span{color:#ff9aa5}
+#modalRoot .capital-debt-fig--gap strong{font-size:26px;color:#ff8a96}
+#modalRoot .capital-debt-fig--clear{background:linear-gradient(180deg,rgba(61,214,145,.15),rgba(61,214,145,.05))}
+#modalRoot .capital-debt-fig--clear span{color:#5ee3a0}
+#modalRoot .capital-debt-fig--clear strong{font-size:22px;color:#5ee3a0}
+/* Raise funds */
+#modalRoot .capital-debt-assets-head{
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  padding:15px 20px 9px;
+}
+#modalRoot .capital-debt-assets-head h4{
+  margin:0;font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;
+  color:#f4c95d;white-space:nowrap;flex:0 0 auto;
+}
+#modalRoot .capital-debt-assets-head span{
+  font-size:11.5px;color:#7f8da0;text-align:right;
+  flex:1 1 auto;min-width:0;line-height:1.4;
+}
+#modalRoot .capital-debt-list{
+  margin:0 20px;max-height:min(32vh,264px);overflow-y:auto;overscroll-behavior:contain;
+  border:1px solid rgba(255,255,255,.08);border-radius:12px;background:#0d141e;
+}
+#modalRoot .capital-debt-row{
+  display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:11px;
+  padding:9px 9px 9px 13px;border-bottom:1px solid rgba(255,255,255,.05);
+}
+#modalRoot .capital-debt-row:last-child{border-bottom:0}
+#modalRoot .capital-debt-row-name{min-width:0}
+#modalRoot .capital-debt-row-name b{
+  display:block;font-size:13px;font-weight:700;line-height:1.25;color:#e9eef5;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+#modalRoot .capital-debt-row-name i{
+  display:block;font-style:normal;font-size:10.5px;color:#7f8da0;margin-top:2px;
+}
+#modalRoot .capital-debt-row-amt{
+  font-size:14.5px;font-weight:900;font-variant-numeric:tabular-nums;color:#7ddca0;white-space:nowrap;
+}
+#modalRoot .capital-debt-row-btn{
+  min-width:94px;min-height:32px;padding:6px 13px!important;font-size:12px!important;
+  font-weight:800;border-radius:9px!important;white-space:nowrap!important;
+}
+/* Footer */
+#modalRoot .capital-debt-foot{
+  margin-top:16px;padding:14px 20px 18px;
+  border-top:1px solid rgba(255,255,255,.07);background:rgba(0,0,0,.2);
+}
+#modalRoot .capital-debt-hint{
+  margin:0 0 10px;font-size:12px;line-height:1.45;color:#8d9aad;text-align:center;min-height:1.45em;
+}
+#modalRoot .capital-debt-hint b{color:#ff9aa5;font-weight:800;font-variant-numeric:tabular-nums}
+#modalRoot .capital-debt-hint.is-clear{color:#5ee3a0}
+#modalRoot .capital-debt-actions{display:grid;grid-template-columns:1.25fr 1.1fr;gap:10px}
+#modalRoot .capital-debt-actions .btn{
+  min-height:46px;font-size:13px;font-weight:800;border-radius:12px!important;
+  white-space:nowrap;
+}
+#modalRoot .capital-debt-give{
+  background:rgba(224,90,107,.1)!important;color:#ff9aa5!important;
+  border:1px solid rgba(224,90,107,.34)!important;
+}
+#modalRoot .capital-debt-give:hover:not(:disabled){
+  background:rgba(224,90,107,.18)!important;border-color:rgba(224,90,107,.55)!important;
+}
+#modalRoot .capital-debt-empty{padding:20px 16px;text-align:center;font-size:12.5px;color:#8d9aad}
+/* Bankruptcy confirmation */
+#modalRoot .capital-debt-confirm{padding:20px}
+#modalRoot .capital-debt-warn{
+  border:1px solid rgba(224,90,107,.3);background:rgba(224,90,107,.07);
+  border-radius:13px;padding:14px 15px;margin-bottom:15px;
+}
+#modalRoot .capital-debt-warn h4{
+  margin:0 0 7px;font-size:13.5px;font-weight:900;color:#ff8a96;letter-spacing:.01em;
+}
+#modalRoot .capital-debt-warn p{margin:0;font-size:12.5px;line-height:1.55;color:#c3cddb}
+#modalRoot .capital-debt-warn ul{margin:9px 0 0;padding-left:18px}
+#modalRoot .capital-debt-warn li{font-size:12.5px;line-height:1.5;color:#c3cddb;margin-bottom:4px}
+#modalRoot .capital-debt-warn li:last-child{margin-bottom:0}
+#modalRoot .capital-debt-warn li b{color:#f0f4fa;font-weight:700}
+@media (max-width:560px){
+  #modalRoot .capital-debt-summary{grid-template-columns:1fr 1fr}
+  #modalRoot .capital-debt-fig--gap{grid-column:1/-1}
+  #modalRoot .capital-debt-list{max-height:min(28vh,210px);margin:0 14px}
+  #modalRoot .capital-debt-head,#modalRoot .capital-debt-foot,
+  #modalRoot .capital-debt-assets-head,#modalRoot .capital-debt-confirm{padding-left:14px;padding-right:14px}
+  #modalRoot .capital-debt-actions{grid-template-columns:1fr}
+}
 
 /* Bidding: a ladder of ready-made bids above an exact-amount fallback. Each rung
    is labelled with the total it places, and the rungs are multiples of the
@@ -5123,6 +5262,27 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     rm.raf=scheduleWalkFrame(frame);
   }
 
+  /* Redraw the guest's debt dialog on its own, without waiting for the next
+     snapshot. Only needed for the bankruptcy confirmation, which is a local UI
+     state: the two buttons that toggle it must answer immediately rather than
+     sit dead for up to a third of a second until the next state tick rebuilt
+     the dialog and threw the flag away.
+
+     The signature is left alone deliberately. Clearing it would make the next
+     snapshot rebuild the dialog from scratch and lose the confirmation the
+     player just opened; leaving it means the repaint stands until something
+     actually changed. Rebuilt through mpRenderModal, so this client still draws
+     the dialog itself out of its own state and its own language. */
+  function mpRepaintDebtDialog(){
+    try{
+      const data=authoritativeModalData;
+      if(!data||data.kind!=="debt")return;
+      modalRoot.innerHTML=mpRenderModal(data);
+      modalOpen=true;modalKind="debt";
+      mpBindRemoteModalActions();
+    }catch(_){}
+  }
+
   function mpApplySnapshot(s){
     if(!s||!Array.isArray(s.players)||!Array.isArray(s.tiles))return;
     const seq=Number(s.seq)||0;
@@ -5240,7 +5400,12 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     // signature has to move when an asset is sold - otherwise the guest would keep
     // the stale list of buttons and the stale shortfall.
     const raisable=d.kind==="debt"&&p?playerLiquidations(p).map(x=>x.kind+x.t.id+x.amount).join(","):"";
-    return [d.kind,d.tileId,d.deck,d.index,d.amount,p?p.money:"",p?p.getOutCards:"",raisable].join("|");
+    /* debtConfirmOpen is in the signature because the dialog it builds now has
+       two states. Without it a guest whose debt figures changed while the
+       confirmation was open would be redrawn into the main screen by an
+       unrelated snapshot and the warning they were reading would vanish. */
+    const confirm=d.kind==="debt"?(debtConfirmOpen?"1":"0"):"";
+    return [d.kind,d.tileId,d.deck,d.index,d.amount,p?p.money:"",p?p.getOutCards:"",raisable,confirm].join("|");
   }
   function mpRenderModal(d){
     try{
@@ -5302,6 +5467,11 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       // host, which re-checks it and publishes the result. The host is the only
       // writer of state, so a guest that decided for itself could hand out a
       // property the host never agreed to sell.
+      //
+      // The two bankruptcy buttons are split here as they are in single player:
+      // #debtAskBankrupt only opens the confirmation on this client and costs
+      // nothing on the wire, while #debtGiveUp - which only exists once that
+      // confirmation is showing - is the request that actually ends the game.
       root.addEventListener("click",e=>{
         const asset=e.target.closest("[data-kind]");
         if(asset){
@@ -5311,6 +5481,10 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
         }
         const pay=root.querySelector("#debtPay");
         if(pay&&e.target===pay){e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"debtPay"}});return;}
+        const ask=root.querySelector("#debtAskBankrupt");
+        if(ask&&e.target===ask){e.preventDefault();debtConfirmOpen=true;mpRepaintDebtDialog();return;}
+        const cancel=root.querySelector("#debtCancel");
+        if(cancel&&e.target===cancel){e.preventDefault();debtConfirmOpen=false;mpRepaintDebtDialog();return;}
         const give=root.querySelector("#debtGiveUp");
         if(give&&e.target===give){e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"debtGiveUp"}});return;}
       });
@@ -5404,6 +5578,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       if(a.type==="debtGiveUp"){
         mpPendingDebt=null;
         authoritativeModalData=null;
+        debtConfirmOpen=false;
         declareBankruptcy(p,d.creditorId);
         try{modalRoot.innerHTML="";}catch(_){}
         modalOpen=false;modalKind=null;updateBadge();saveGame();mpPublishSnapshot(true);
@@ -5411,14 +5586,23 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
         return;
       }
       if(a.type==="debtPay"){mpDebtSettle();return;}
-      // debtSell: the host re-derives the amount from the tile itself. A guest
-      // that asked for a bigger number is simply answered with the real one.
+      /* debtSell: the host re-derives the amount from the tile itself. A guest
+         that asked for a bigger number is simply answered with the real one.
+
+         An unknown tile, a tile the guest does not own, or a kind that is no
+         longer sellable is REJECTED, not settled. All three used to fall through
+         to mpDebtSettle(), which pays the debt if the money happens to be there
+         and otherwise DECLARES BANKRUPTCY - so a guest whose list had gone stale
+         (they sold the last house, or the host already sold it) could be bankrupted
+         by a click on a row that should simply have done nothing. That is the one
+         place in this flow where a duplicated or stale click could cost somebody
+         the game, so it now only ever drops the request. */
       const t=TILES[Number(a.tileId)];
-      if(!t||t.owner!==p.id){mpDebtSettle();return;}
+      if(!t||t.owner!==p.id){mpPublishSnapshot(true);return;}
       const kind=String(a.assetKind||"");
       if(!(kind==="mortgage"||kind==="house"||kind==="hotel"))return;
       const row=playerLiquidations(p).find(x=>x.t.id===t.id&&x.kind===kind);
-      if(!row){mpDebtSettle();return;}
+      if(!row){mpPublishSnapshot(true);return;}
       applyLiquidation(p,row);
       playSellSfx();
       log(lang==="en"?`${playerLabel(p)} ${kind==="mortgage"?"mortgages":"sells"} on «${tileLabel(t)}» to cover a debt.`:`${playerLabel(p)} ${kind==="mortgage"?"закладывает":"продаёт застройку на"} «${tileLabel(t)}», чтобы покрыть долг.`);
@@ -8687,8 +8871,21 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     p.bankrupt=true;
     returnJailCards(p);
     const creditor=creditorId!=null?players[creditorId]:null;
-    // The creditor already received the full amount; take back the part the debtor could not pay.
-    if(creditor&&!creditor.bankrupt)creditor.money=Math.max(0,creditor.money+p.money);
+    /* The creditor takes whatever cash the debtor actually has, and nothing else.
+
+       This used to read `creditor.money = Math.max(0, creditor.money + p.money)`,
+       on a comment claiming the creditor had already been paid in full and this
+       was clawing back the unpaid part. That is wrong twice over.
+
+       p.money is only non-negative on the paths that reach here through
+       requirePayment, so on those it happened to be harmless. But checkBankrupt is
+       also called after a card's "collect from each player" (checkBankrupt(o,p.id)),
+       where p.money has already gone NEGATIVE. There the old line debited the
+       creditor by the size of the shortfall: a player landing a Collect From
+       Everyone card against someone who could not cover it took money away from
+       them. The creditor is never pre-paid before a bankruptcy on any path, so
+       there is no clawback to do - just hand over the cash that exists. */
+    if(creditor&&!creditor.bankrupt)creditor.money=Math.max(0,creditor.money+Math.max(0,p.money));
     p.money=0;
     TILES.forEach(t=>{if(t.owner===p.id){if(creditor&&!creditor.bankrupt){t.owner=creditor.id;}else{t.owner=null;t.houses=0;t.hotel=false;t.mortgaged=false;}}});
     log(`${playerLabel(p)} не может расплатиться и объявляет банкротство.`);playBankruptSfx();showActionEvent("bankrupt",p,{titleEn:"BANKRUPT",titleRu:"БАНКРОТСТВО",detailEn:"The player can no longer pay",detailRu:"Игрок больше не может расплачиваться",amount:null,icon:"💀",tone:"red",duration:1600});renderTokens();renderPlayers();return true;
@@ -8731,33 +8928,112 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
   /* The markup, separated from the wiring so the host's snapshot can hand the
      same dialog to a guest: the guest builds it from its own live state and its
      own language, exactly as it does for the jail and the purchase dialog. */
+  /* Whether the bankruptcy confirmation is showing instead of the main screen.
+     Module scope rather than a closure local, because the dialog is rebuilt from
+     scratch on every mortgage and the multiplayer path rebuilds it again from a
+     snapshot - a local would be reset by the rebuild and the confirmation would
+     never survive a repaint. Cleared by whoever ends the debt. */
+  let debtConfirmOpen=false;
+  const debtMoney=n=>"$"+Math.max(0,Math.floor(n)).toLocaleString(lang==="ru"?"ru-RU":"en-US");
+
+  /* The bankruptcy step. Rendered instead of the main dialog rather than as a
+     confirm() call: a native dialog cannot be styled, cannot name the creditor,
+     and cannot say what happens to the assets - which is the part players
+     actually need to know before agreeing to something irreversible. */
+  function debtConfirmHtml(p,amount,creditorId){
+    const en=lang==="en";
+    const cash=Math.max(0,Math.floor(p.money));
+    const owed=Math.max(0,Math.floor(amount));
+    const creditor=creditorId!=null?players[creditorId]:null;
+    const toCreditor=creditor?playerLabel(creditor):(en?"the bank":"банк");
+    const props=TILES.filter(t=>t.owner===p.id).length;
+    return `<div class="modal-bg"><div class="modal capital-debt-modal">
+      <div class="capital-debt-head">
+        <div class="capital-debt-kicker">${en?"Confirm bankruptcy":"Подтверждение банкротства"}</div>
+        <h3 class="capital-debt-title">${en?"This cannot be undone":"Это действие необратимо"}</h3>
+      </div>
+      <div class="capital-debt-confirm">
+        <div class="capital-debt-warn">
+          <h4>${en?`You still owe ${debtMoney(owed)}`:`Вы всё ещё должны ${debtMoney(owed)}`}</h4>
+          <p>${en?"Declaring bankruptcy removes you from the game permanently.":"Объявление банкротства навсегда выводит вас из игры."}</p>
+          <ul>
+            <li>${en?`Your cash of <b>${debtMoney(cash)}</b> goes to <b>${escapeHtml(toCreditor)}</b>.`:`Ваши <b>${debtMoney(cash)}</b> перейдут к <b>${escapeHtml(toCreditor)}</b>.`}</li>
+            ${props?`<li>${en?`All <b>${props}</b> of your properties transfer to <b>${escapeHtml(toCreditor)}</b>.`:`Все ваши <b>${props}</b> участк${props===1?" перейдёт":"ов перейдут"} к <b>${escapeHtml(toCreditor)}</b>.`}</li>`:""}
+            ${p.getOutCards?`<li>${en?"Any Get Out of Jail card returns to the deck.":"Карты «Выйти из тюрьмы» вернутся в колоду."}</li>`:""}
+            <li>${en?"You will not play again in this game.":"Вы больше не будете участвовать в этой игре."}</li>
+          </ul>
+        </div>
+        <div class="capital-debt-actions" style="grid-template-columns:1fr 1fr">
+          <button class="btn yes" id="debtCancel">${en?"Keep playing":"Продолжить игру"}</button>
+          <button class="btn no capital-debt-give" id="debtGiveUp">${en?"Declare bankruptcy":"Объявить банкротство"}</button>
+        </div>
+      </div>
+    </div></div>`;
+  }
+
   function debtDialogHtml(p,amount,creditorId,reason){
+    if(debtConfirmOpen)return debtConfirmHtml(p,amount,creditorId);
     const en=lang==="en";
     const cash=Math.max(0,Math.floor(p.money));
     const owed=Math.max(0,Math.floor(amount));
     const short=Math.max(0,owed-cash);
     const creditor=creditorId!=null?players[creditorId]:null;
     const rows=playerLiquidations(p);
+    /* A row, not a button styled as a card. The amount is the thing a player
+       scans for when deciding how many assets to part with, so it gets its own
+       tabular-nums column where the digits line up vertically; the action is a
+       separate control on the right rather than the whole row, so a click can
+       never land on an asset by accident while reading the list. */
     const assetHtml=rows.length?rows.map(x=>{
-      const label=x.kind==="mortgage"
-        ?(en?`Mortgage ${tileLabel(x.t)}`:`Заложить «${tileLabel(x.t)}»`)
-        :(x.kind==="hotel"?(en?`Sell the hotel on ${tileLabel(x.t)}`:`Продать отель на «${tileLabel(x.t)}»`):(en?`Sell a house on ${tileLabel(x.t)}`:`Продать дом на «${tileLabel(x.t)}»`));
-      return `<button class="btn no capital-debt-asset" data-kind="${x.kind}" data-tile="${x.t.id}">${escapeHtml(label)} <span style="opacity:.72">+$${x.amount}</span></button>`;
-    }).join(""):`<div class="auction-empty">${en?"You have nothing left to sell.":"Продавать больше нечего."}</div>`;
+      const name=tileLabel(x.t);
+      const kind=x.kind==="mortgage"
+        ?(x.t.type==="station"?(en?"Station":"Вокзал"):x.t.type==="util"?(en?"Utility":"Предприятие"):(en?"Property":"Участок"))
+        :(x.kind==="hotel"?(en?"Hotel":"Отель"):(en?"House":"Дом"));
+      const act=x.kind==="mortgage"
+        ?(en?"Mortgage":"Заложить")
+        :(x.kind==="hotel"?(en?"Sell hotel":"Продать отель"):(en?"Sell house":"Продать дом"));
+      const action=x.kind==="mortgage"?`${en?"Mortgage":"Заложить"} ${name}`:`${en?"Sell":"Продать"} ${kind.toLowerCase()} on ${name}`;
+      return `<div class="capital-debt-row">
+        <div class="capital-debt-row-name"><b title="${escapeHtml(name)}">${escapeHtml(name)}</b><i>${escapeHtml(kind)}</i></div>
+        <span class="capital-debt-row-amt">+${debtMoney(x.amount)}</span>
+        <button class="btn no capital-debt-row-btn" data-kind="${x.kind}" data-tile="${x.t.id}" aria-label="${escapeHtml(action)}">${escapeHtml(act)}</button>
+      </div>`;
+    }).join(""):`<div class="capital-debt-empty">${en?"You have nothing left to sell.":"Продавать больше нечего."}</div>`;
     const canPay=owed>0&&cash>=owed;
+    /* Named after the obligation, not after the player's situation: every state
+       of this dialog is a debt the player is failing to meet, so "Unable to pay
+       rent" would be wrong on the one tile where there is no rent. An income tax
+       or an unpaid auction has no counterparty, so it gets the generic title. */
+    const title=creditorId==null
+      ?(en?"Payment due":"Платёж к оплате")
+      :(en?"Unable to pay rent":"Не хватает на аренду");
     return `<div class="modal-bg"><div class="modal capital-debt-modal">
-      <div class="capital-property-kicker"><span class="capital-property-swatch" style="background:#e05a6b"></span>${en?"CANNOT PAY":"НЕ МОЖЕТ ОПЛАТИТЬ"}</div>
-      <h3 style="margin:6px 0 2px">${escapeHtml(reason||(en?"Payment due":"Платёж"))}</h3>
-      <div class="capital-debt-figures">
-        <div><span>${en?"Owed":"Долг"}</span><strong>$${owed}</strong></div>
-        <div><span>${en?"Cash":"Деньги"}</span><strong>$${cash}</strong></div>
-        <div><span>${en?"Short":"Не хватает"}</span><strong style="color:${short?"#ff8a96":"#5ee3a0"}">$${short}</strong></div>
+      <div class="capital-debt-head">
+        <div class="capital-debt-kicker">${en?"Payment required":"Требуется платёж"}</div>
+        <h3 class="capital-debt-title">${escapeHtml(title)}</h3>
+        <p class="capital-debt-sub">${escapeHtml(reason||"")}${creditor?`${reason?" · ":""}${en?"Creditor":"Получатель"} <b>${escapeHtml(playerLabel(creditor))}</b>`:""}</p>
       </div>
-      ${creditor?`<div style="font-size:11px;color:#7f8da0;margin:2px 0 10px">${en?`Paid to ${playerLabel(creditor)}`:`Получатель: ${escapeHtml(playerLabel(creditor))}`}</div>`:""}
-      <div class="capital-debt-assets">${assetHtml}</div>
-      <div class="modal-btns">
-        <button class="btn yes" id="debtPay" ${canPay?"":"disabled"}>${en?`Pay $${owed}`:`Заплатить $${owed}`}</button>
-        <button class="btn no" id="debtGiveUp">${en?"Declare bankruptcy":"Объявить банкротство"}</button>
+      <div class="capital-debt-summary">
+        <div class="capital-debt-fig"><span>${en?"Amount owed":"Сумма долга"}</span><strong>${debtMoney(owed)}</strong></div>
+        <div class="capital-debt-fig"><span>${en?"Available cash":"Доступно"}</span><strong>${debtMoney(cash)}</strong></div>
+        <div class="capital-debt-fig capital-debt-fig--${short?"gap":"clear"}">
+          <span>${short?(en?"Still needed":"Не хватает"):(en?"Fully covered":"Долг покрыт")}</span>
+          <strong>${short?debtMoney(short):(en?"Ready":"Готово")}</strong>
+        </div>
+      </div>
+      <div class="capital-debt-assets-head">
+        <h4>${en?"Raise funds":"Найти средства"}</h4>
+        <span>${en?"Mortgage eligible properties to cover your debt.":"Заложите свободную недвижимость, чтобы покрыть долг."}</span>
+      </div>
+      <div class="capital-debt-list">${assetHtml}</div>
+      <div class="capital-debt-foot">
+        <p class="capital-debt-hint${short?"":" is-clear"}">${short
+          ?(en?`You still need <b>${debtMoney(short)}</b> to pay this debt.`:`Чтобы оплатить долг, не хватает <b>${debtMoney(short)}</b>.`)
+          :(en?"You can pay this debt now.":"Долг можно оплатить прямо сейчас.")}</p>
+        <div class="capital-debt-actions">
+          <button class="btn yes" id="debtPay" ${canPay?"":"disabled"}>${en?`Pay ${debtMoney(owed)}`:`Оплатить ${debtMoney(owed)}`}</button>
+          <button class="btn no capital-debt-give" id="debtAskBankrupt">${en?"Declare bankruptcy":"Объявить банкротство"}</button>
+        </div>
       </div>
     </div></div>`;
   }
@@ -8782,9 +9058,23 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     else t.mortgaged=true;
     p.money=Math.max(0,p.money+entry.amount);
   }
+  /* Set while a click is being turned into a transaction, and cleared in a
+     finally. The old handler had no re-entrancy guard: it rebuilt the dialog by
+     calling clearModal and openModal from inside the click handler, so a fast
+     double-click could land twice on the same row before the DOM was swapped and
+     sell the asset twice - a house count stepping down by two, or a mortgage
+     applied to an already-mortgaged tile. One flag around the whole handler makes
+     the second click a no-op regardless of how fast it arrives. */
+  let debtBusy=false;
   function openDebtDialog(p,amount,creditorId,reason,onDone){
     let done=false;
-    const finish=(settled)=>{if(done)return;done=true;try{clearModal();}catch(_){}onDone&&onDone(settled);};
+    debtConfirmOpen=false;
+    const finish=(settled)=>{
+      if(done)return;
+      done=true;debtConfirmOpen=false;
+      try{clearModal();}catch(_){}
+      onDone&&onDone(settled);
+    };
     const render=()=>{
       if(done)return;
       /* Re-render by closing first. openModal refuses to open while a dialog is
@@ -8798,16 +9088,24 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
       bg.addEventListener("click",e=>{
         const b=e.target.closest("[data-kind]");
         if(b&&!b.disabled){
+          if(debtBusy)return;
+          /* Re-validate against live state instead of trusting the row that was
+             on screen. The list is rebuilt after every sale, so a stale click can
+             name an asset that is already mortgaged or a house that is already
+             gone; playerLiquidations is the single source of truth for what may
+             legally be sold, and it also carries the amount, so the number here
+             always matches the engine's rather than being re-derived here. */
           const t=TILES[Number(b.dataset.tile)];
           if(!t)return;
-          const entry={t,kind:b.dataset.kind,amount:0};
-          if(entry.kind==="hotel")entry.amount=Math.round(HOUSE_COST[t.group]/2);
-          else if(entry.kind==="house")entry.amount=Math.round(HOUSE_COST[t.group]/2);
-          else entry.amount=Math.round((t.price||0)/2);
-          applyLiquidation(p,entry);
-          playSellSfx();
-          log(lang==="en"?`${playerLabel(p)} ${entry.kind==="mortgage"?"mortgages":"sells"} on «${tileLabel(t)}» to cover a debt.`:`${playerLabel(p)} ${entry.kind==="mortgage"?"закладывает":"продаёт застройку на"} «${tileLabel(t)}», чтобы покрыть долг.`);
-          renderTokens();renderPlayers();
+          const entry=playerLiquidations(p).find(x=>x.t.id===t.id&&x.kind===b.dataset.kind);
+          if(!entry){render();return;}
+          debtBusy=true;
+          try{
+            applyLiquidation(p,entry);
+            playSellSfx();
+            log(lang==="en"?`${playerLabel(p)} ${entry.kind==="mortgage"?"mortgages":"sells"} on «${tileLabel(t)}» to cover a debt.`:`${playerLabel(p)} ${entry.kind==="mortgage"?"закладывает":"продаёт застройку на"} «${tileLabel(t)}», чтобы покрыть долг.`);
+            renderTokens();renderPlayers();saveGame();
+          }finally{debtBusy=false;}
           render();
           return;
         }
@@ -8818,6 +9116,9 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
       if(pay)pay.onclick=()=>{
         const owed=Math.max(0,Math.floor(Number(amount)||0));
         const creditor=creditorId!=null?players[creditorId]:null;
+        /* Re-check against live cash, not the disabled attribute: the attribute
+           can be a frame behind after a sale, and paying on a stale button would
+           let the creditor take money the player no longer has. */
         if(p.money<owed)return;
         p.money-=owed;
         if(creditor&&!creditor.bankrupt)creditor.money+=owed;
@@ -8825,10 +9126,19 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
         SFX.coin();renderTokens();renderPlayers();saveGame();
         finish(true);
       };
+      /* Bankruptcy takes two presses. The first opens the confirmation, which
+         names the creditor and spells out what leaves the player; the second is
+         the only one that ends the game. */
+      const ask=bg.querySelector("#debtAskBankrupt");
+      if(ask)ask.onclick=()=>{if(debtBusy)return;debtConfirmOpen=true;render();};
+      const cancel=bg.querySelector("#debtCancel");
+      if(cancel)cancel.onclick=()=>{debtConfirmOpen=false;render();};
       const give=bg.querySelector("#debtGiveUp");
       if(give)give.onclick=()=>{
-        declareBankruptcy(p,creditorId);
-        saveGame();
+        if(debtBusy)return;
+        debtBusy=true;
+        try{declareBankruptcy(p,creditorId);saveGame();}
+        finally{debtBusy=false;}
         finish(false);
       };
     };
@@ -8844,20 +9154,26 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     const d=mpPendingDebt;
     if(!d)return;
     const p=players.find(x=>x&&x.id===Number(d.playerId));
-    mpPendingDebt=null;
-    authoritativeModalData=null;
-    if(!p||p.bankrupt){try{modalRoot.innerHTML="";}catch(_){}modalOpen=false;modalKind=null;updateBadge();mpPublishSnapshot(true);return;}
     const owed=Math.max(0,Math.floor(Number(d.amount)||0));
     const creditor=d.creditorId!=null?players[d.creditorId]:null;
-    if(p.money>=owed){
-      p.money-=owed;
-      if(creditor&&!creditor.bankrupt)creditor.money+=owed;
-      log(lang==="en"?`${playerLabel(p)} pays $${owed}.`:`${playerLabel(p)} расплачивается на $${owed}.`);
-      SFX.coin();renderTokens();renderPlayers();saveGame();
-    }else{
-      declareBankruptcy(p,d.creditorId);
-      saveGame();
+    /* A guest pressed Pay with a stale view of their own cash. The host is the
+       authority and the money is not there, so this is NOT bankruptcy: the debt
+       stays open, the guest gets the dialog back with the real figures, and they
+       carry on selling assets. It used to call declareBankruptcy() here, which
+       meant a button that was disabled on their screen could still end the game
+       if they had clicked it a moment before a sale went through. */
+    if(p&&!p.bankrupt&&p.money<owed){
+      mpPublishSnapshot(true);
+      return;
     }
+    mpPendingDebt=null;
+    authoritativeModalData=null;
+    debtConfirmOpen=false;
+    if(!p||p.bankrupt){try{modalRoot.innerHTML="";}catch(_){}modalOpen=false;modalKind=null;updateBadge();mpPublishSnapshot(true);return;}
+    p.money-=owed;
+    if(creditor&&!creditor.bankrupt)creditor.money+=owed;
+    log(lang==="en"?`${playerLabel(p)} pays $${owed}.`:`${playerLabel(p)} расплачивается на $${owed}.`);
+    SFX.coin();renderTokens();renderPlayers();saveGame();
     try{modalRoot.innerHTML="";}catch(_){}
     modalOpen=false;modalKind=null;updateBadge();
     mpPublishSnapshot(true);
@@ -8878,6 +9194,7 @@ function tileLabel(t){return (lang==="en"?tileEN[t.id]:tileRU[t.id])||t.name;}
     if(mp.active&&mp.host&&!mpIsLocalPlayer(p)&&p.mpClientId){
       mpPendingDebt={playerId:p.id,amount:owed,creditorId:creditorId==null?null:Number(creditorId),reason:reason||"",onDone};
       authoritativeModalData={kind:"debt",playerId:p.id,amount:owed,creditorId:mpPendingDebt.creditorId,reason:mpPendingDebt.reason};
+      debtConfirmOpen=false;
       modalRoot.innerHTML="";modalOpen=false;modalKind="debt";updateBadge();
       mpPublishSnapshot(true);
       return;
