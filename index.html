@@ -4707,7 +4707,14 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       }
     }
   }
-  async function mpSubscribeChannel(){
+  /* deadlineMs exists because a retry is a different kind of question.
+
+     The first subscribe is allowed the full 15s, because a cold realtime edge on
+     the free tier genuinely can take that long and failing a healthy join is worse
+     than making someone wait. A retry is only asking "is it still broken?", and
+     there is no reason to make a player stare at a spinner for another 15s per
+     attempt to learn that the answer has not changed. */
+  async function mpSubscribeChannel(deadlineMs=15000){
     const client=await mpLoadSupabase();
     if(!client)throw new Error("Supabase client unavailable");
     if(mp.channel){try{await client.removeChannel(mp.channel);}catch(_){}mp.channel=null;}
@@ -4721,7 +4728,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       let settled=false;
       const finish=(ok,value)=>{if(settled)return;settled=true;ok?resolve(value):reject(value);};
       channel.subscribe(status=>{mpHandleChannelStatus(status);if(status==="SUBSCRIBED")finish(true,channel);else if(status==="CHANNEL_ERROR"||status==="TIMED_OUT")finish(false,new Error(status));});
-      setTimeout(()=>finish(false,new Error("supabase-subscribe-timeout")),15000);
+      setTimeout(()=>finish(false,new Error("supabase-subscribe-timeout")),deadlineMs);
     });
   }
   async function mpReconnectChannel(){
@@ -4737,6 +4744,64 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     mp.active=false;mp.connected=false;mp.channel=null;
     const close=async()=>{try{if(channel&&client)await client.removeChannel(channel);}catch(_){} };
     if(delay>0)setTimeout(close,delay);else close();
+  }
+  /* Subscribe, but do not give up on the first failure.
+
+     The realtime service is the only thing standing between two people and a
+     game, and it is the part that blips: a restarting edge, a cold start on the
+     free tier, or a 5xx from the edge all fail the FIRST subscribe and succeed on
+     the second. Before this, a single failure tore the transport down and left the
+     player with no multiplayer at all until they reloaded.
+
+     Each attempt still removes the previous channel before making a new one
+     (mpSubscribeChannel does that), so a retry cannot stack subscriptions. */
+  async function mpSubscribeWithRetry(tries){
+    let last=null;
+    for(let i=0;i<tries;i++){
+      if(!mp.active)throw last||new Error("cancelled");
+      try{return await mpSubscribeChannel(i===0?15000:6000);}
+      catch(e){
+        last=e;
+        // Not a transient blip: no SDK, no transport. Retrying cannot help.
+        if(/SDK could not load|client unavailable/i.test(String(e?.message||e)))throw e;
+        if(i<tries-1)await new Promise(r=>setTimeout(r,800*(i+1)));
+      }
+    }
+    throw last||new Error("subscribe failed");
+  }
+  /* A failed connection, shown rather than toasted.
+
+     The old path tore the transport down, cleared the room and fired a toast.
+     Three seconds later the menu looked exactly as it had before you typed
+     anything, so joining a friend's code looked like it had done nothing at all -
+     which is the whole of the bug report.
+
+     It also sent people looking in the wrong place. A 5xx or Cloudflare's 1101
+     from the realtime edge is our problem and the anon key is fine, so telling
+     someone to check their connection or retype the code is worse than saying
+     nothing. The two cases get different words. */
+  function mpConnectionFailed(room,name,host,err){
+    const msg=String(err?.message||err||"");
+    const serverSide=/CHANNEL_ERROR|TIMED_OUT|timeout|1101|5\d\d|failed to fetch|fetch failed|network/i.test(msg);
+    const head=serverSide?"The game server is not answering right now.":"That room did not answer.";
+    const body=serverSide
+      ?"This is a problem on our side, not with the code. Your friend does not need to change anything — try again in a moment."
+      :"Check the six-character code with your friend and try again.";
+    modalOpen=true;modalKind="mpError";updateBadge();
+    modalRoot.innerHTML=`<div class="modal-bg capital-mp-bg"><div class="modal capital-mp-modal" role="dialog" aria-modal="true">
+      <div style="font-size:11px;letter-spacing:.16em;color:#ff8a96;font-weight:900">${"CONNECTION FAILED"}</div>
+      <h3 style="margin:6px 0 6px">${escapeHtml(String(room||""))}</h3>
+      <p style="margin:0 0 4px;color:#dbe2ec;line-height:1.5">${escapeHtml(head)}</p>
+      <p style="margin:0;font-size:12px;color:#8d9ab0;line-height:1.5">${escapeHtml(body)}</p>
+      <div class="modal-btns" style="margin-top:16px">
+        <button class="btn no" id="mpErrLeave">${"Back"}</button>
+        <button class="btn yes" id="mpErrRetry">${"Try again"}</button>
+      </div></div></div>`;
+    modalRoot.querySelector("#mpErrLeave")?.addEventListener("click",()=>{clearModal();modalOpen=false;modalKind=null;});
+    modalRoot.querySelector("#mpErrRetry")?.addEventListener("click",()=>{
+      clearModal();modalOpen=false;modalKind=null;
+      mpConnect(room,host,name);
+    });
   }
   async function mpConnect(room,host,name,restoreSession=false){
     try{
@@ -4766,7 +4831,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       mp.hostId=host?mp.clientId:null;
       mpStopHostWatch();
       mpPersistSession();
-      await mpSubscribeChannel();
+      await mpSubscribeWithRetry(3);
       if(host){
         mpRefreshMembersFromPresence(false);
         if(mp.restorePending){
@@ -4829,8 +4894,9 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     }catch(e){
       console.error("CAPITAL Supabase multiplayer connect",e);
       mpTeardownTransport();mp.host=false;mp.room="";
-      const msg=String(e?.message||e||"");
-      toast(msg.includes("timeout")||msg.includes("TIMED_OUT")?("Multiplayer connection timed out. Check your internet connection."):("Multiplayer connection failed. Open the browser console for details."),"warn");
+      // Show it. The toast this replaces was gone within three seconds and left
+      // the menu indistinguishable from never having typed a code at all.
+      mpConnectionFailed(room,name,host,e);
       return false;
     }
   }
@@ -5034,6 +5100,18 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     if(mp.active){mpRoomActiveNotice();return;}
     const preset=(prefillName||document.getElementById("nickInput")?.value||"").trim().slice(0,16);
     const presetRoom=String(prefillRoom||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6);
+    /* Already given a usable code AND a name: connect, do not ask again.
+
+       The boot layer collects a room code and a nickname in its own form and then
+       hands both to this function, so without this branch the player typed their
+       friend's code, pressed Join, and got the identical form back with the code
+       already filled in - twice, every time. That is indistinguishable from a
+       game that will not let you in, and it is the exact thing players describe as
+       "I enter the code and it still does not connect". */
+    if(presetRoom.length===6&&preset){
+      mpConnect(presetRoom,false,preset);
+      return;
+    }
     const title="JOIN GAME";
     const subtitle="Enter room code and nickname";
     const codeLabel="Room code";
