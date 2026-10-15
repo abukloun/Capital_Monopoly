@@ -58,7 +58,9 @@ or pinch to zoom, and click a tile to open the same property window.
 you can offer properties and cash to another player, the host approves, and the
 target accepts or declines.
 
-**Two languages** — English and Russian, switchable from the main menu.
+**English UI** — this build ships English only. The Russian translation layer is
+still in the repository history: restore the bilingual `index.html` with
+`git checkout 52d2447 -- index.html`.
 
 ## Controls
 
