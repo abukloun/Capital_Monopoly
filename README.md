@@ -92,7 +92,7 @@ Multiplayer hides Save, since the host owns the state.
 
 The game sits at the repository root, so **GitHub Pages needs no build at all**:
 Settings → Pages → Source → *Deploy from a branch* → `main` / `/ (root)`. It
-will be live at `https://abuklown.github.io/Capital_Monopoly/`, and every push
+will be live at `https://abukloun.github.io/Capital_Monopoly/`, and every push
 to `main` republishes it.
 
 `vercel.json` is also set up, with cache headers so the audio is not
