@@ -4292,7 +4292,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
      start message, with every snapshot (so a reconnect picks it up) and live in
      the lobby via "lobbySettings". Settings values are never trusted from a
      guest, and every field is clamped by sanitizeGameSettings. */
-  const GAME_SETTINGS_DEFAULTS={startingCash:1500,goBonus:200,jailFine:50,incomeTaxMode:"flat",incomeTaxPercent:10,turnTimer:0,auctionOnDecline:true,doubleRentOnMonopoly:true,evenBuild:true,freeParkingPot:false,botDifficulty:"normal"};
+  const GAME_SETTINGS_DEFAULTS={startingCash:1500,goBonus:200,jailFine:50,incomeTaxMode:"flat",incomeTaxPercent:10,turnTimer:0,auctionOnDecline:true,doubleRentOnMonopoly:true,evenBuild:true,freeParkingPot:false,botDifficulty:"normal",randomizePlayerOrder:false,rentWhileInJail:true,mortgageEnabled:true};
   const GAME_SETTINGS_KEY="capital.gameSettings.v1";
   let gameSettings={...GAME_SETTINGS_DEFAULTS};
   let freeParkingPotAmount=0;
@@ -4313,6 +4313,9 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     out.evenBuild=v.evenBuild!==false;
     out.freeParkingPot=!!v.freeParkingPot;
     out.botDifficulty=["easy","normal","hard"].includes(v.botDifficulty)?v.botDifficulty:"normal";
+    out.randomizePlayerOrder=!!v.randomizePlayerOrder;
+    out.rentWhileInJail=v.rentWhileInJail!==false;
+    out.mortgageEnabled=v.mortgageEnabled!==false;
     return out;
   }
   function persistGameSettings(){try{localStorage.setItem(GAME_SETTINGS_KEY,JSON.stringify(gameSettings));}catch(_){}}
@@ -4336,9 +4339,12 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     if(s.jailFine!==d.jailFine)out.push(`Jail $${s.jailFine}`);
     if(s.incomeTaxMode!=="flat")out.push(`Tax ${s.incomeTaxPercent}%`);
     if(!s.auctionOnDecline)out.push("No auctions");
-    if(!s.doubleRentOnMonopoly)out.push("No monopoly x2");
+    if(!s.doubleRentOnMonopoly)out.push("No x2 rent");
+    if(!s.rentWhileInJail)out.push("No rent in jail");
+    if(!s.mortgageEnabled)out.push("No mortgage");
     if(!s.evenBuild)out.push("Free build");
-    if(s.freeParkingPot)out.push("Parking pot");
+    if(s.freeParkingPot)out.push("Vacation pot");
+    if(s.randomizePlayerOrder)out.push("Random order");
     if(s.botDifficulty!=="normal")out.push(`Bots ${s.botDifficulty}`);
     return out.length?out.join(" · "):"Classic rules";
   }
@@ -4969,7 +4975,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     const layered=!!container;
     const canEdit=!!editable&&(!mp.active||mp.host);
     const draft={...gameSettings};
-    const tabs=[["general","General"],["economy","Economy"],["rules","Gameplay Rules"],["bots","Bots"]];
+    const tabs=[["general","General","🏠"],["economy","Economy","💰"],["rules","Gameplay Rules","📜"],["bots","Bots","🤖"]];
     let tab="general";
     const close=()=>{
       if(layered)closeGameSettingsLayer();
@@ -4980,7 +4986,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       toast("Game rules saved.","good");
       if(mp.active&&mp.host)mpSend({kind:"lobbySettings",settings:gameSettings});
     };
-    const row=(label,ctl,hint)=>`<div class="gs-row"><div class="gs-row-text"><b>${label}</b>${hint?`<small>${hint}</small>`:""}</div><div class="gs-row-ctl">${ctl}</div></div>`;
+    const row=(label,ctl,hint,icon="⚙️")=>`<div class="gs-row"><div class="gs-row-icon" aria-hidden="true">${icon}</div><div class="gs-row-text"><b>${label}</b>${hint?`<small>${hint}</small>`:""}</div><div class="gs-row-ctl">${ctl}</div></div>`;
     const sel=(id,opts,val)=>`<select class="gs-input" id="${id}" ${canEdit?"":"disabled"}>${opts.map(o=>`<option value="${o[0]}"${String(val)===String(o[0])?" selected":""}>${o[1]}</option>`).join("")}</select>`;
     const tog=(id,on)=>`<button type="button" class="gs-toggle${on?" on":""}" id="${id}" role="switch" aria-checked="${!!on}" ${canEdit?"":"disabled"}><i></i></button>`;
     const num=(id,val,min,max,step)=>`<input type="number" class="gs-input" id="${id}" value="${val}" min="${min}" max="${max}" step="${step}" ${canEdit?"":"disabled"}>`;
@@ -4991,33 +4997,36 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       const body=root.querySelector("#gsBody");if(!body)return;
       if(tab==="general"){
         body.innerHTML=
-          row("Starting cash",sel("gsCash",[["500","$500"],["1000","$1,000"],["1500","$1,500"],["2000","$2,000"],["3000","$3,000"]],draft.startingCash),"Each player begins with this amount.")+
-          row("Pass Start bonus",num("gsGo",draft.goBonus,0,2000,50),"Paid for passing or landing on GO.")+
-          row("Turn timer",sel("gsTimer",[[0,"Off"],["60","60 seconds"],["90","90 seconds"],["120","120 seconds"],["180","180 seconds"]],draft.turnTimer),"The host auto-rolls and ends idle turns. Never bids in auctions.");
-        bindSel("gsCash","startingCash",true);bindNum("gsGo","goBonus",0,2000);bindSel("gsTimer","turnTimer",true);
+          row("Starting cash",sel("gsCash",[["500","$500"],["1000","$1,000"],["1500","$1,500"],["2000","$2,000"],["3000","$3,000"]],draft.startingCash),"Each player begins with this amount.","💵")+
+          row("Randomize player order",tog("gsRandom",draft.randomizePlayerOrder),"Shuffle the seating order at the start of every match.","🔀")+
+          row("Pass Start bonus",num("gsGo",draft.goBonus,0,2000,50),"Paid for passing or landing on GO.","➜")+
+          row("Turn timer",sel("gsTimer",[[0,"Off"],["60","60 seconds"],["90","90 seconds"],["120","120 seconds"],["180","180 seconds"]],draft.turnTimer),"The host auto-rolls and ends idle turns. Never bids in auctions.","⏱");
+        bindSel("gsCash","startingCash",true);bindTog("gsRandom","randomizePlayerOrder");bindNum("gsGo","goBonus",0,2000);bindSel("gsTimer","turnTimer",true);
       }else if(tab==="economy"){
         body.innerHTML=
-          row("Jail fine",num("gsJail",draft.jailFine,0,1000,10),"Cost to pay your way out of Jail.")+
-          row("Income tax",sel("gsTaxMode",[["flat","Fixed amount"],["percent","Percent of cash"]],draft.incomeTaxMode),"Applies to the Income Tax tile only.")+
-          (draft.incomeTaxMode==="percent"?row("Tax percent",num("gsTaxPct",draft.incomeTaxPercent,1,50,1),"Charged on the payer's current cash."):"");
+          row("Jail fine",num("gsJail",draft.jailFine,0,1000,10),"Cost to pay your way out of Jail.","🔒")+
+          row("Income tax",sel("gsTaxMode",[["flat","Fixed amount"],["percent","Percent of cash"]],draft.incomeTaxMode),"Applies to the Income Tax tile only.","🧾")+
+          (draft.incomeTaxMode==="percent"?row("Tax percent",num("gsTaxPct",draft.incomeTaxPercent,1,50,1),"Charged on the payer's current cash.","🧾"):"");
         bindNum("gsJail","jailFine",0,1000);bindSel("gsTaxMode","incomeTaxMode",false);bindNum("gsTaxPct","incomeTaxPercent",1,50);
       }else if(tab==="rules"){
         body.innerHTML=
-          row("Auction on decline",tog("gsAuction",draft.auctionOnDecline),"A skipped property goes to a live auction.")+
-          row("Monopoly doubles rent",tog("gsMono",draft.doubleRentOnMonopoly),"A complete colour group doubles base rent.")+
-          row("Even build",tog("gsEven",draft.evenBuild),"Houses must be spread evenly across a group.")+
-          row("Free Parking pot",tog("gsPot",draft.freeParkingPot),"Taxes and jail fines pool; landing on Free Parking pays it out.");
-        bindTog("gsAuction","auctionOnDecline");bindTog("gsMono","doubleRentOnMonopoly");bindTog("gsEven","evenBuild");bindTog("gsPot","freeParkingPot");
+          row("x2 rent on full-set properties",tog("gsMono",draft.doubleRentOnMonopoly),"Owning every property in a colour group doubles its base rent.","🏘️")+
+          row("Vacation cash",tog("gsPot",draft.freeParkingPot),"Landing on Vacation pays out the taxes and bank payments collected so far.","🏖️")+
+          row("Auction",tog("gsAuction",draft.auctionOnDecline),"A property the landing player declines to buy is auctioned to the table.","🔨")+
+          row("Don't collect rent while in prison",tog("gsJailRent",draft.rentWhileInJail),"While the owner sits in Jail their properties collect nothing.","⛓️")+
+          row("Mortgage",tog("gsMortgage",draft.mortgageEnabled),"Mortgage a property for half its price; mortgaged property collects no rent.","🏦")+
+          row("Even build",tog("gsEven",draft.evenBuild),"Houses and hotels must be built and sold evenly across a colour group.","🏗️");
+        bindTog("gsMono","doubleRentOnMonopoly");bindTog("gsPot","freeParkingPot");bindTog("gsAuction","auctionOnDecline");bindTog("gsJailRent","rentWhileInJail");bindTog("gsMortgage","mortgageEnabled");bindTog("gsEven","evenBuild");
       }else{
         body.innerHTML=
-          row("Bot difficulty",sel("gsBot",[["easy","Easy"],["normal","Normal"],["hard","Hard"]],draft.botDifficulty),"Easy bots bid and build more cautiously; hard bots push harder.")+
-          `<div class="gs-row"><div class="gs-row-text"><small>Bots use the built-in personalities. This only tunes how aggressively they buy, bid and build.</small></div></div>`;
+          row("Bot difficulty",sel("gsBot",[["easy","Easy"],["normal","Normal"],["hard","Hard"]],draft.botDifficulty),"Easy bots bid and build more cautiously; hard bots push harder.","🤖")+
+          `<div class="gs-row"><div class="gs-row-icon">ℹ️</div><div class="gs-row-text"><small>Bots use the built-in personalities. This only tunes how aggressively they buy, bid and build.</small></div></div>`;
         bindSel("gsBot","botDifficulty",false);
       }
     };
     const renderTabs=()=>{
       const el=root.querySelector("#gsTabs");if(!el)return;
-      el.innerHTML=tabs.map(t=>`<button type="button" class="gs-tab${tab===t[0]?" sel":""}" data-tab="${t[0]}">${t[1]}</button>`).join("");
+      el.innerHTML=tabs.map(t=>`<button type="button" class="gs-tab${tab===t[0]?" sel":""}" data-tab="${t[0]}"><span class="gs-tab-ico" aria-hidden="true">${t[2]}</span>${t[1]}</button>`).join("");
       el.querySelectorAll(".gs-tab").forEach(b=>b.addEventListener("click",()=>{tab=b.dataset.tab;renderTabs();renderBody();}));
     };
     root.innerHTML=`<div class="modal-bg capital-settings-bg"><div class="modal capital-settings-modal"><div class="capital-settings-head"><div><div class="capital-settings-kicker">${"GAME SETTINGS"}</div><h3>${"Room rules"}</h3></div><button class="btn no capital-settings-x" id="gsClose">✕</button></div><div class="capital-settings-tabs" id="gsTabs"></div><div class="capital-settings-body" id="gsBody"></div><div class="capital-settings-foot"><span class="capital-settings-note">${canEdit?(mp.active?"Host only — every player receives the same rules.":"Applies to the next game you start."):"Only the host can change the rules."}</span><div class="modal-btns">${canEdit?`<button class="btn no" id="gsCancel">${"Cancel"}</button><button class="btn yes" id="gsSave">${"Save rules"}</button>`:`<button class="btn no" id="gsCancel">${"Close"}</button>`}</div></div></div></div>`;
@@ -9516,6 +9525,9 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
   function hasMonopoly(pid,group){if(pid==null)return false;const groupTiles=TILES.filter(t=>t.type==="prop"&&t.group===group);return groupTiles.length>0&&groupTiles.every(t=>t.owner===pid);}
   function calcRent(t){
     if(!t||t.mortgaged)return 0;
+    // The owner sitting in Jail suspends rent only when the room turns that
+    // rule on; the mortgage switch is honoured at every mortgage entry point.
+    if(t.owner!=null&&!gameSettings.rentWhileInJail){const o=players[t.owner];if(o&&o.inJail)return 0;}
     // Unowned: show the base rent a first owner would charge.
     if(t.owner==null)return t.type==="prop"?t.rent:t.type==="station"?25:t.type==="util"?lastRollTotal*4:0;
     let rent=0;
@@ -9528,7 +9540,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
   function groupHasBuildings(t){return t?.type==="prop"&&TILES.some(x=>x.type==="prop"&&x.group===t.group&&(x.hotel||(x.houses||0)>0));}
   // Buildings stay with the color group, so a property is only tradable while its group is unbuilt.
   function isTradable(t){return !!t&&["prop","station","util"].includes(t.type)&&!groupHasBuildings(t);}
-  function canMortgage(t){return !!t&&["prop","station","util"].includes(t.type)&&t.owner!=null&&!t.mortgaged&&!groupHasBuildings(t);}
+  function canMortgage(t){return !!gameSettings.mortgageEnabled&&!!t&&["prop","station","util"].includes(t.type)&&t.owner!=null&&!t.mortgaged&&!groupHasBuildings(t);}
   function canBuildHouse(t){if(!t||t.type!=="prop"||t.owner==null||t.hotel||t.mortgaged||!hasMonopoly(t.owner,t.group)||groupHasMortgage(t)||t.houses>=4)return false;return gameSettings.evenBuild?TILES.filter(x=>x.type==="prop"&&x.group===t.group).every(x=>x.hotel||x.houses>=t.houses):true;}
   function canBuildHotel(t){if(!t||t.type!=="prop"||t.owner==null||t.hotel||t.mortgaged||t.houses<4||!hasMonopoly(t.owner,t.group)||groupHasMortgage(t))return false;return TILES.filter(x=>x.type==="prop"&&x.group===t.group).every(x=>x.hotel||x.houses>=4);}
 
@@ -9736,9 +9748,12 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     });
     // Cheapest first: covering a debt should cost the player as little as
     // possible, and the property they part with should be the one they mind least.
-    const props=TILES.filter(t=>t.owner===p.id&&!t.mortgaged&&["prop","station","util"].includes(t.type)&&!groupHasBuildings(t))
-      .sort((a,b)=>(a.price||0)-(b.price||0))
-      .map(t=>({t,kind:"mortgage",amount:Math.round((t.price||0)/2)}));
+    // With mortgages off, debt relief can only come from selling buildings.
+    const props=gameSettings.mortgageEnabled
+      ?TILES.filter(t=>t.owner===p.id&&!t.mortgaged&&["prop","station","util"].includes(t.type)&&!groupHasBuildings(t))
+        .sort((a,b)=>(a.price||0)-(b.price||0))
+        .map(t=>({t,kind:"mortgage",amount:Math.round((t.price||0)/2)}))
+      :[];
     return [...buildings,...props];
   }
   function applyLiquidation(p,entry){
@@ -12152,6 +12167,14 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
       players=[{id:0,name:nick,human:true,color:PLAYER_COLORS[0],money:startingMoney,pos:0,inJail:false,jailAttempts:0,getOutCards:0,doubles:0,bankrupt:false}];
       const names=BOT_NAMES_EN;
       for(let i=1;i<count;i++)players.push({id:i,name:names[i-1],human:false,color:PLAYER_COLORS[i],money:startingMoney,pos:0,inJail:false,jailAttempts:0,getOutCards:0,doubles:0,bankrupt:false,personality:personalityForBot(i)});
+    }
+    // RichUp-style random seat order: shuffle a copy so the lobby roster stays
+    // untouched, then hand out board seats in the shuffled order.
+    if(gameSettings.randomizePlayerOrder&&players.length>1){
+      const order=players.map((_,i)=>i);
+      for(let i=order.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[order[i],order[j]]=[order[j],order[i]];}
+      players=order.map(i=>players[i]);
+      players.forEach((p,i)=>{p.id=i;});
     }
     resetCardDecks();
     turn=0;state=STATES.WAITING_FOR_ROLL;menuScreen.style.display="none";setupScreen.style.display="none";gameWrap.style.display="block";toggleMusicSettings(false);installSoundButton();startMusic();buildBoard();renderDice();renderTokens();renderPlayers();updateBadge();refreshDevPlayers();renderPauseUI();renderSpeedUI();invalidateTokenPoints();log(T("gameStarted"));saveGame();

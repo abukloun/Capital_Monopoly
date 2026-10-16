@@ -100,7 +100,7 @@ try{
   pass('Free Parking pot collects the tax and pays the corner');
   // Sanitizer clamps hostile values.
   await single.evaluate(()=>Capital.applySettings({startingCash:99999,goBonus:-5,jailFine:99999,incomeTaxMode:'percent',incomeTaxPercent:400,turnTimer:99999,botDifficulty:'god'}));
-  assert.deepEqual(await single.evaluate(()=>__test.settings),{startingCash:3000,goBonus:0,jailFine:1000,incomeTaxMode:'percent',incomeTaxPercent:50,turnTimer:300,auctionOnDecline:true,doubleRentOnMonopoly:true,evenBuild:true,freeParkingPot:false,botDifficulty:'normal'});
+  assert.deepEqual(await single.evaluate(()=>__test.settings),{startingCash:3000,goBonus:0,jailFine:1000,incomeTaxMode:'percent',incomeTaxPercent:50,turnTimer:300,auctionOnDecline:true,doubleRentOnMonopoly:true,evenBuild:true,freeParkingPot:false,botDifficulty:'normal',randomizePlayerOrder:false,rentWhileInJail:true,mortgageEnabled:true});
   pass('settings sanitizer clamps every field');
   await single.evaluate(()=>__test.applySettings({...__test.settingsDefaults}));
 
