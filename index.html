@@ -814,6 +814,31 @@ body{
   border-radius:12px;
   transition:box-shadow .22s ease,background .22s ease;
 }
+/* The "+" itself, sitting next to the landlord's name in the panel.
+
+   The row already flashes green when rent lands, but a colour change is not a
+   number: nothing in it says money arrived, and by the time the balance ticks
+   over, the transient +$ pop has already gone. This is the actual plus, held
+   long enough to read. */
+.capital-rent-gain{
+  display:inline-block;
+  margin-left:6px;
+  padding:1px 7px;
+  border-radius:999px;
+  background:#5ee3a022;
+  border:1px solid #5ee3a066;
+  color:#5ee3a0;
+  font-size:12px;
+  font-weight:950;
+  vertical-align:middle;
+  white-space:nowrap;
+  animation:capRentGain .32s cubic-bezier(.2,.9,.3,1) both;
+}
+@keyframes capRentGain{
+  0%{opacity:0;transform:translateY(-4px) scale(.8)}
+  60%{transform:translateY(0) scale(1.08)}
+  100%{opacity:1;transform:none}
+}
 @keyframes capMoney{
   0%{opacity:0;transform:translateY(7px) scale(.85)}
   15%{opacity:1;transform:none}
@@ -5240,7 +5265,15 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       const row=playerRowEl(owner.id);
       if(row){
         row.classList.add("capital-gain");
-        const off=()=>{try{row.classList.remove("capital-gain");}catch(_){}};
+        // A green row says something changed; it does not say money arrived. Put
+        // the plus next to the landlord's name, where they are already looking.
+        const old=row.querySelector(".capital-rent-gain");
+        if(old)old.remove();
+        const badge=document.createElement("span");
+        badge.className="capital-rent-gain";
+        badge.textContent="+$"+Math.round(amount);
+        (row.querySelector(".pr-name")||row).appendChild(badge);
+        const off=()=>{try{badge.remove();row.classList.remove("capital-gain");}catch(_){}};
         setTimeout(off,2400);
       }
     }catch(_){}
@@ -11930,6 +11963,7 @@ document.addEventListener("keydown",e=>{
 </body>
 
 </html>
+
 
 
 
