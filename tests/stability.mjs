@@ -18,10 +18,11 @@ new MutationObserver(records=>{for(const record of records)for(const node of rec
   if(node.matches('.capital-rent-gain,.capital-float-amount'))window.__moneySeen.push({className:node.className,text:node.textContent});
   for(const child of node.querySelectorAll('.capital-rent-gain,.capital-float-amount'))window.__moneySeen.push({className:child.className,text:child.textContent});
 }}).observe(document.body,{subtree:true,childList:true});
-window.__test={mp,mpConnect,mpStartGame,mpSnapshot,mpPublishSnapshot,mpHandle,
+window.__test={mp,mpConnect,mpStartGame,mpSnapshot,mpPublishSnapshot,mpHandle,mpSend,
   mpTeardownTransport,mpRestoreAuthority,mpServerClearState,mpSubscribeChannel,mpReconnectChannel,
   beginTurnRoll,showRentIncome,renderPlayers,renderTokens,cap3d,cap3dFx,setBoardView,
   TILES,startHumanAuction,requirePayment,mpRequestSync,resetState,drawCard,pauseGame,resumeGame,whenRunning,
+  get settings(){return gameSettings;},applySettings:applyGameSettings,settingsDefaults:()=>({...GAME_SETTINGS_DEFAULTS}),openSettings:openGameSettings,
   get players(){return players;},get auction(){return activeAuction;},
   get state(){return state;},get walkCount(){return walkTimers.size;},
   get pauseCount(){return pausedSteps.length;},get eventCount(){return actionEventQueue.length;},
@@ -63,15 +64,63 @@ try{
   assert.equal(await single.evaluate(()=>__test.state),'WAITING_FOR_ROLL');
   pass('old dice callbacks cannot mutate a new game');
 
+  /* ---------- Game settings: each switch must change real gameplay ---------- */
+  // GO bonus off: 35 + 3 + 3 passes GO, balance stays exactly 1500.
+  await single.evaluate(()=>__test.applySettings({...__test.settingsDefaults,goBonus:0}));
+  await single.evaluate(()=>{__test.TILES[1].owner=1;__test.TILES[3].owner=1;__test.prepareTurn(0,35);__test.beginTurnRoll(__test.players[0],false,3,3);});
+  await wait(single,()=>__test.state==='WAITING_FOR_ROLL'&&__test.players[0].pos===1);
+  assert.equal(await single.evaluate(()=>__test.players[0].money),1496);
+  pass('GO bonus 0 = passing GO pays nothing');
+  // GO bonus 400: same move pays 400 on top of the starting balance.
+  await single.evaluate(()=>{__test.applySettings({...__test.settingsDefaults,goBonus:400});__test.prepareTurn(0,35);__test.beginTurnRoll(__test.players[0],false,3,3);});
+  await wait(single,()=>__test.players[0].pos===1&&__test.state==='WAITING_FOR_ROLL');
+  assert.equal(await single.evaluate(()=>__test.players[0].money),1892);
+  pass('GO bonus 400 pays through the same walk');
+  // Monopoly rent doubling off: full brown set rents for 4, not 8.
+  await single.evaluate(()=>{__test.applySettings({...__test.settingsDefaults,doubleRentOnMonopoly:false});__test.players[1].money=1500;__test.prepareTurn(0,0);__test.beginTurnRoll(__test.players[0],false,1,2);});
+  await wait(single,()=>__test.state==='WAITING_FOR_ROLL');
+  assert.equal(await single.evaluate(()=>__test.players[1].money),1504);
+  pass('double-rent-off: complete group no longer doubles base rent');
+  // Auctions off: declining keeps the property with the bank and still ends the turn.
+  await single.evaluate(()=>{__test.applySettings({...__test.settingsDefaults,auctionOnDecline:false});__test.TILES[5].owner=null;__test.TILES[1].owner=null;__test.TILES[3].owner=null;__test.prepareTurn(0,5);__test.land(0,5);});
+  await wait(single,()=>!!document.querySelector('#buyNo'));
+  await single.locator('#buyNo').click();
+  await wait(single,()=>__test.state==='WAITING_FOR_ROLL');
+  assert.equal(await single.evaluate(()=>__test.TILES[5].owner),null);
+  assert.equal(await single.evaluate(()=>__test.auction),null);
+  pass('auctions off: decline ends the turn with the bank');
+  // Free Parking pot: the tax lands in the pot, landing on the corner pays it.
+  await single.evaluate(()=>{__test.applySettings({...__test.settingsDefaults,freeParkingPot:true});__test.players[0].money=1000;__test.prepareTurn(0,4);__test.land(0,4);});
+  await wait(single,()=>__test.state==='WAITING_FOR_ROLL'||!!document.querySelector('#debtPay'));
+  await single.evaluate(()=>{if(document.querySelector('#debtPay'))document.querySelector('#debtPay').click();});
+  await wait(single,()=>__test.state==='WAITING_FOR_ROLL');
+  await single.evaluate(()=>{__test.prepareTurn(0,20);__test.land(0,20);});
+  await wait(single,()=>__test.players[0].money===1000);
+  assert.equal(await single.evaluate(()=>__test.players[0].money),1000);
+  pass('Free Parking pot collects the tax and pays the corner');
+  // Sanitizer clamps hostile values.
+  await single.evaluate(()=>Capital.applySettings({startingCash:99999,goBonus:-5,jailFine:99999,incomeTaxMode:'percent',incomeTaxPercent:400,turnTimer:99999,botDifficulty:'god'}));
+  assert.deepEqual(await single.evaluate(()=>__test.settings),{startingCash:3000,goBonus:0,jailFine:1000,incomeTaxMode:'percent',incomeTaxPercent:50,turnTimer:300,auctionOnDecline:true,doubleRentOnMonopoly:true,evenBuild:true,freeParkingPot:false,botDifficulty:'normal'});
+  pass('settings sanitizer clamps every field');
+  await single.evaluate(()=>__test.applySettings({...__test.settingsDefaults}));
+
   const host=await page(),guest=await page(),observer=await page();
   const code='T'+Date.now().toString(36).slice(-5).toUpperCase();
   assert.ok(await host.evaluate(c=>__test.mpConnect(c,true,'Host'),code));
   assert.ok(await guest.evaluate(c=>__test.mpConnect(c,false,'Guest'),code));
   assert.ok(await observer.evaluate(c=>__test.mpConnect(c,false,'Observer'),code));
   await wait(host,()=>__test.mp.members.length===3);
+  // Host rules must reach every client before the match starts.
+  await host.evaluate(()=>__test.applySettings({...__test.settingsDefaults,goBonus:123,turnTimer:60}));
   await host.evaluate(()=>__test.mpStartGame());
-  await wait(guest,()=>__test.players.length===3);await wait(observer,()=>__test.players.length===3);
+  await wait(guest,()=>__test.players.length===3&&__test.settings.goBonus===123);
+  await wait(observer,()=>__test.players.length===3&&__test.settings.goBonus===123&&__test.settings.turnTimer===60);
   pass('three real Supabase clients join and start');
+  // Settings are locked once the match is running: a late lobby update is ignored.
+  await host.evaluate(()=>__test.mpSend({kind:'lobbySettings',settings:{...__test.settingsDefaults,goBonus:777}}));
+  await host.waitForTimeout(900);
+  assert.equal(await guest.evaluate(()=>__test.settings.goBonus),123);
+  pass('settings lock after start: late lobby updates are ignored');
   await guest.evaluate(()=>__test.setBoardView('3d'));
   await wait(guest,()=>__test.cap3d.ready);
   await host.evaluate(()=>{__test.TILES[3].owner=1;__test.prepareTurn(0,0);__test.players[1].pos=10;__test.renderTokens();__test.mpPublishSnapshot(true);__test.beginTurnRoll(__test.players[0],false,1,2);});

@@ -814,6 +814,34 @@ body{
   border-radius:12px;
   transition:box-shadow .22s ease,background .22s ease;
 }
+/* ---------- Game settings window ---------- */
+.capital-settings-bg{z-index:12060}
+.capital-settings-modal{width:min(560px,94vw);max-height:86vh;display:flex;flex-direction:column;background:linear-gradient(180deg,#101826,#0b111c);border:1px solid #ffffff14;border-radius:18px;padding:18px 18px 14px;box-shadow:0 30px 80px #000c}
+.capital-settings-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
+.capital-settings-kicker{font-size:10px;letter-spacing:.18em;font-weight:900;color:#8d9ab0}
+.capital-settings-head h3{margin:2px 0 0;font-size:20px;color:#f4c95d}
+.capital-settings-x{padding:2px 10px}
+.capital-settings-tabs{display:flex;gap:6px;margin:4px 0 10px;flex-wrap:wrap}
+.gs-tab{padding:6px 12px;border-radius:999px;border:1px solid #ffffff18;background:#0d141e;color:#9aa8ba;font-weight:800;font-size:12px;cursor:pointer}
+.gs-tab.sel{background:#f4c95d1f;border-color:#f4c95d66;color:#f4c95d}
+.capital-settings-body{overflow:auto;min-height:200px;max-height:50vh;padding-right:4px}
+.gs-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 2px;border-bottom:1px solid #ffffff0d}
+.gs-row-text b{display:block;font-size:13px;color:#e8edf4}
+.gs-row-text small{color:#7f8da0;font-size:11px}
+.gs-row-ctl{display:flex;align-items:center;gap:8px}
+.gs-input{background:#0d141e;border:1px solid #ffffff1f;color:#e8edf4;border-radius:9px;padding:6px 10px;font-weight:700;font-size:13px}
+.gs-input:focus{outline:1px solid #f4c95d66}
+.gs-toggle{width:46px;height:24px;border-radius:999px;border:1px solid #ffffff22;background:#0d141e;position:relative;cursor:pointer;padding:0}
+.gs-toggle i{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#7f8da0;transition:.15s}
+.gs-toggle.on{background:#2f6d4f;border-color:#5ee3a066}
+.gs-toggle.on i{left:24px;background:#5ee3a0}
+.gs-toggle:disabled,.gs-input:disabled{opacity:.55;cursor:default}
+.capital-settings-foot{display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:10px}
+.capital-settings-note{font-size:11px;color:#7f8da0}
+.capital-mp-settings-summary{font-size:11px;color:#9aa8ba;margin:8px 0 2px;text-align:center}
+.capital-mp-settings-summary b{color:#f4c95d}
+#turnClockBadge{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:9000;background:#0d141eee;border:1px solid #ffffff22;color:#e8edf4;font-weight:900;padding:4px 12px;border-radius:999px;font-size:13px;display:none;pointer-events:none}
+#turnClockBadge.low{color:#ff8a96;border-color:#ff8a9666}
 /* The "+" itself, sitting next to the landlord's name in the panel.
 
    The row already flashes green when rent lands, but a colour change is not a
@@ -3945,6 +3973,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 <label class="setup-label" id="speedLabel">Game speed</label>
 <div class="speed-row" id="speedRow" role="radiogroup" aria-labelledby="speedLabel"><button class="speed-btn" type="button" role="radio" data-speed="normal">Normal</button><button class="speed-btn" type="button" role="radio" data-speed="fast">Fast</button></div>
 <div class="modal-btns" style="margin-top:16px">
+<button class="btn no" id="btnGameSettings" onclick="window.Capital.openSettings()" type="button">⚙ Game rules</button>
 <button class="btn yes" id="btnStart" onclick="window.Capital.start()" style="position:relative;z-index:100;pointer-events:auto" type="button">Start game</button>
 <button class="btn no" id="btnBack" onclick="window.Capital.back()" style="position:relative;z-index:100;pointer-events:auto" type="button">Back</button>
 </div>
@@ -4255,6 +4284,63 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   let selectedCount = 4;
   let selectedStartingMoney = 1500;
   window.chosenStartingMoney = selectedStartingMoney;
+  /* ---------- Game rules (RichUp-style room settings) ----------
+     One object drives every optional rule. The defaults are exactly the rules
+     the game shipped with, so a room that never opens this panel plays
+     identically to before. The host owns the object: guests receive it with the
+     start message, with every snapshot (so a reconnect picks it up) and live in
+     the lobby via "lobbySettings". Settings values are never trusted from a
+     guest, and every field is clamped by sanitizeGameSettings. */
+  const GAME_SETTINGS_DEFAULTS={startingCash:1500,goBonus:200,jailFine:50,incomeTaxMode:"flat",incomeTaxPercent:10,turnTimer:0,auctionOnDecline:true,doubleRentOnMonopoly:true,evenBuild:true,freeParkingPot:false,botDifficulty:"normal"};
+  const GAME_SETTINGS_KEY="capital.gameSettings.v1";
+  let gameSettings={...GAME_SETTINGS_DEFAULTS};
+  let freeParkingPotAmount=0;
+  try{const raw=localStorage.getItem(GAME_SETTINGS_KEY);if(raw)gameSettings=sanitizeGameSettings(JSON.parse(raw));}catch(_){}
+  function sanitizeGameSettings(v){
+    const out={...GAME_SETTINGS_DEFAULTS};
+    if(!v||typeof v!=="object")return out;
+    const num=(x,min,max,d)=>{x=Math.round(Number(x));return Number.isFinite(x)?Math.min(max,Math.max(min,x)):d;};
+    const cash=num(v.startingCash,500,3000,1500);
+    out.startingCash=[500,1000,1500,2000,3000].includes(cash)?cash:1500;
+    out.goBonus=num(v.goBonus,0,2000,200);
+    out.jailFine=num(v.jailFine,0,1000,50);
+    out.incomeTaxMode=v.incomeTaxMode==="percent"?"percent":"flat";
+    out.incomeTaxPercent=num(v.incomeTaxPercent,1,50,10);
+    out.turnTimer=v.turnTimer>0?Math.min(300,Math.max(30,Math.round(Number(v.turnTimer)/30)*30||30)):0;
+    out.auctionOnDecline=v.auctionOnDecline!==false;
+    out.doubleRentOnMonopoly=v.doubleRentOnMonopoly!==false;
+    out.evenBuild=v.evenBuild!==false;
+    out.freeParkingPot=!!v.freeParkingPot;
+    out.botDifficulty=["easy","normal","hard"].includes(v.botDifficulty)?v.botDifficulty:"normal";
+    return out;
+  }
+  function persistGameSettings(){try{localStorage.setItem(GAME_SETTINGS_KEY,JSON.stringify(gameSettings));}catch(_){}}
+  function applyGameSettings(s){
+    const next=sanitizeGameSettings(s);
+    if(JSON.stringify(next)===JSON.stringify(gameSettings))return;
+    gameSettings=next;
+    selectedStartingMoney=gameSettings.startingCash;
+    window.chosenStartingMoney=selectedStartingMoney;
+    try{const el=document.getElementById("startingMoneySelect");if(el)el.value=String(selectedStartingMoney);}catch(_){}
+    persistGameSettings();
+  }
+  function jailFineAmount(){return Math.max(0,Math.round(Number(gameSettings.jailFine)||0));}
+  function turnTimerLimit(){const v=Number(gameSettings.turnTimer);return v>0?v*1000:0;}
+  function botDifficultyTune(){const d=gameSettings.botDifficulty;return d==="easy"?{valueMult:.75,reserveExtra:250}:d==="hard"?{valueMult:1.15,reserveExtra:0}:{valueMult:1,reserveExtra:0};}
+  function gameSettingsSummary(s){
+    const d=GAME_SETTINGS_DEFAULTS,out=[];
+    if(s.startingCash!==d.startingCash)out.push(`Start $${s.startingCash}`);
+    if(s.goBonus!==d.goBonus)out.push(`GO +$${s.goBonus}`);
+    if(s.turnTimer)out.push(`Turn ${s.turnTimer}s`);
+    if(s.jailFine!==d.jailFine)out.push(`Jail $${s.jailFine}`);
+    if(s.incomeTaxMode!=="flat")out.push(`Tax ${s.incomeTaxPercent}%`);
+    if(!s.auctionOnDecline)out.push("No auctions");
+    if(!s.doubleRentOnMonopoly)out.push("No monopoly x2");
+    if(!s.evenBuild)out.push("Free build");
+    if(s.freeParkingPot)out.push("Parking pot");
+    if(s.botDifficulty!=="normal")out.push(`Bots ${s.botDifficulty}`);
+    return out.length?out.join(" · "):"Classic rules";
+  }
   let completedRounds = 0;
   let totalTurns = 0;
   let fastPace = false;
@@ -4843,13 +4929,76 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   function mpShowLobby(){
     const members=mpMembersSorted();
     const rows=members.map((m,i)=>`<div class="player-row" style="margin-bottom:6px"><div class="player-mini-piece" style="--piece-color:${PLAYER_COLORS[i]||PLAYER_COLORS[0]}"><span class="mini-head"></span><span class="mini-body"></span></div><div class="pname">${escapeHtml(m.name||"Player")}${m.clientId===mp.clientId?` <span style="color:#9db8a8">(${"You"})</span>`:""}${m.host?` <span style="color:#f6c84e">HOST</span>`:""}</div><div class="pmoney">#${i+1}</div></div>`).join("");
-    modalRoot.innerHTML=`<div class="modal-bg capital-mp-bg"><div class="modal capital-mp-modal"><div style="font-size:11px;letter-spacing:.16em;color:#8d9ab0;font-weight:900">${"MULTIPLAYER LOBBY"}</div><h3 style="margin:5px 0 4px">CAPITAL · ${escapeHtml(mp.room)}</h3><p>${"Share this room code with your friends."}</p><div class="capital-mp-code" role="button" tabindex="0" title="${"Click to copy the room code"}">${escapeHtml(mp.room)}</div><div style="font-size:11px;color:#7f8da0;margin:12px 0 7px">${"Players"} · ${members.length}/8</div><div>${rows||`<div class="auction-empty">${"Waiting for players…"}</div>`}</div><div class="modal-btns"><button class="btn yes" id="mpStart" ${mp.host&&members.length>=2?"":"disabled"}>${"Start game"}</button><button class="btn no" id="mpLeave">${"Leave"}</button></div></div></div>`;
+    modalRoot.innerHTML=`<div class="modal-bg capital-mp-bg"><div class="modal capital-mp-modal"><div style="font-size:11px;letter-spacing:.16em;color:#8d9ab0;font-weight:900">${"MULTIPLAYER LOBBY"}</div><h3 style="margin:5px 0 4px">CAPITAL · ${escapeHtml(mp.room)}</h3><p>${"Share this room code with your friends."}</p><div class="capital-mp-code" role="button" tabindex="0" title="${"Click to copy the room code"}">${escapeHtml(mp.room)}</div><div style="font-size:11px;color:#7f8da0;margin:12px 0 7px">${"Players"} · ${members.length}/8</div><div class="capital-mp-settings-summary">${"Rules"}: <b>${escapeHtml(gameSettingsSummary(gameSettings))}</b></div><div>${rows||`<div class="auction-empty">${"Waiting for players…"}</div>`}</div><div class="modal-btns"><button class="btn no" id="mpSettings">⚙ ${"Rules"}</button><button class="btn yes" id="mpStart" ${mp.host&&members.length>=2?"":"disabled"}>${"Start game"}</button><button class="btn no" id="mpLeave">${"Leave"}</button></div></div></div>`;
     modalOpen=true;modalKind="mpLobby";
     const copyCode=()=>mpCopyRoomCode();
     const codeEl=modalRoot.querySelector(".capital-mp-code");
     if(codeEl){codeEl.addEventListener("click",copyCode);codeEl.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();copyCode();}});}
     modalRoot.querySelector("#mpStart")?.addEventListener("click",mpStartGame);
     modalRoot.querySelector("#mpLeave")?.addEventListener("click",mpLeaveRoom);
+    modalRoot.querySelector("#mpSettings")?.addEventListener("click",()=>openGameSettings(mp.host));
+  }
+  /* ---------- Game settings window (lobby / setup screen) ----------
+     The host edits; everyone else sees the same values read-only. Nothing here
+     touches game state directly - Save goes through applyGameSettings, which is
+     the single writer, and the host broadcasts the result to the room. */
+  function openGameSettings(editable=true){
+    const canEdit=!!editable&&(!mp.active||mp.host);
+    const draft={...gameSettings};
+    const tabs=[["general","General"],["economy","Economy"],["rules","Gameplay Rules"],["bots","Bots"]];
+    let tab="general";
+    const close=()=>{clearModal();};
+    const save=()=>{
+      applyGameSettings(draft);close();
+      toast("Game rules saved.","good");
+      if(mp.active&&mp.host){mpSend({kind:"lobbySettings",settings:gameSettings});mpShowLobby();}
+    };
+    const row=(label,ctl,hint)=>`<div class="gs-row"><div class="gs-row-text"><b>${label}</b>${hint?`<small>${hint}</small>`:""}</div><div class="gs-row-ctl">${ctl}</div></div>`;
+    const sel=(id,opts,val)=>`<select class="gs-input" id="${id}" ${canEdit?"":"disabled"}>${opts.map(o=>`<option value="${o[0]}"${String(val)===String(o[0])?" selected":""}>${o[1]}</option>`).join("")}</select>`;
+    const tog=(id,on)=>`<button type="button" class="gs-toggle${on?" on":""}" id="${id}" role="switch" aria-checked="${!!on}" ${canEdit?"":"disabled"}><i></i></button>`;
+    const num=(id,val,min,max,step)=>`<input type="number" class="gs-input" id="${id}" value="${val}" min="${min}" max="${max}" step="${step}" ${canEdit?"":"disabled"}>`;
+    const bindNum=(id,key,min,max)=>{const el=modalRoot.querySelector("#"+id);if(!el)return;el.addEventListener("change",()=>{draft[key]=Math.min(max,Math.max(min,Math.round(Number(el.value)||0)));el.value=draft[key];});};
+    const bindSel=(id,key,cast)=>{const el=modalRoot.querySelector("#"+id);if(!el)return;el.addEventListener("change",()=>{draft[key]=cast?Number(el.value):el.value;});};
+    const bindTog=(id,key)=>{const el=modalRoot.querySelector("#"+id);if(!el)return;el.addEventListener("click",()=>{draft[key]=!draft[key];el.classList.toggle("on",draft[key]);el.setAttribute("aria-checked",String(!!draft[key]));});};
+    const renderBody=()=>{
+      const body=modalRoot.querySelector("#gsBody");if(!body)return;
+      if(tab==="general"){
+        body.innerHTML=
+          row("Starting cash",sel("gsCash",[["500","$500"],["1000","$1,000"],["1500","$1,500"],["2000","$2,000"],["3000","$3,000"]],draft.startingCash),"Each player begins with this amount.")+
+          row("Pass Start bonus",num("gsGo",draft.goBonus,0,2000,50),"Paid for passing or landing on GO.")+
+          row("Turn timer",sel("gsTimer",[[0,"Off"],["60","60 seconds"],["90","90 seconds"],["120","120 seconds"],["180","180 seconds"]],draft.turnTimer),"The host auto-rolls and ends idle turns. Never bids in auctions.");
+        bindSel("gsCash","startingCash",true);bindNum("gsGo","goBonus",0,2000);bindSel("gsTimer","turnTimer",true);
+      }else if(tab==="economy"){
+        body.innerHTML=
+          row("Jail fine",num("gsJail",draft.jailFine,0,1000,10),"Cost to pay your way out of Jail.")+
+          row("Income tax",sel("gsTaxMode",[["flat","Fixed amount"],["percent","Percent of cash"]],draft.incomeTaxMode),"Applies to the Income Tax tile only.")+
+          (draft.incomeTaxMode==="percent"?row("Tax percent",num("gsTaxPct",draft.incomeTaxPercent,1,50,1),"Charged on the payer's current cash."):"");
+        bindNum("gsJail","jailFine",0,1000);bindSel("gsTaxMode","incomeTaxMode",false);bindNum("gsTaxPct","incomeTaxPercent",1,50);
+      }else if(tab==="rules"){
+        body.innerHTML=
+          row("Auction on decline",tog("gsAuction",draft.auctionOnDecline),"A skipped property goes to a live auction.")+
+          row("Monopoly doubles rent",tog("gsMono",draft.doubleRentOnMonopoly),"A complete colour group doubles base rent.")+
+          row("Even build",tog("gsEven",draft.evenBuild),"Houses must be spread evenly across a group.")+
+          row("Free Parking pot",tog("gsPot",draft.freeParkingPot),"Taxes and jail fines pool; landing on Free Parking pays it out.");
+        bindTog("gsAuction","auctionOnDecline");bindTog("gsMono","doubleRentOnMonopoly");bindTog("gsEven","evenBuild");bindTog("gsPot","freeParkingPot");
+      }else{
+        body.innerHTML=
+          row("Bot difficulty",sel("gsBot",[["easy","Easy"],["normal","Normal"],["hard","Hard"]],draft.botDifficulty),"Easy bots bid and build more cautiously; hard bots push harder.")+
+          `<div class="gs-row"><div class="gs-row-text"><small>Bots use the built-in personalities. This only tunes how aggressively they buy, bid and build.</small></div></div>`;
+        bindSel("gsBot","botDifficulty",false);
+      }
+    };
+    const renderTabs=()=>{
+      const el=modalRoot.querySelector("#gsTabs");if(!el)return;
+      el.innerHTML=tabs.map(t=>`<button type="button" class="gs-tab${tab===t[0]?" sel":""}" data-tab="${t[0]}">${t[1]}</button>`).join("");
+      el.querySelectorAll(".gs-tab").forEach(b=>b.addEventListener("click",()=>{tab=b.dataset.tab;renderTabs();renderBody();}));
+    };
+    modalRoot.innerHTML=`<div class="modal-bg capital-settings-bg"><div class="modal capital-settings-modal"><div class="capital-settings-head"><div><div class="capital-settings-kicker">${"GAME SETTINGS"}</div><h3>${"Room rules"}</h3></div><button class="btn no capital-settings-x" id="gsClose">✕</button></div><div class="capital-settings-tabs" id="gsTabs"></div><div class="capital-settings-body" id="gsBody"></div><div class="capital-settings-foot"><span class="capital-settings-note">${canEdit?(mp.active?"Host only — every player receives the same rules.":"Applies to the next game you start."):"Only the host can change the rules."}</span><div class="modal-btns">${canEdit?`<button class="btn no" id="gsCancel">${"Cancel"}</button><button class="btn yes" id="gsSave">${"Save rules"}</button>`:`<button class="btn no" id="gsCancel">${"Close"}</button>`}</div></div></div></div>`;
+    modalOpen=true;modalKind="gsheet";updateBadge();
+    modalRoot.querySelector("#gsClose").onclick=close;
+    modalRoot.querySelector("#gsCancel").onclick=close;
+    if(canEdit)modalRoot.querySelector("#gsSave").onclick=save;
+    renderTabs();renderBody();
   }
   function mpCopyText(text){
     const value=String(text||"");
@@ -5215,6 +5364,16 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       return;
     }
     if(msg.kind==="syncRequest"&&mp.host){if(players.length>1)mpPublishSnapshot(true);return;}
+    if(msg.kind==="lobbySettings"&&!mp.host){
+      // Rules are the host's property. Guests apply them verbatim while the room
+      // is in the lobby and can never write them: this branch is read-only, and
+      // once a game is running the settings are locked everywhere.
+      if(!mpSenderIsHost(msg._capitalSender))return;
+      if(mpGameRunning())return;
+      applyGameSettings(msg.settings);
+      if(modalKind==="mpLobby")mpShowLobby();
+      return;
+    }
     if(msg.kind==="stateTick"&&!mp.host){
       // The host's heartbeat is what everyone else watches to notice it died.
       // Only the host sends these, so the sender is the authority - and knowing
@@ -5275,6 +5434,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       if(mpGameRunning()&&mp.startedMatch===mp.matchId)return;
       mp.startedMatch=mp.matchId;mp.lastAppliedSeq=0;mp.lastRealtimeStateSeq=0;
       mp.pendingStart=Array.isArray(msg.members)?mpMembersSortedFrom(msg.members):[];mp.members=mp.pendingStart;
+      applyGameSettings(msg.settings);
       clearModal();startGame(msg.startingMoney);return;
     }
     if(msg.kind==="action"&&mp.host){
@@ -5335,7 +5495,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   function mpStartGame(){
     if(!mp.active||!mp.host||mpMembersSorted().length<2)return;
     mp.matchId=Date.now().toString(36)+"-"+mp.clientId;mp.authorityTerm=0;
-    mp.members=mpMembersSorted();mp.pendingStart=mp.members;mpPersistSession();mpSend({kind:"start",members:mp.members,startingMoney:selectedStartingMoney});clearModal();modalOpen=false;modalKind=null;startGame(selectedStartingMoney);
+    mp.members=mpMembersSorted();mp.pendingStart=mp.members;mpPersistSession();mpSend({kind:"start",members:mp.members,startingMoney:selectedStartingMoney,settings:gameSettings});clearModal();modalOpen=false;modalKind=null;startGame(selectedStartingMoney);
   }
   function mpLeaveRoom(){
     if(mp.active)mpSend({kind:"leave",clientId:mp.clientId});
@@ -5459,6 +5619,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     if(!data&&modalKind==="debt"&&mpPendingDebt)data={kind:"debt",playerId:mpPendingDebt.playerId,amount:mpPendingDebt.amount,creditorId:mpPendingDebt.creditorId,reason:mpPendingDebt.reason};
     return {
       seq:++mp.snapshotSeq,
+      settings:gameSettings,freeParkingPot:freeParkingPotAmount,
       matchId:mp.matchId,authorityTerm:mp.authorityTerm,packetSeq:mp.packetSeq,
       decks:{chance:[...cardDecks.chance],chest:[...cardDecks.chest]},
       pendingDebt:mpPendingDebt?{playerId:mpPendingDebt.playerId,amount:mpPendingDebt.amount,creditorId:mpPendingDebt.creditorId,reason:mpPendingDebt.reason,continuation:mpPendingDebt.continuation||null}:null,
@@ -5707,6 +5868,8 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     completedRounds=Number(s.completedRounds)||0;
     totalTurns=Number(s.totalTurns)||0;
     fastPace=!!s.fastPace;
+    if(s.settings)applyGameSettings(s.settings);
+    freeParkingPotAmount=Math.max(0,Math.round(Number(s.freeParkingPot)||0));
     if(Array.isArray(s.logHistory)){gameLog=s.logHistory.slice(-80);renderEventLog();}
     const map=new Map(s.tiles.map(t=>[Number(t.id),t]));
     TILES.forEach(t=>{const x=map.get(Number(t.id));if(x){t.owner=x.owner??null;t.houses=x.houses||0;t.hotel=!!x.hotel;t.mortgaged=!!x.mortgaged;}});
@@ -5843,7 +6006,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       if(kind==="jail"){
         const p=currentPlayer();
         if(!p)return "";
-        return `<div class="modal-bg"><div class="modal"><h3>🔒 ${"You're in Jail"}</h3><p>${"Choose how to leave."}</p><div class="modal-btns" style="flex-wrap:wrap"><button class="btn yes" id="jRoll">🎲 ${"Roll for double"}</button><button class="btn no" id="jPay" ${p.money<50?"disabled":""}>💵 $50</button>${p.getOutCards?`<button class="btn no" id="jCard">🎟 ${"Get Out Free"}</button>`:""}</div></div></div>`;
+        return `<div class="modal-bg"><div class="modal"><h3>🔒 ${"You're in Jail"}</h3><p>${"Choose how to leave."}</p><div class="modal-btns" style="flex-wrap:wrap"><button class="btn yes" id="jRoll">🎲 ${"Roll for double"}</button><button class="btn no" id="jPay" ${p.money<jailFineAmount()?"disabled":""}>💵 $${jailFineAmount()}</button>${p.getOutCards?`<button class="btn no" id="jCard">🎟 ${"Get Out Free"}</button>`:""}</div></div></div>`;
       }
       if(kind==="buy"){
         const t=TILES[Number(d.tileId)];
@@ -5963,7 +6126,11 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     if(a.type==="declineProperty"){
       const t=TILES[Number(a.tileId)];
       if(!isTurn||state!==STATES.TILE_ACTION||modalKind!=="buy"||!t||p.pos!==t.id||t.owner!=null)return;
-      clearModal();startHumanAuction(p,t);
+      clearModal();
+      if(gameSettings.auctionOnDecline){startHumanAuction(p,t);return;}
+      log(`${playerLabel(p)} declined to buy "${tileLabel(t)}".`);
+      const localRun=runId;
+      setTimeout(()=>{if(validRun(localRun)&&validTurn(p)&&state===STATES.TILE_ACTION&&!modalOpen)completeTileAction(p);},90);
       return;
     }
 
@@ -5987,7 +6154,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     if(a.type==="jailRoll"||a.type==="jailPay"||a.type==="jailCard"){
       if(!isTurn||modalKind!=="jail")return;
       if(a.type==="jailRoll"){clearModal();beginTurnRoll(p,true);return;}
-      if(a.type==="jailPay"){if(p.money<50)return;clearModal();p.money-=50;SFX.penalty();p.inJail=false;p.jailAttempts=0;log(`${playerLabel(p)} pays $50 and leaves Jail.`);renderPlayers();if(checkBankrupt(p,null)){endTurn(p);return;}beginTurnRoll(p,false);return;}
+      if(a.type==="jailPay"){const fineAmt=jailFineAmount();if(p.money<fineAmt)return;clearModal();p.money-=fineAmt;SFX.penalty();p.inJail=false;p.jailAttempts=0;log(`${playerLabel(p)} pays $${fineAmt} and leaves Jail.`);renderPlayers();if(checkBankrupt(p,null)){endTurn(p);return;}beginTurnRoll(p,false);return;}
       if(p.getOutCards<=0)return;clearModal();useJailCard(p);p.inJail=false;p.jailAttempts=0;SFX.coin();log(`${playerLabel(p)} uses a Get Out of Jail Free card and leaves Jail.`);beginTurnRoll(p,false);return;
     }
 
@@ -8336,12 +8503,48 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     // Single-player auctions keep their remaining time. In multiplayer the host's clock is shared, so it keeps running.
     if(!mp.active&&activeAuction&&!activeAuction.closed)activeAuction.pausedLeft=Math.max(0,activeAuction.endsAt-performance.now());
   }
+  /* ---------- Turn clock (optional, RichUp-style) ----------
+     Host-side only. When the clock is on and a turn sits idle past the limit,
+     the host takes the least destructive default: roll, roll out of Jail, send
+     a skipped purchase to auction, or finish an empty tile action. It never
+     bids in an auction, never sells assets, and never resolves a card or a
+     debt - those keep their own flows and timers. */
+  let turnClockAt=0,turnClockBadge=null;
+  function touchTurnClock(){turnClockAt=Date.now();}
+  function updateTurnClockBadge(limit){
+    if(!limit||!players.length||state===STATES.GAME_OVER||gameWrap?.style.display!=="block"){if(turnClockBadge)turnClockBadge.style.display="none";return;}
+    if(!turnClockBadge){turnClockBadge=document.createElement("div");turnClockBadge.id="turnClockBadge";document.body.appendChild(turnClockBadge);}
+    const left=Math.max(0,Math.ceil((turnClockAt+limit-Date.now())/1000));
+    turnClockBadge.style.display="block";turnClockBadge.textContent="⏱ "+left;turnClockBadge.classList.toggle("low",left<=15);
+  }
+  function turnClockTick(){
+    const limit=turnTimerLimit();
+    updateTurnClockBadge(limit);
+    if(!limit||!players.length||state===STATES.GAME_OVER)return;
+    if(gamePaused&&!mp.active)return;
+    if(mp.active&&!mp.host)return;
+    if(!mpGameRunning())return;
+    if(activeAuction||mpPendingDebt||mpPendingCard)return;
+    const p=currentPlayer();
+    if(!p||p.bankrupt||p.left)return;
+    if(Date.now()-turnClockAt<limit)return;
+    turnClockAt=Date.now();
+    if(modalOpen){
+      if(modalKind==="buy"){const t=TILES[p.pos];if(t&&t.owner==null){if(gameSettings.auctionOnDecline){startHumanAuction(p,t);}else{clearModal();completeTileAction(p);}}return;}
+      if(modalKind==="jail"){beginTurnRoll(p,true);return;}
+      return;
+    }
+    if(state===STATES.WAITING_FOR_ROLL){if(mp.active)beginTurnRoll(p,!!p.inJail);else rollDice();return;}
+    if(state===STATES.TILE_ACTION&&!modalOpen){completeTileAction(p);return;}
+  }
+  setInterval(turnClockTick,1000);
   function resumeGame(){
     if(!gamePaused)return;
     gamePaused=false;
     if(activeAuction&&!activeAuction.closed&&activeAuction.pausedLeft!=null){activeAuction.endsAt=performance.now()+activeAuction.pausedLeft;activeAuction.pausedLeft=null;}
     if(musicPausedByPause){musicPausedByPause=false;startMusic();}
     pausedSteps.splice(0).forEach(fn=>{try{fn();}catch(e){console.error("CAPITAL resume error",e);}});
+    touchTurnClock();
   }
   function syncPause(){if(pausedByHide||pausedByUser)pauseGame();else resumeGame();}
   document.addEventListener("visibilitychange",()=>{pausedByHide=document.hidden;syncPause();});
@@ -8927,7 +9130,6 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
       else if(t.type==="chest"){if(n)n.textContent="📦 "+T("chestShort");}
       else{const c=el.querySelector(".corner-label");if(c)c.outerHTML=cornerLabel(t);}
       el.title=tileLabel(t);
-      
     });
   }
 
@@ -9291,7 +9493,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     let rent=0;
     if(t.type==="station"){const n=TILES.filter(x=>x.type==="station"&&x.owner===t.owner&&!x.mortgaged).length;rent=n?25*Math.pow(2,n-1):0;}
     else if(t.type==="util"){const n=TILES.filter(x=>x.type==="util"&&x.owner===t.owner&&!x.mortgaged).length;rent=lastRollTotal*(n>=2?10:4);}
-    else {const ladder=rentLadder(t);const level=t.hotel?5:(t.houses||0);rent=level>0?ladder[level]:(hasMonopoly(t.owner,t.group)?ladder[0]*2:ladder[0]);}
+    else {const ladder=rentLadder(t);const level=t.hotel?5:(t.houses||0);rent=level>0?ladder[level]:(hasMonopoly(t.owner,t.group)&&gameSettings.doubleRentOnMonopoly?ladder[0]*2:ladder[0]);}
     return fastPace?Math.round(rent*1.25):rent;
   }
   function groupHasMortgage(t){return t?.type==="prop"&&TILES.some(x=>x.type==="prop"&&x.group===t.group&&x.mortgaged);}
@@ -9299,7 +9501,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
   // Buildings stay with the color group, so a property is only tradable while its group is unbuilt.
   function isTradable(t){return !!t&&["prop","station","util"].includes(t.type)&&!groupHasBuildings(t);}
   function canMortgage(t){return !!t&&["prop","station","util"].includes(t.type)&&t.owner!=null&&!t.mortgaged&&!groupHasBuildings(t);}
-  function canBuildHouse(t){if(!t||t.type!=="prop"||t.owner==null||t.hotel||t.mortgaged||!hasMonopoly(t.owner,t.group)||groupHasMortgage(t)||t.houses>=4)return false;return TILES.filter(x=>x.type==="prop"&&x.group===t.group).every(x=>x.hotel||x.houses>=t.houses);}
+  function canBuildHouse(t){if(!t||t.type!=="prop"||t.owner==null||t.hotel||t.mortgaged||!hasMonopoly(t.owner,t.group)||groupHasMortgage(t)||t.houses>=4)return false;return gameSettings.evenBuild?TILES.filter(x=>x.type==="prop"&&x.group===t.group).every(x=>x.hotel||x.houses>=t.houses):true;}
   function canBuildHotel(t){if(!t||t.type!=="prop"||t.owner==null||t.hotel||t.mortgaged||t.houses<4||!hasMonopoly(t.owner,t.group)||groupHasMortgage(t))return false;return TILES.filter(x=>x.type==="prop"&&x.group===t.group).every(x=>x.hotel||x.houses>=4);}
 
   function sendToJail(p){if(!p)return;p.pos=10;p.inJail=true;p.jailAttempts=0;p.doubles=0;extraTurnPending=false;playJailSfx();log(`${playerLabel(p)} goes to Jail!`);showActionEvent("jail",p,{titleEn:"SENT TO JAIL",detailEn:"Go to Jail",icon:"🔒",tone:"red",duration:1500});renderTokens();renderPlayers();}
@@ -9836,7 +10038,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
   }
   /* ---------- State machine ---------- */
   function setState(next){
-    boardVisualDirty=true;
+    boardVisualDirty=true;touchTurnClock();
     state=next;updateBadge();
   }
   function validTurn(p){return !!p&&players[turn]===p&&!p.bankrupt&&!p.left;}
@@ -10045,7 +10247,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     const startPoint=tokenPoint(fromPos),targetPoint=tokenPoint(finalPos);
     if(!startPoint||!targetPoint){
       p.pos=finalPos;
-      if(moveSteps>0&&fromPos+moveSteps>=40)p.money+=200;
+      if(moveSteps>0&&fromPos+moveSteps>=40)p.money+=gameSettings.goBonus;
       mpAuthoritativeMovement=null;clearMovingPiece();renderTokens();renderPlayers();onDone?.();return;
     }
     // The walk path is rebuilt from the tile the piece left, so remember it.
@@ -10068,9 +10270,9 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
       p.pos=finalPos;
       const passedGo=moveSteps>0 && fromPos+moveSteps>=40;
       if(passedGo){
-        p.money+=200;SFX.income();
-        log(`${playerLabel(p)} passes GO and collects $200.`);
-        toast(`💰 ${playerLabel(p)} +$200`,'good');
+        p.money+=gameSettings.goBonus;SFX.income();
+        log(`${playerLabel(p)} passes GO and collects $${gameSettings.goBonus}.`);
+        toast(`💰 ${playerLabel(p)} +$${gameSettings.goBonus}`,'good');
         showActionEvent("go",p,{titleEn:"PASSED GO",detailEn:"Salary collected for completing a lap",amount:200,icon:"➜",tone:"green",duration:1350});
       }
       mpAuthoritativeMovement=null;
@@ -10118,7 +10320,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     log(`${playerLabel(p)} rolled ${d1} + ${d2} = ${total}${isDouble?" — double, another turn!":"."}`);tutorialAfterRoll();
     if(jailRoll){
       if(isDouble){p.inJail=false;p.jailAttempts=0;p.doubles=0;extraTurnPending=false;log(`${playerLabel(p)} rolled a double (${d1} + ${d2}) and leaves Jail.`);showActionEvent("jailfree",p,{titleEn:"OUT OF JAIL",detailEn:`Double ${d1} + ${d2}`,icon:"🔓",tone:"green",duration:1350});SFX.coin();}
-      else{p.jailAttempts=(p.jailAttempts||0)+1;if(p.jailAttempts>=3){p.money-=50;SFX.penalty();p.inJail=false;p.jailAttempts=0;log(`${playerLabel(p)} failed to roll a double three times and pays $50 to leave Jail.`);showActionEvent("jailfee",p,{titleEn:"JAIL FEE PAID",detailEn:"Three failed double rolls",amount:-50,icon:"🔓",tone:"red",duration:1450});renderPlayers();if(checkBankrupt(p,null)){endTurn(p);return;}}else{log(`${playerLabel(p)} failed the Jail roll (${d1} + ${d2}) and stays in Jail.`);endTurn(p);return;}}
+      else{p.jailAttempts=(p.jailAttempts||0)+1;if(p.jailAttempts>=3){const fineAmt=jailFineAmount();p.money-=fineAmt;SFX.penalty();p.inJail=false;p.jailAttempts=0;log(`${playerLabel(p)} failed to roll a double three times and pays $${fineAmt} to leave Jail.`);showActionEvent("jailfee",p,{titleEn:"JAIL FEE PAID",detailEn:"Three failed double rolls",amount:-fineAmt,icon:"🔓",tone:"red",duration:1450});renderPlayers();if(checkBankrupt(p,null)){endTurn(p);return;}}else{log(`${playerLabel(p)} failed the Jail roll (${d1} + ${d2}) and stays in Jail.`);endTurn(p);return;}}
     }else{
       p.doubles=isDouble?(p.doubles||0)+1:0;
       if(isDouble&&p.doubles>=3){p.doubles=0;extraTurnPending=false;sendToJail(p);endTurn(p);return;}
@@ -10203,12 +10405,23 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     updateFastPace();
     const t=TILES[p.pos];if(!t){completeTileAction(p);return;}
     if(t.type==="tax"){
-      requirePayment(p,t.amount,null,`Income tax · ${tileLabel(t)}`,settled=>{
-        if(settled){playTaxSfx();log(`${playerLabel(p)} pays $${t.amount} tax.`);toast(`💸 ${playerLabel(p)} −$${t.amount}`,'warn');showActionEvent("tax",p,{titleEn:"TAX PAID",detailEn:`${tileLabel(t)} · mandatory payment`,amount:-t.amount,icon:"💸",tone:"red",duration:1550});}
+      // Income Tax honours the room's tax mode (flat or a percent of current
+      // cash); Luxury Tax always stays at its printed amount.
+      const owed=(t.id===4&&gameSettings.incomeTaxMode==="percent")?Math.max(0,Math.floor(p.money*gameSettings.incomeTaxPercent/100)):t.amount;
+      requirePayment(p,owed,null,`Income tax · ${tileLabel(t)}`,settled=>{
+        if(settled){playTaxSfx();log(`${playerLabel(p)} pays $${owed} tax.`);toast(`💸 ${playerLabel(p)} −$${owed}`,'warn');showActionEvent("tax",p,{titleEn:"TAX PAID",detailEn:`${tileLabel(t)} · mandatory payment`,amount:-owed,icon:"💸",tone:"red",duration:1550});if(gameSettings.freeParkingPot)freeParkingPotAmount+=owed;}
         renderPlayers();
         completeTileAction(p);
       });
       return;
+    }
+    // The Free Parking pot only exists when the room turns it on, and it only
+    // ever holds taxes and jail fines collected earlier in the same match.
+    if(t.id===20&&gameSettings.freeParkingPot&&freeParkingPotAmount>0){
+      const pot=freeParkingPotAmount;freeParkingPotAmount=0;p.money+=pot;SFX.income();
+      log(`${playerLabel(p)} lands on Free Parking and collects the $${pot} pot.`);
+      showActionEvent("freeparking",p,{titleEn:"FREE PARKING",detailEn:"Collected the pot",amount:pot,icon:"🅿️",tone:"green",duration:1600});
+      renderPlayers();
     }
     if(t.type==="gotojail"){sendToJail(p);completeTileAction(p);return;}
     if(t.type==="chance"||t.type==="chest"){drawCard(p,t);return;}
@@ -10440,7 +10653,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
 
   function showJailModal(p){
     const remoteTurn=mp.active&&mp.host&&!mpIsLocalPlayer(p);
-    const jailHtml=`<div class="modal-bg"><div class="modal"><h3>🔒 ${"You're in Jail"}</h3><p>${"Choose how to leave."}</p><div class="modal-btns" style="flex-wrap:wrap"><button class="btn yes" id="jRoll">🎲 ${"Roll for double"}</button><button class="btn no" id="jPay" ${p.money<50?"disabled":""}>💵 $50</button>${p.getOutCards?`<button class="btn no" id="jCard">🎟 ${"Get Out Free"}</button>`:""}</div></div></div>`;
+    const jailHtml=`<div class="modal-bg"><div class="modal"><h3>🔒 ${"You're in Jail"}</h3><p>${"Choose how to leave."}</p><div class="modal-btns" style="flex-wrap:wrap"><button class="btn yes" id="jRoll">🎲 ${"Roll for double"}</button><button class="btn no" id="jPay" ${p.money<jailFineAmount()?"disabled":""}>💵 $${jailFineAmount()}</button>${p.getOutCards?`<button class="btn no" id="jCard">🎟 ${"Get Out Free"}</button>`:""}</div></div></div>`;
     if(remoteTurn){
       // Facts only: the guest rebuilds the dialog with its own language and
       // its own escaping. p.money/getOutCards are read from the player's
@@ -10452,7 +10665,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     const root=openModal(jailHtml,"jail");
     if(!root)return;
     root.querySelector("#jRoll").onclick=()=>{if(remoteTurn)return;clearModal();beginTurnRoll(p,true);};
-    root.querySelector("#jPay").onclick=()=>{if(remoteTurn||p.money<50)return;clearModal();p.money-=50;SFX.penalty();p.inJail=false;p.jailAttempts=0;log(`${playerLabel(p)} pays $50 and leaves Jail.`);showActionEvent("jailfee",p,{titleEn:"JAIL FEE PAID",detailEn:"Paid $50 to leave Jail",amount:-50,icon:"🔓",tone:"red",duration:1450});renderPlayers();if(checkBankrupt(p,null)){endTurn(p);return;}beginTurnRoll(p,false);};
+    root.querySelector("#jPay").onclick=()=>{const fineAmt=jailFineAmount();if(remoteTurn||p.money<fineAmt)return;clearModal();p.money-=fineAmt;SFX.penalty();p.inJail=false;p.jailAttempts=0;log(`${playerLabel(p)} pays $${fineAmt} and leaves Jail.`);showActionEvent("jailfee",p,{titleEn:"JAIL FEE PAID",detailEn:`Paid $${fineAmt} to leave Jail`,amount:-fineAmt,icon:"🔓",tone:"red",duration:1450});renderPlayers();if(checkBankrupt(p,null)){endTurn(p);return;}beginTurnRoll(p,false);};
     const card=root.querySelector("#jCard");if(card)card.onclick=()=>{if(remoteTurn||!(p.getOutCards>0))return;clearModal();useJailCard(p);p.inJail=false;p.jailAttempts=0;SFX.coin();log(`${playerLabel(p)} uses a Get Out of Jail Free card and leaves Jail.`);beginTurnRoll(p,false);};
     // Clicking the backdrop only hides the dialog; "Roll Dice" reopens it. It no longer forfeits the turn.
     root.onclick=e=>{if(!remoteTurn&&e.target===root)clearModal();};
@@ -10555,7 +10768,14 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
       const localRun=runId;setTimeout(()=>{if(validRun(localRun)&&validTurn(p)&&state===STATES.TILE_ACTION&&!modalOpen)completeTileAction(p);},isFast()?300:700);
     };
     const buy=bg.querySelector("#buyYes");if(buy)buy.onclick=finishBuy;
-    const no=bg.querySelector("#buyNo");if(no)no.onclick=()=>{if(remoteTurn)return;clearModal();startHumanAuction(p,t);};
+    const no=bg.querySelector("#buyNo");if(no)no.onclick=()=>{
+      if(remoteTurn)return;
+      clearModal();
+      if(gameSettings.auctionOnDecline){startHumanAuction(p,t);return;}
+      log(`${playerLabel(p)} declined to buy "${tileLabel(t)}".`);
+      const localRun=runId;
+      setTimeout(()=>{if(validRun(localRun)&&validTurn(p)&&state===STATES.TILE_ACTION&&!modalOpen)completeTileAction(p);},isFast()?300:700);
+    };
     /* The dialog offers exactly two decisions: buy, or skip to auction. A Close
        button used to sit beside them, and it was a third way out that decided
        nothing the player could see - the property silently stayed with the bank
@@ -10642,6 +10862,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
   function botShouldBuy(bot,t){
     if(!bot||!t||t.owner!=null||!botCanAfford(bot,t.price))return false;
     const remaining=bot.money-t.price,value=botPropertyValue(bot,t);
+    if(gameSettings.botDifficulty==="easy"&&remaining<150)return false;
     if(bot.personality==="ANNA")return remaining>=300;
     if(bot.personality==="MARK")return true;
     if(bot.personality==="IRINA")return value>=t.price*1.02||groupMissingFor(bot.id,t)<=2||t.type==="station";
@@ -10675,6 +10896,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
       const plan=botBuildPlan(bot);if(!plan.length)break;
       const choice=plan[0],cost=choice.cost||0;
       if(bot.money-cost<reserve)break;
+      if(gameSettings.botDifficulty==="easy"&&bot.money-cost<reserve+200)break;
       if(bot.personality==="ANNA"||bot.personality==="ELENA"){
         const g=groupTiles(choice.t),minH=Math.min(...g.map(x=>x.houses||0));
         if((choice.t.houses||0)>minH)break;
@@ -10696,8 +10918,9 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
       completeTileAction(p);
       return true;
     }
-    // Refusal / insufficient cash must resolve through the auction path.
-    finishBotAuction(t,p);
+    // Refusal / insufficient cash resolves through the auction, unless the room
+    // has auctions disabled - then the property simply stays with the bank.
+    if(gameSettings.auctionOnDecline)finishBotAuction(t,p);else completeTileAction(p);
     return false;
   }
 
@@ -10717,13 +10940,13 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     // Keep a meaningful cash cushion for rent / chance / movement after the auction.
     // Personality reserves remain respected, but the reserve also scales with the
     // normal $1500 starting bankroll.
-    return Math.max(Number(person.reserve)||0,225);
+    return Math.max(Number(person.reserve)||0,225)+botDifficultyTune().reserveExtra;
   }
 
   function botAuctionValue(bot,t){
     if(!bot||!t)return 0;
     const base=Math.max(0,Number(t.price)||0);
-    let value=Math.max(base,botPropertyValue(bot,t));
+    let value=Math.max(base,botPropertyValue(bot,t))*botDifficultyTune().valueMult;
 
     if(t.type==="prop"){
       const group=groupTiles(t);
@@ -11868,7 +12091,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     pausedByUser=false;syncPause();renderPauseUI();
     // A live auction keeps its own timers; left running it would close dialogs in the next game.
     if(activeAuction){activeAuction.closed=true;auctionCancelTimers(activeAuction);activeAuction=null;}
-    rentIndicators.forEach(e=>clearTimeout(e.timer));rentIndicators.clear();pendingRoll=null;
+    rentIndicators.forEach(e=>clearTimeout(e.timer));rentIndicators.clear();pendingRoll=null;freeParkingPotAmount=0;
     mpStopAuctionClock();mpPendingCard=null;authoritativeModalData=null;mp.lastModalSig="";mpPendingTrade=null;mpLastTradeId=null;
     if(toastStack){toastStack.remove();toastStack=null;}clearActionEventQueue();if(modalRoot)modalRoot.innerHTML="";if(howModalRoot)howModalRoot.innerHTML="";if(tooltip)tooltip.classList.remove("show");tutorialClearFocus();document.getElementById("capitalTutorial")?.remove();tutorialActive=false;tutorialStep=0;
     document.querySelectorAll("#gameWrap .cap-hover-main,#gameWrap .cap-hover-group,#gameWrap .cap-hover-dim").forEach(e=>e.classList.remove("cap-hover-main","cap-hover-group","cap-hover-dim"));
@@ -12149,11 +12372,14 @@ document.addEventListener("keydown",e=>{
   document.querySelectorAll("#countRow .count-btn").forEach(b=>b.addEventListener("click",()=>setCount(Number(b.dataset.count))));
   document.querySelectorAll("#speedRow .speed-btn").forEach(b=>b.addEventListener("click",()=>setGameSpeed(b.dataset.speed)));
   document.getElementById("startingMoneySelect")?.addEventListener("change",e=>setStartingMoney(e.target.value));
+  document.getElementById("btnGameSettings")?.addEventListener("click",()=>openGameSettings(true));
   document.getElementById("tradeBtn")?.addEventListener("click",openTradeModal);
 
   window.Capital={
     start:startGame,back:backToMenu,play:openSetup,select:setCount,
     multiplayer:mpCreate,joinMultiplayer:mpJoin,
+    settings:()=>({...gameSettings}),applySettings:s=>applyGameSettings(s),openSettings:openGameSettings,
+    settingsDefaults:()=>({...GAME_SETTINGS_DEFAULTS}),
     // Read-only multiplayer state, for the developer panel and for tests. It
     // exposes the object itself rather than a copy, so anything added here is a
     // decision not to hide; the fields are all client-local facts.
