@@ -4944,19 +4944,23 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
      touches game state directly - Save goes through applyGameSettings, which is
      the single writer, and the host broadcasts the result to the room. */
   function openGameSettings(editable=true){
-    /* The Create/Join form and this window both live in modalRoot, and opening
-       settings used to wipe the form's markup - so Cancel closed the whole flow.
-       Over that form the settings render into their own layer instead: the form
-       keeps its DOM, its values and its handlers, and only this layer closes. */
-    if(modalRoot?.querySelector("#capitalMpFlow"))return openGameSettingsLayer(editable);
+    /* Room rules are ALWAYS a standalone layer while a multiplayer room is
+       active. Two things write to modalRoot independently of the user:
+       the host/guest flow draws its lobby after the async subscribe resolves,
+       and any incoming state redraws the lobby. Anything rendered into
+       modalRoot here would be wiped by the next one of those, and its own
+       close path would wipe the lobby in return. The layer is closed only by
+       its own buttons, and only modalRoot's owner clears modalRoot. */
+    if(mp.active)return openGameSettingsLayer(editable);
     return openGameSettingsIn(null,editable);
   }
   function openGameSettingsLayer(editable){
-    const old=document.getElementById("capitalSettingsLayer");
-    if(old)old.remove();
-    const layer=document.createElement("div");
-    layer.id="capitalSettingsLayer";
-    document.body.appendChild(layer);
+    let layer=document.getElementById("capitalSettingsLayer");
+    if(!layer){
+      layer=document.createElement("div");
+      layer.id="capitalSettingsLayer";
+      document.body.appendChild(layer);
+    }
     return openGameSettingsIn(layer,editable);
   }
   function closeGameSettingsLayer(){document.getElementById("capitalSettingsLayer")?.remove();}
@@ -4967,11 +4971,14 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     const draft={...gameSettings};
     const tabs=[["general","General"],["economy","Economy"],["rules","Gameplay Rules"],["bots","Bots"]];
     let tab="general";
-    const close=()=>{if(layered)closeGameSettingsLayer();else clearModal();};
+    const close=()=>{
+      if(layered)closeGameSettingsLayer();
+      else{clearModal();modalOpen=false;modalKind=null;}
+    };
     const save=()=>{
       applyGameSettings(draft);close();
       toast("Game rules saved.","good");
-      if(mp.active&&mp.host){mpSend({kind:"lobbySettings",settings:gameSettings});if(!layered)mpShowLobby();}
+      if(mp.active&&mp.host)mpSend({kind:"lobbySettings",settings:gameSettings});
     };
     const row=(label,ctl,hint)=>`<div class="gs-row"><div class="gs-row-text"><b>${label}</b>${hint?`<small>${hint}</small>`:""}</div><div class="gs-row-ctl">${ctl}</div></div>`;
     const sel=(id,opts,val)=>`<select class="gs-input" id="${id}" ${canEdit?"":"disabled"}>${opts.map(o=>`<option value="${o[0]}"${String(val)===String(o[0])?" selected":""}>${o[1]}</option>`).join("")}</select>`;
