@@ -785,6 +785,35 @@ body{
 }
 .capital-money-pop.positive{color:#5ee3a0}
 .capital-money-pop.negative{color:#ff687b}
+/* Money landing on a piece in the 2D board. The 3D board floats this as a sprite;
+   this is the same idea for the flat board, where the piece is a DOM element. */
+.capital-float-amount{
+  position:absolute;
+  transform:translateX(-50%);
+  z-index:26;
+  font-size:16px;
+  font-weight:950;
+  letter-spacing:.01em;
+  pointer-events:none;
+  white-space:nowrap;
+  text-shadow:0 3px 14px #000c,0 0 2px #000c;
+  animation:capFloatAmount 1.4s cubic-bezier(.2,.7,.3,1) forwards;
+}
+.capital-float-amount.positive{color:#5ee3a0}
+.capital-float-amount.negative{color:#ff687b}
+@keyframes capFloatAmount{
+  0%{opacity:0;transform:translateX(-50%) translateY(6px) scale(.8)}
+  14%{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}
+  72%{opacity:1;transform:translateX(-50%) translateY(-16px) scale(1)}
+  100%{opacity:0;transform:translateX(-50%) translateY(-40px) scale(.94)}
+}
+/* The landlord's row in the panel while a rent payment lands on them. */
+.player-row.capital-gain{
+  box-shadow:0 0 0 2px #5ee3a055,0 0 26px -6px #5ee3a0aa;
+  background:linear-gradient(90deg,#5ee3a01f,transparent 62%);
+  border-radius:12px;
+  transition:box-shadow .22s ease,background .22s ease;
+}
 @keyframes capMoney{
   0%{opacity:0;transform:translateY(7px) scale(.85)}
   15%{opacity:1;transform:none}
@@ -4189,6 +4218,14 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   let lastRollTotal = 0;
   let lastDice = [1,1];
   let previousMoney = new Map();
+  /* Per-player rows are kept between renders instead of being rebuilt.
+     renderPlayers() is called from 55 places, several times per turn, and it used
+     to do box.innerHTML="" and rebuild every row - including one chip per owned
+     property, each with six tooltip listeners and a click handler. One call cost
+     80 elements at the start of a game and 440 once the board was full, so the
+     game got steadily heavier the longer it ran. Nothing here is rebuilt unless
+     the thing it draws from actually changed. */
+  const playerPanelCache = new Map();
   let tooltip = null;
   let modalOpen = false;
   let modalKind = null;
@@ -5165,6 +5202,50 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     // Non-forced publishes are also sent immediately. The previous 120ms
     // debounce allowed state changes to piggyback on a later player action.
     const snap=mpSnapshot();mpSend({kind:"snapshot",snapshot:snap});mpSaveHostState(snap);mpServerScheduleSave(snap);
+  }
+  /* The 2D counterpart of cap3dFxFloat.
+     Money moving is the one thing that has to be readable in both board views, and
+     until now a floating amount only existed over the 3D board - in 2D the payer
+     got a card and the landlord got nothing at all. */
+  function cap2dFxFloat(pl,amount){
+    if(boardView!=="2d"||!pl||!amount)return;
+    try{
+      const at=tokenPoint(pl.pos);if(!at)return;
+      const el=document.createElement("div");
+      el.className="capital-float-amount "+(amount>0?"positive":"negative");
+      el.textContent=(amount>0?"+$":"-$")+Math.abs(Math.round(amount));
+      el.style.left=(at.x+TOKEN_W/2)+"px";
+      el.style.top=(at.y-6)+"px";
+      boardEl.appendChild(el);
+      const born=performance.now(),localRun=runId;
+      const cleanup=ts=>{if(!el.isConnected)return;if(!validRun(localRun)||ts-born>1400){el.remove();return;}scheduleFrame(cleanup);};
+      scheduleFrame(cleanup);
+    }catch(_){}
+  }
+  /* Money arriving, told from the receiver's side.
+
+     Every other money event is reported against the player who caused it: rent
+     paid, tax paid, a card payout. Rent is the exception - the landlord gains
+     while somebody else is spending, so the card, the floating amount and the
+     sound all landed on the payer, and the person who actually got paid watched
+     their balance change in silence. Give them their own notice: a card, an
+     amount over their piece in whichever board view is showing, and a flash on
+     their row in the panel.
+
+     The wording is built here, on whoever ran the payment, and travels inside the
+     event - a guest that rebuilt it would not know who paid. */
+  function showRentIncome(owner,payer,amount,t){
+    if(!owner||owner.bankrupt||!amount)return;
+    try{
+      const row=playerRowEl(owner.id);
+      if(row){
+        row.classList.add("capital-gain");
+        const off=()=>{try{row.classList.remove("capital-gain");}catch(_){}};
+        setTimeout(off,2400);
+      }
+    }catch(_){}
+    const from=payer&&players[payer.id]?("From "+playerLabel(players[payer.id])):"Rent collected";
+    showActionEvent("rent-in",owner,{titleEn:"RENT RECEIVED",detailEn:`${from} · ${tileLabel(t)}`,amount:amount,icon:"\U0001F4B0",tone:"green",duration:1500});
   }
   function remoteMovementPoint(tileId){return tokenPoint(tileId);}
   function finishRemoteMovement(force=false){
@@ -6542,18 +6623,44 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       openPropertyModal(id);
     }catch(_){}
   }
-  function cap3dTileSig(t){
+  /* Which "<player>|<group>" pairs hold a complete colour group, in one pass.
+     hasMonopoly() answered this by filtering all 40 tiles on every call, and
+     cap3dSync asks it twice for each of the 40 tiles on every animation frame:
+     roughly eighty throwaway arrays and three thousand element visits per frame,
+     which was most of what the 3D view spent between frames. One pass per sync
+     gives the same answer for a fraction of the work. */
+  function cap3dMonopolySet(){
+    const groups=new Map();
+    for(const t of TILES){
+      if(t.type!=="prop")continue;
+      let g=groups.get(t.group);
+      if(!g){g={need:0,owned:new Map()};groups.set(t.group,g);}
+      g.need++;
+      if(t.owner!=null)g.owned.set(t.owner,(g.owned.get(t.owner)||0)+1);
+    }
+    const set=new Set();
+    // The group name is the Map key; the value only carries the counts. Reading it
+    // off the entry silently built every key as "<player>|undefined".
+    for(const name of groups.keys()){
+      const g=groups.get(name);
+      if(g.need<1)continue;
+      for(const counted of g.owned){if(counted[1]===g.need)set.add(counted[0]+"|"+name);}
+    }
+    return set;
+  }
+  function cap3dTileSig(t,monopoly){
     // Monopoly status is part of the signature: a group can complete or break
     // (trading away the last tile) without owner/houses changing.
-    const mono=t.type==="prop"&&t.owner!=null&&hasMonopoly(t.owner,t.group)?1:0;
+    const mono=t.type==="prop"&&t.owner!=null&&monopoly.has(t.owner+"|"+t.group)?1:0;
     return (t.owner==null?"-":t.owner)+"|"+(t.houses||0)+"|"+(t.hotel?1:0)+"|"+(t.mortgaged?1:0)+"|"+mono+"|"+lang;
   }
   function cap3dSync(force){
     if(!cap3d.ready||!cap3d.scene)return;
     const THREE=window.THREE;
+    const monopoly=cap3dMonopolySet();
     TILES.forEach(function(t){
       const entry=cap3d.tiles.get(t.id);if(!entry)return;
-      const sig=cap3dTileSig(t);
+      const sig=cap3dTileSig(t,monopoly);
       // A forced resync (view switch, 3D start) must not replay growth for a
       // skyline that is already standing. Clearing the marker below makes the
       // first sync of the new pass take the "stand up at full size" branch.
@@ -6568,7 +6675,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
         // Monopoly state drives the crown + pad. A group can be completed by a
         // purchase or by a trade, and broken by trading the last tile away, so
         // this is recomputed from live state every time the signature changes.
-        const mono=(t.type==="prop"&&t.owner!=null&&!owner?.bankrupt&&hasMonopoly(t.owner,t.group))||false;
+        const mono=(t.type==="prop"&&t.owner!=null&&!owner?.bankrupt&&monopoly.has(t.owner+"|"+t.group))||false;
         if(entry.crown)entry.crown.visible=mono;
         if(entry.pad)entry.pad.visible=mono;
         const lvl=t.type==="prop"?((t.hotel)?5:Math.min(4,t.houses||0)):0;
@@ -7250,10 +7357,16 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   showActionEvent=function(kind,p,ev){
     __capFxOrigActionEvent(kind,p,ev);
     try{
-      if(boardView!=="3d"||!cap3d.ready)return;
       const amt=ev&&ev.amount;
       if(!amt)return;
-      if(kind==="rent"||kind==="tax"||kind==="go"||kind==="cardmoney"||kind==="jailfee")cap3dFxFloat(p,amt);
+      /* Both board views. Each renderer ignores the other's view, so this covers
+         the 3D board and the 2D board without either knowing about the other.
+         "rent-in" is the landlord's side of a rent payment; until now the payout
+         was only ever reported against the player who paid it. */
+      if(kind==="rent"||kind==="tax"||kind==="go"||kind==="cardmoney"||kind==="jailfee"||kind==="rent-in"){
+        cap3dFxFloat(p,amt);
+        cap2dFxFloat(p,amt);
+      }
     }catch(_){}
   };
   /* ---------- 3D building growth + monopoly pulse (visual only) ----------
@@ -8648,46 +8761,90 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     return parts.join(" · ");
   }
   function renderPlayers(){
-    const box=document.getElementById("players");if(!box)return;box.innerHTML="";
+    const box=document.getElementById("players");if(!box)return;
+    /* One pass over the board instead of three filters per player. Eight players
+       used to mean twenty-four walks of all 40 tiles on every single render. */
+    const byOwner=new Map();
+    for(const t of TILES){
+      if(t.owner==null)continue;
+      let e=byOwner.get(t.owner);
+      if(!e){e={props:[],houses:0,hotels:0};byOwner.set(t.owner,e);}
+      const type=t.type;
+      if(type==="prop"||type==="station"||type==="util")e.props.push(t);
+      if(type==="prop"){e.houses+=(t.houses||0);if(t.hotel)e.hotels++;}
+    }
+    const rows=[];
+    const pendingDeltas=[];
     players.forEach((p,i)=>{
       if(!p)return;
       const old=previousMoney.get(p.id),delta=old===undefined?0:p.money-old;previousMoney.set(p.id,p.money);
-      const props=TILES.filter(t=>t.owner===p.id&&["prop","station","util"].includes(t.type));
-      const houses=TILES.filter(t=>t.owner===p.id&&t.type==="prop").reduce((s,t)=>s+(t.houses||0),0);
-      const hotels=TILES.filter(t=>t.owner===p.id&&t.type==="prop"&&t.hotel).length;
-      const row=document.createElement("div");
-      row.className="player-row"+(i===turn&&!p.bankrupt?" active":"")+(p.bankrupt?" bankrupt":"");
-      row.style.position="relative";
+      const own=byOwner.get(p.id)||{props:[],houses:0,hotels:0};
+      const props=own.props,houses=own.houses,hotels=own.hotels;
       const isMe=mp.active?mpIsLocalPlayer(p):!!p.human;
-      const tags=`${isMe?`<span class="pr-tag pr-you">${"You"}</span>`:""}${p.inJail?`<span class="pr-tag pr-jail" title="${"In Jail"}">🔒</span>`:""}${p.getOutCards?`<span class="pr-tag" title="${"Get Out of Jail Free"}">🎟×${p.getOutCards}</span>`:""}`;
-      // Double streak indicator. The counter was tracked and synced to every
-      // multiplayer client but never rendered, so a third double sent a player
-      // to jail with nothing on screen warning it was coming.
-      const streak=(Number(p.doubles)||0)>0&&!p.bankrupt
-        ?`<span class="capital-streak${(Number(p.doubles)||0)>=2?" danger":""}" title="${"Double streak — a third double sends you to jail"}" aria-label="${Math.min(2,Number(p.doubles)||0)} of 2 doubles, a third sends you to jail">${[1,2].map(i=>`<i class="${(Number(p.doubles)||0)>=i?"on":""}"></i>`).join("")}<b>${Math.min(2,Number(p.doubles)||0)}/2</b></span>`
-        :"";
-      row.innerHTML=`<div class="pr-top"><div class="player-mini-piece" style="--piece-color:${p.color}"><span class="mini-head"></span><span class="mini-body"></span></div><div class="pname"><div class="pr-name"><span class="pr-name-text">${escapeHtml(playerLabel(p))}</span>${tags}${streak}</div><div class="pr-sub">${!p.human?`<span class="capital-personality">${escapeHtml(personalityLabel(p))}</span>`:""}<span>${playerPropertySummary(p,props,houses,hotels)}</span></div></div><div class="pmoney">${p.bankrupt?T("bankrupt"):"$"+Math.max(0,Math.floor(p.money)).toLocaleString("en-US")}</div></div>`;
-      if(props.length){
-        const inv=document.createElement("div");
-        inv.className="capital-inventory";
-        props.forEach(t=>{
-          const chip=document.createElement("button");
-          chip.type="button";
-          chip.className="capital-prop-chip"+(t.mortgaged?" mortgaged":"")+(t.type==="prop"&&(t.hotel||t.houses>0)?" built":"");
-          chip.style.background=GROUP_UI[t.group]||(t.type==="station"?"#8391a7":"#a58bd6");
-          chip.dataset.tileId=t.id;
-          chip.setAttribute("aria-label",tileLabel(t));
-          attachInventoryChipTooltip(chip,t);
-          // Clicking a chip opens that property (build, sell, mortgage…).
-          chip.addEventListener("click",()=>{clearHover();openPropertyModal(t.id);});
-          inv.appendChild(chip);
-        });
-        row.appendChild(inv);
+      const rowCls="player-row"+(i===turn&&!p.bankrupt?" active":"")+(p.bankrupt?" bankrupt":"");
+      /* What the row draws from, split so that the two halves can change apart.
+         Money moves far more often than anything else, and rewriting the whole
+         row for a number that occupies one div was the bulk of the cost. */
+      const topSig=[rowCls,p.name,p.color,isMe?"1":"",p.inJail?"1":"",p.getOutCards||0,
+                    Number(p.doubles)||0,props.length,houses,hotels,!p.human?personalityLabel(p):""].join("|");
+      const invSig=props.map(t=>t.id+":"+(t.mortgaged?1:0)+":"+(t.hotel?5:(t.houses||0))).join(",");
+      let c=playerPanelCache.get(p.id);
+      if(!c){c={row:document.createElement("div"),top:null,money:null,inv:null,topSig:"",invSig:"~"};c.row.style.position="relative";playerPanelCache.set(p.id,c);}
+      const row=c.row;
+      if(c.topSig!==topSig){
+        if(!c.top){c.top=document.createElement("div");c.top.className="pr-top";row.appendChild(c.top);}
+        // Double streak indicator. The counter was tracked and synced to every
+        // multiplayer client but never rendered, so a third double sent a player
+        // to jail with nothing on screen warning it was coming.
+        const tags=`${isMe?`<span class="pr-tag pr-you">${"You"}</span>`:""}${p.inJail?`<span class="pr-tag pr-jail" title="${"In Jail"}">🔒</span>`:""}${p.getOutCards?`<span class="pr-tag" title="${"Get Out of Jail Free"}">🎟×${p.getOutCards}</span>`:""}`;
+        const streak=(Number(p.doubles)||0)>0&&!p.bankrupt
+          ?`<span class="capital-streak${(Number(p.doubles)||0)>=2?" danger":""}" title="${"Double streak — a third double sends you to jail"}" aria-label="${Math.min(2,Number(p.doubles)||0)} of 2 doubles, a third sends you to jail">${[1,2].map(i=>`<i class="${(Number(p.doubles)||0)>=i?"on":""}"></i>`).join("")}<b>${Math.min(2,Number(p.doubles)||0)}/2</b></span>`
+          :"";
+        c.top.innerHTML=`<div class="player-mini-piece" style="--piece-color:${p.color}"><span class="mini-head"></span><span class="mini-body"></span></div><div class="pname"><div class="pr-name"><span class="pr-name-text">${escapeHtml(playerLabel(p))}</span>${tags}${streak}</div><div class="pr-sub">${!p.human?`<span class="capital-personality">${escapeHtml(personalityLabel(p))}</span>`:""}<span>${playerPropertySummary(p,props,houses,hotels)}</span></div></div><div class="pmoney"></div>`;
+        c.money=c.top.querySelector(".pmoney");
+        row.className=rowCls;
+        c.topSig=topSig;
       }
-      box.appendChild(row);
-      if(delta)showMoneyDelta(p,delta,row);
+      // Money is one text write whether or not anything else moved.
+      if(c.money){const txt=p.bankrupt?T("bankrupt"):"$"+Math.max(0,Math.floor(p.money)).toLocaleString("en-US");if(c.money.textContent!==txt)c.money.textContent=txt;}
+      if(c.invSig!==invSig){
+        if(props.length){
+          if(!c.inv){c.inv=document.createElement("div");c.inv.className="capital-inventory";}
+          else c.inv.innerHTML="";
+          props.forEach(t=>{
+            const chip=document.createElement("button");
+            chip.type="button";
+            chip.className="capital-prop-chip"+(t.mortgaged?" mortgaged":"")+(t.type==="prop"&&(t.hotel||t.houses>0)?" built":"");
+            chip.style.background=GROUP_UI[t.group]||(t.type==="station"?"#8391a7":"#a58bd6");
+            chip.dataset.tileId=t.id;
+            chip.setAttribute("aria-label",tileLabel(t));
+            attachInventoryChipTooltip(chip,t);
+            // Clicking a chip opens that property (build, sell, mortgage…).
+            chip.addEventListener("click",()=>{clearHover();openPropertyModal(t.id);});
+            c.inv.appendChild(chip);
+          });
+          if(c.inv.parentNode!==row)row.appendChild(c.inv);
+        }else if(c.inv){c.inv.remove();c.inv=null;}
+        c.invSig=invSig;
+      }
+      rows.push(row);
+      if(delta)pendingDeltas.push([p,delta,row]);
     });
+    // Rows for players who are gone (left, bankrupt and dropped, a new game).
+    for(const [pid,c] of playerPanelCache){
+      if(!players.some(p=>p&&p.id===pid)){c.row.remove();playerPanelCache.delete(pid);}
+    }
+    // Keep DOM order in step with players[] without rebuilding anything.
+    let misordered=rows.length!==box.children.length;
+    if(!misordered)for(let k=0;k<rows.length;k++){if(box.children[k]!==rows[k]){misordered=true;break;}}
+    if(misordered)rows.forEach(r=>box.appendChild(r));
+    /* Money pops only after the row is in the document. showMoneyDelta's first
+       frame checks isConnected and stops dead on a detached row, so a brand new
+       row would swallow its own "+". */
+    for(const [p,delta,row] of pendingDeltas)showMoneyDelta(p,delta,row);
   }
+  /* The rendered row for a player, for anything that needs to point at it. */
+  function playerRowEl(pid){const c=playerPanelCache.get(Number(pid));return c?c.row:null;}
   function updateBadge(){
     // Self-heal a stale multiplayer modal flag. A previous snapshot/event can
     // be superseded while its DOM has already been cleared; leaving modalOpen
@@ -9720,7 +9877,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
       const owner=players[t.owner],rent=calcRent(t);
       if(rent>0&&owner&&!owner.bankrupt){
         requirePayment(p,rent,owner.id,`Rent · ${tileLabel(t)}`,settled=>{
-          if(settled){SFX.rentPay();log(`${playerLabel(p)} pays $${rent} rent to ${playerLabel(owner)}.`);toast(`🏠 ${playerLabel(p)} → ${playerLabel(owner)}  $${rent}`,'warn');showActionEvent("rent",p,{titleEn:"RENT PAID",detailEn:`To ${playerLabel(owner)} · ${tileLabel(t)}`,amount:-rent,icon:"🏠",tone:"red",duration:1500});}
+          if(settled){SFX.rentPay();log(`${playerLabel(p)} pays $${rent} rent to ${playerLabel(owner)}.`);toast(`🏠 ${playerLabel(p)} → ${playerLabel(owner)}  $${rent}`,'warn');showActionEvent("rent",p,{titleEn:"RENT PAID",detailEn:`To ${playerLabel(owner)} · ${tileLabel(t)}`,amount:-rent,icon:"🏠",tone:"red",duration:1500});showRentIncome(owner,p,rent,t);}
           renderPlayers();
           completeTileAction(p);
         });
@@ -9976,6 +10133,13 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
   }
   function showActionEvent(kind,p,{titleEn,titleRu,detailEn="",detailRu="",amount=null,icon="✦",tone="gold",duration=1450}={}){
     actionEventQueue.push({kind,p,titleEn,titleRu,detailEn,detailRu,amount,icon,tone,duration});
+    /* One card is on screen at a time and each holds it for its whole duration, so
+       a turn that produces several events drains far slower than it makes them -
+       a bot building a house alone can queue three. The queue had no ceiling, so it
+       grew for the rest of the session and cards kept arriving long after the game
+       had moved on. When it backs up, the oldest entries are the most stale, so
+       those are the ones to drop. */
+    if(actionEventQueue.length>6)actionEventQueue.splice(0,actionEventQueue.length-6);
     // In multiplayer the host is authoritative, so action-event overlays are
     // broadcast separately from the state snapshot. This makes purchase/rent/
     // tax/etc. notifications appear on every connected screen, not only locally.
@@ -11340,7 +11504,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     if(toastStack){toastStack.remove();toastStack=null;}clearActionEventQueue();if(modalRoot)modalRoot.innerHTML="";if(howModalRoot)howModalRoot.innerHTML="";if(tooltip)tooltip.classList.remove("show");tutorialClearFocus();document.getElementById("capitalTutorial")?.remove();tutorialActive=false;tutorialStep=0;
     document.querySelectorAll("#gameWrap .cap-hover-main,#gameWrap .cap-hover-group,#gameWrap .cap-hover-dim").forEach(e=>e.classList.remove("cap-hover-main","cap-hover-group","cap-hover-dim"));
     TILES.forEach(t=>{if(["prop","station","util"].includes(t.type)){t.owner=null;t.houses=0;t.hotel=false;t.mortgaged=false;}});
-    players=[];turn=0;state=STATES.WAITING_FOR_ROLL;extraTurnPending=false;lastRollTotal=0;lastDice=[1,1];previousMoney=new Map();gameLog=[];renderDice();updateBadge();
+    players=[];turn=0;state=STATES.WAITING_FOR_ROLL;extraTurnPending=false;lastRollTotal=0;lastDice=[1,1];previousMoney=new Map();playerPanelCache.forEach(c=>c.row.remove());playerPanelCache.clear();gameLog=[];renderDice();updateBadge();
     // Drop the standing total and the previous roll's facing, so a new game does
     // not open with the last game's number still on the board.
     try{cap3d.prevDiceKey=null;cap3d.prevDiceVals=null;cap3dDiceSumDraw(true);}catch(_){}
@@ -11766,6 +11930,7 @@ document.addEventListener("keydown",e=>{
 </body>
 
 </html>
+
 
 
 
