@@ -102,12 +102,30 @@ root.
 ## How it is built
 
 One `index.html` holds the whole game — markup, styles, engine and renderer.
-No dependencies are vendored; the only external fetch is three.js from a CDN,
-and the game runs fine without it.
+Three.js and the Supabase client load from CDNs. Multiplayer uses Supabase
+Realtime and the `rooms` table; fonts load from Google Fonts. The 2D bot game
+does not require the multiplayer service.
 
 That is a deliberate choice. There is no build to run, no lockfile to rot, and
 nothing to keep in sync when you clone it. The cost is that `index.html` is one
 large file.
+
+## Regression checks
+
+`tests/stability.mjs` runs Chromium with Playwright against a local HTTP server.
+It exercises real Supabase rooms with separate browser contexts, including rent
+feedback in 2D/3D, auctions, reconnects, restored purchase/debt dialogs, host
+migration, and cleanup when a new game starts. It creates temporary test rooms.
+
+```bash
+npm install --no-save playwright
+python3 -m http.server 8000
+# In another terminal (Chrome is used by default on macOS):
+node tests/stability.mjs
+```
+
+Set `CHROME_PATH` for another Chromium installation, `GAME_URL` for a different
+local address, or `PLAYWRIGHT_MODULE` for an external Playwright installation.
 
 ## Licence
 

@@ -4243,14 +4243,10 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   let lastRollTotal = 0;
   let lastDice = [1,1];
   let previousMoney = new Map();
-  /* Per-player rows are kept between renders instead of being rebuilt.
-     renderPlayers() is called from 55 places, several times per turn, and it used
-     to do box.innerHTML="" and rebuild every row - including one chip per owned
-     property, each with six tooltip listeners and a click handler. One call cost
-     80 elements at the start of a game and 440 once the board was full, so the
-     game got steadily heavier the longer it ran. Nothing here is rebuilt unless
-     the thing it draws from actually changed. */
+  // Keep player rows and inventory handlers stable between state updates.
   const playerPanelCache = new Map();
+  const rentIndicators = new Map();
+  let boardVisualDirty=true;
   let tooltip = null;
   let modalOpen = false;
   let modalKind = null;
@@ -4269,6 +4265,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   // one waypoint per tile. Set by animateMove, read by animatePieceTo.
   let moveStepCount = 1;
   let mpAuthoritativeMovement = null;
+  let pendingRoll = null;
   let mpRemoteMovement = null;
   let mpPendingTrade = null;
   let boardView = "2d";
@@ -4289,6 +4286,9 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   /* ---------- Realtime multiplayer ---------- */
   const mp = {
     active:false, host:false, room:"", clientId:("c_"+Math.random().toString(36).slice(2,10)),
+    connecting:false, transportEpoch:0, subscribeTask:null, cancelSubscribe:null,
+    resyncTimer:null, awaitingSnapshot:false, packetSeq:0, lastPacketSeq:0,
+    matchId:"", authorityTerm:0, lastFullSyncAt:0,
     channel:null, members:[], pendingStart:null, lastSnapshot:"", lastModalSig:"", connected:false, publishTimer:null, auctionTimer:null, auctionClockIsRaf:false, snapshotSeq:0, lastAppliedSeq:0, pendingSnapshotSeq:0, realtimeStateSeq:0, lastRealtimeStateSeq:0, syncTimer:null, hostId:null, hostWatchTimer:null, claimTimer:null, lastTickAt:0, restorePending:false, authoritySettled:false
   };
   function mpLocalPlayer(){return players.find(p=>p&&p.mpClientId===mp.clientId)||null;}
@@ -4339,9 +4339,18 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     }catch(_){return null;}
   }
   function mpSaveHostState(snapshot){
+    if(!mp.active||!mp.host||!mp.room||!snapshot)return;
+    mpLocalSavePending={room:mp.room,snapshot};
+    if(!mpLocalSaveTimer)mpLocalSaveTimer=setTimeout(mpFlushLocalSave,250);
+  }
+  let mpLocalSaveTimer=null,mpLocalSavePending=null;
+  function mpFlushLocalSave(){
+    if(mpLocalSaveTimer)clearTimeout(mpLocalSaveTimer);
+    mpLocalSaveTimer=null;
+    const pending=mpLocalSavePending;mpLocalSavePending=null;
     try{
-      if(!mp.active||!mp.host||!mp.room||!snapshot)return;
-      const data={room:mp.room,savedAt:Date.now(),snapshot};
+      if(!pending||!mp.host||pending.room!==mp.room)return;
+      const data={room:pending.room,savedAt:Date.now(),snapshot:pending.snapshot};
       const raw=JSON.stringify(data);
       try{sessionStorage.setItem(MP_HOST_STATE_KEY,raw);}catch(_){}
       try{localStorage.setItem(MP_HOST_STATE_KEY,raw);}catch(_){}
@@ -4358,7 +4367,8 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       return d.snapshot;
     }catch(_){return null;}
   }
-  function mpClearHostState(){try{sessionStorage.removeItem(MP_HOST_STATE_KEY);}catch(_){}try{localStorage.removeItem(MP_HOST_STATE_KEY);}catch(_){}}
+  function mpClearHostState(){clearTimeout(mpLocalSaveTimer);mpLocalSaveTimer=null;mpLocalSavePending=null;try{sessionStorage.removeItem(MP_HOST_STATE_KEY);}catch(_){}try{localStorage.removeItem(MP_HOST_STATE_KEY);}catch(_){}}
+  window.addEventListener("pagehide",mpFlushLocalSave);
   /* ---------- Server-side room state ----------
      The project's Supabase already has a `rooms` table (code, state jsonb,
      updated_at) that nothing ever used: the whole game ran on Realtime
@@ -4378,13 +4388,14 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   function mpServerRoomCode(){return String(mp.room||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6);}
   function mpServerSaveNow(snapshot){
     const code=mpServerRoomCode();
-    if(!code||!snapshot)return Promise.resolve(false);
+    const epoch=mp.transportEpoch;
+    if(!code||!snapshot||!mp.active||!mp.host)return Promise.resolve(false);
     // A lobby nobody has started, or a one-player room, is not a game worth
     // keeping. Writing those would just fill the table with dead rows.
     if(!Array.isArray(snapshot.players)||snapshot.players.length<2)return Promise.resolve(false);
     const seq=++mpServerSaveSeq;
     return mpLoadSupabase().then(client=>{
-      if(!client)return false;
+      if(!client||!mp.active||!mp.host||epoch!==mp.transportEpoch||code!==mpServerRoomCode())return false;
       return client.from("rooms").upsert(
         {code:code,state:{...snapshot,serverSavedAt:Date.now(),serverSeq:seq}},
         {onConflict:"code"}
@@ -4397,19 +4408,22 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   function mpServerScheduleSave(snapshot){
     // Snapshots fire on every state commit, so this is debounced hard: the point
     // is to survive a crash, not to mirror every 350ms tick.
-    if(mpServerSaveTimer)clearTimeout(mpServerSaveTimer);
-    mpServerSaveTimer=setTimeout(()=>{mpServerSaveTimer=null;mpServerSaveNow(snapshot);},MP_SERVER_SAVE_DEBOUNCE);
+    mpServerPendingSave=snapshot;
+    if(mpServerSaveTimer)return;
+    mpServerSaveTimer=setTimeout(()=>{mpServerSaveTimer=null;const pending=mpServerPendingSave;mpServerPendingSave=null;mpServerSaveNow(pending);},MP_SERVER_SAVE_DEBOUNCE);
   }
   function mpServerFlushSave(snapshot){
     if(mpServerSaveTimer){clearTimeout(mpServerSaveTimer);mpServerSaveTimer=null;}
-    return mpServerSaveNow(snapshot);
+    mpServerPendingSave=null;return mpServerSaveNow(snapshot);
   }
-  function mpServerCancelSave(){if(mpServerSaveTimer){clearTimeout(mpServerSaveTimer);mpServerSaveTimer=null;}}
+  let mpServerPendingSave=null;
+  function mpServerCancelSave(){if(mpServerSaveTimer){clearTimeout(mpServerSaveTimer);mpServerSaveTimer=null;}mpServerPendingSave=null;}
   function mpServerLoadState(){
     const code=mpServerRoomCode();
+    const epoch=mp.transportEpoch;
     if(!code)return Promise.resolve(null);
     return mpLoadSupabase().then(client=>{
-      if(!client)return null;
+      if(!client||epoch!==mp.transportEpoch||code!==mpServerRoomCode())return null;
       return client.from("rooms").select("state").eq("code",code).limit(1)
         .then(({data,error})=>{
           if(error){console.warn("CAPITAL server state load failed",error);return null;}
@@ -4431,8 +4445,11 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
      would be worse than starting from nothing. */
   function mpServerStateUsable(s){
     if(!s||typeof s!=="object")return false;
-    if(!Array.isArray(s.players)||s.players.length<2)return false;
-    if(!Array.isArray(s.tiles)||s.tiles.length===0)return false;
+    if(!Array.isArray(s.players)||s.players.length<2||s.players.length>8)return false;
+    if(!s.players.every((p,i)=>p&&p.id===i&&Number.isFinite(p.money)&&Number.isInteger(p.pos)&&p.pos>=0&&p.pos<40))return false;
+    if(!Number.isInteger(s.turn)||!s.players[s.turn]||!Object.values(STATES).includes(s.state))return false;
+    if(!Array.isArray(s.tiles)||s.tiles.length!==TILES.length)return false;
+    if(!s.tiles.every((t,i)=>t&&t.id===i&&(t.owner==null||Number.isInteger(t.owner)&&!!s.players[t.owner])))return false;
     // mpSnapshot stamps the room it was taken from. A row for a different room
     // means the code collided or the row was edited by hand.
     if(s.room!=null&&String(s.room).toUpperCase()!==mpServerRoomCode())return false;
@@ -4447,11 +4464,14 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   function mpTryServerRestore(reason=""){
     if(!mp.active)return Promise.resolve(false);
     if(mpHasLiveGame())return Promise.resolve(false);
+    const room=mp.room,epoch=mp.transportEpoch;
     return mpServerLoadState().then(s=>{
-      if(!mp.active)return false;
+      if(!mp.active||mp.room!==room||mp.transportEpoch!==epoch)return false;
       // A snapshot may have arrived while we were reading. Never race it.
       if(mpHasLiveGame())return false;
       if(!mpServerStateUsable(s))return false;
+      if(!mp.host&&s.hostClientId)mp.hostId=String(s.hostClientId);
+      mp.authorityTerm=Number(s.authorityTerm)||0;
       mpApplySnapshot(s);
       // A restored game may have been restored precisely because the host was
       // gone. Start the stall watch from now: if the real host is alive its
@@ -4502,13 +4522,13 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     try{(mp.members||[]).forEach(m=>{if(m&&m.clientId)ids.add(String(m.clientId));});}catch(_){}
     return [...ids];
   }
-  function mpElectedHostId(){
+  function mpElectedHostId(previousHostId=mp.hostId){
     // The host we were hearing from is, by construction, the one that went
     // silent. Leaving it in the running would hand the election straight back to
     // a dead client, and the successor would never be elected at all - which is
     // exactly what happened when this only excluded clients presence had already
     // pruned, since presence leave is slow and is not acted on by guests.
-    const gone=mp.hostId?String(mp.hostId):null;
+    const gone=previousHostId?String(previousHostId):null;
     const ids=mpPresentClientIds().filter(id=>!gone||id!==gone);
     if(!ids.length)return mp.clientId;
     // Plain string sort: stable, and identical on every client because it is
@@ -4526,8 +4546,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   function mpStartHostWatch(){
     if(mp.hostWatchTimer)return;
     mp.hostWatchTimer=setInterval(()=>{
-      if(!mp.active||mp.host||!mpGameRunning())return;
-      if(mp.authoritySettled)return;
+      if(!mp.active||!mp.connected||mp.host||!mpGameRunning())return;
       if(!mp.lastTickAt)return;
       if(Date.now()-mp.lastTickAt<MP_HOST_STALL_MS)return;
       if(mp.claimTimer)return;
@@ -4545,23 +4564,31 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   function mpStepDownHost(successorId){
     if(!mp.host)return;
     mp.host=false;
+    if(successorId)mp.hostId=String(successorId);
+    runId++;cancelFrames();cancelBotTimers();clearMovingPiece();
+    if(activeAuction){auctionCancelTimers(activeAuction);activeAuction=null;}
+    mp.lastAppliedSeq=0;mp.lastRealtimeStateSeq=0;mp.lastPacketSeq=0;
+    mp.authoritySettled=false;mp.awaitingSnapshot=true;
     mpStopRealtimeHeartbeat();
     // A former host must stop writing, or it would keep overwriting the new
     // host's snapshots in the server copy.
     mpServerCancelSave();
     mpPersistSession();
-    log("The host left. You are now playing this game.");
-    toast("You are now the host of this game.","good");
-    showActionEvent("hostchange",{id:turn,name:mp.localName,color:PLAYER_COLORS[0]||"#f4c95d",mpClientId:mp.clientId,bankrupt:false,money:0,pos:0},
-      {titleEn:"NEW HOST",detailEn:"You have taken over the game.",icon:"👑",tone:"gold",duration:2600});
+    toast("Another player is now hosting this game.","info");
+    mp.lastTickAt=Date.now();mpStartHostWatch();mpRequestSync();
     // Pull the authoritative state from the new host rather than trusting what
     // this client last happened to receive.
     setTimeout(()=>{if(mp.active&&!mp.host&&mp.connected)mpSend({kind:"join",member:mpLocalPresence(),wantSnapshot:true});},400);
   }
   function mpBecomeHost(){
-    if(!mp.active||mp.host)return Promise.resolve(false);
+    if(!mp.active||!mp.connected||mp.host)return Promise.resolve(false);
+    const previousHostId=mp.hostId,epoch=mp.transportEpoch;
+    if(mpElectedHostId(previousHostId)!==mp.clientId)return Promise.resolve(false);
+    const saved=mp.latestSnapshot;
+    if(!saved){mpRequestSync();return Promise.resolve(false);}
     mp.host=true;
     mp.hostId=mp.clientId;
+    mp.authorityTerm++;
     mp.authoritySettled=true;
     mpStopRealtimeHeartbeat();
     mpStopHostWatch();
@@ -4569,17 +4596,18 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     // Adopt this client's own state if it already has the game; otherwise take
     // the server copy, which is the last thing the previous host committed. The
     // guard is re-checked after the read so a snapshot arriving mid-read wins.
-    const haveGame=mpHasLiveGame();
-    const load=haveGame?Promise.resolve(false):mpServerLoadState();
-    return load.then(s=>{
-      if(!mp.active)return false;
-      if(!haveGame&&!mpHasLiveGame()&&mpServerStateUsable(s))mpApplySnapshot(s);
+    return Promise.resolve().then(()=>{
+      if(!mp.active||mp.transportEpoch!==epoch)return false;
       // Presence may have changed while we were reading. If we are no longer the
       // right host, stand down rather than fork the game.
-      if(!mpIsElectedHost()){mpStepDownHost();return false;}
+      if(mpElectedHostId(previousHostId)!==mp.clientId){mpStepDownHost(previousHostId);return false;}
+      mp.snapshotSeq=Math.max(mp.snapshotSeq,mp.lastAppliedSeq);
+      mp.realtimeStateSeq=Math.max(mp.realtimeStateSeq,mp.lastRealtimeStateSeq);
+      mp.channel?.track(mpLocalPresence()).catch(()=>{});
+      mpSend({kind:"hostClaim",clientId:mp.clientId,previousHostId,term:mp.authorityTerm});
+      mpRestoreAuthority(saved);
       mpStartRealtimeHeartbeat();
       mpPersistSession();
-      mpSend({kind:"hostClaim",clientId:mp.clientId,previousHostId:mp.hostId||null});
       if(mpGameRunning()){
         mpPublishSnapshot(true);
         log("The previous host disconnected. You have taken over as host.");
@@ -4605,6 +4633,80 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     if(!s||typeof s!=="object")return false;
     const prev=s.hostClientId!=null?String(s.hostClientId):null;
     return !!(prev&&prev!==mp.clientId);
+  }
+  // Restore data and the pending decision, never a dead animation callback.
+  // Paying/rolling is resumed exactly once by the new authority.
+  function mpRestoreAuthority(s){
+    if(!mpServerStateUsable(s))return false;
+    cancelFrames();cancelBotTimers();clearMovingPiece();dropRemoteMovement();runId++;
+    pendingRoll=null;
+    if(activeAuction){auctionCancelTimers(activeAuction);activeAuction=null;}
+    mpStopAuctionClock();mpPendingDebt=null;mpPendingCard=null;
+    clearModal();mp.lastModalSig="";mp.lastAppliedSeq=0;
+    mpApplySnapshot(s);
+    mp.snapshotSeq=Math.max(mp.snapshotSeq,Number(s.seq)||0);
+    mp.matchId=s.matchId||mp.matchId||Date.now().toString(36);
+    mp.packetSeq=Math.max(mp.packetSeq,Number(s.packetSeq)||0);
+    mp.latestSnapshot=JSON.parse(JSON.stringify(s));
+    clearModal();
+    const p=currentPlayer();
+    if(!p||state===STATES.GAME_OVER){showGameOver(alive()[0]||p);return true;}
+    if(p.bankrupt||p.left){nextTurn();return true;}
+    if(s.auction){
+      const a=s.auction,t=TILES[Number(a.tileId)];
+      if(t){
+        activeAuction={tile:t,turnPlayer:players[a.turnPlayerId]||p,currentBid:Number(a.currentBid)||0,
+          highestBidder:a.highestBidder,clockSeq:Number(a.clockSeq)||0,closed:false,
+          endsAt:performance.now()+Math.max(0,Number(a.remainingMs)||0),lastBidAt:performance.now(),
+          history:a.history||[],bots:[],botTimers:new Set(),rafIds:new Set()};
+        state=STATES.TILE_ACTION;renderAuction(activeAuction);auctionStartTimer(activeAuction);
+      }
+    }else if(s.pendingDebt||s.modalData?.kind==="debt"){
+      const d=s.pendingDebt||s.modalData,debtor=players[d.playerId];
+      if(debtor)requirePayment(debtor,d.amount,d.creditorId,d.reason,
+        settled=>mpResumePayment(d,settled),d.continuation);
+    }else if(s.modalKind==="card"&&s.modalData){
+      const d=s.modalData,table=d.deck==="chance"?CHANCE_CARDS:CHEST_CARDS;
+      const raw=table[d.index];
+      if(raw){
+        mpPendingCard={playerId:p.id,card:{...raw,deck:d.deck,index:d.index}};
+        authoritativeModalData=d;modalKind="card";
+        if(mpIsLocalPlayer(p)){
+          modalRoot.innerHTML=mpRenderModal(d);modalOpen=true;
+          modalRoot.querySelector("#cardOk").onclick=()=>{const card=mpPendingCard.card;clearModal();applyCard(p,card);};
+        }
+      }
+    }else if(s.modalKind==="buy"){
+      state=STATES.TILE_ACTION;showBuyModal(p,TILES[s.modalData?.tileId??p.pos]);
+    }else if(s.modalKind==="jail"){
+      state=STATES.WAITING_FOR_ROLL;showJailModal(p);
+    }else if(state===STATES.MOVING&&s.movement){
+      const m=s.movement;
+      p.pos=Number(m.fromPos)||0;
+      animateMove(p,Number(m.steps)||0,()=>landPlayer(p));
+    }else if(state===STATES.ROLLING){
+      const r=s.pendingRoll;
+      beginTurnRoll(p,!!r?.jailRoll,r?.d1??lastDice[0],r?.d2??lastDice[1]);
+    }else if(state===STATES.TILE_ACTION){
+      onTileLand(p);
+    }else if(state===STATES.TURN_END){
+      nextTurn();
+    }else{
+      state=STATES.WAITING_FOR_ROLL;
+      if(!p.human)scheduleBotAction(p,()=>beginBotTurn(p),350);
+    }
+    renderTokens();renderPlayers();updateBadge();return true;
+  }
+  function mpResumePayment(d,settled){
+    const p=players[d.playerId],c=d.continuation;
+    if(c?.kind==="auction"){
+      const t=TILES[c.tileId];
+      if(settled&&t){t.owner=p.id;showPropertyAcquiredFx(p,t);}
+      renderTokens();renderPlayers();completeTileAction(players[c.turnPlayerId]);
+    }else{
+      if(settled&&d.creditorId!=null)showRentIncome(players[d.creditorId],p,d.amount,TILES[p.pos]);
+      renderPlayers();completeTileAction(p);
+    }
   }
   /* ---------- Supabase Realtime transport. The host is the only game authority. ---------- */
   // Multiplayer is intentionally server-assisted now: GitHub Pages serves the UI,
@@ -4647,11 +4749,32 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 
   function mpChannelName(){return SUPABASE_CHANNEL_PREFIX+String(mp.room||"").toUpperCase();}
   function mpLocalPresence(){return {clientId:mp.clientId,name:mp.localName||"Player",host:!!mp.host,joinedAt:mp.joinedAt||Date.now()};}
+  function mpRequestSync(){
+    if(!mp.active||mp.host||!mp.connected)return;
+    if(mp.resyncTimer)return;
+    const epoch=mp.transportEpoch;
+    mpSend({kind:"syncRequest"});
+    mp.resyncTimer=setTimeout(()=>{
+      mp.resyncTimer=null;
+      if(epoch!==mp.transportEpoch||!mp.active||mp.host||!mp.connected)return;
+      mpSend({kind:"join",member:mpLocalPresence(),wantSnapshot:true});
+      if(!mpHasLiveGame())mpTryServerRestore("resync");
+      if(mp.awaitingSnapshot)mpRequestSync();
+    },2000);
+  }
   function mpSend(payload){
     if(!mp.active||!mp.connected||!mp.channel)return false;
     try{
-      const message={...payload,_capitalTs:Date.now(),_capitalSender:mp.clientId};
-      mp.channel.send({type:"broadcast",event:"capital",payload:message});
+      const channel=mp.channel;
+      const message={...payload,_capitalTs:Date.now(),_capitalSender:mp.clientId,
+        _capitalRoom:mp.room,_capitalMatch:mp.matchId,_capitalTerm:mp.authorityTerm,_capitalSeq:++mp.packetSeq,_capitalSession:mp.transportSession};
+      Promise.resolve(channel.send({type:"broadcast",event:"capital",payload:message})).then(result=>{
+        if(result!=="ok"&&mp.channel===channel){console.warn("CAPITAL send not acknowledged",result);if(!mp.host)mpRequestSync();}
+      }).catch(e=>{console.warn("CAPITAL send failed",e);if(!mp.host)mpRequestSync();});
+      if(payload.kind==="action"){
+        mp.awaitingSnapshot=true;
+        mpRequestSync();
+      }
       return true;
     }catch(e){console.warn("CAPITAL Supabase send failed",e);return false;}
   }
@@ -4669,6 +4792,8 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   function mpBuildRealtimeState(){
     return {
       seq:++mp.realtimeStateSeq,
+      snapshotSeq:mp.snapshotSeq,
+      pendingRoll:pendingRoll?{...pendingRoll}:null,
       turn,state,extraTurnPending:!!extraTurnPending,
       lastRollTotal:Number(lastRollTotal)||0,
       lastDice:Array.isArray(lastDice)?lastDice.slice(0,2):[1,1],
@@ -4710,6 +4835,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       if(!list.some(x=>x.clientId===mp.clientId))list.push(mpLocalPresence());
       const before=JSON.stringify(mp.members.map(x=>x.clientId).sort());
       mp.members=mpMembersSortedFrom(list);
+      if(!mp.hostId){const host=mp.members.find(m=>m.host);if(host)mp.hostId=String(host.clientId);}
       const after=JSON.stringify(mp.members.map(x=>x.clientId).sort());
       if(mp.host&&announce&&before!==after){mpSend({kind:"lobby",members:mp.members});if(modalKind==="mpLobby")mpShowLobby();mpServerDropIfEmpty();}
     }catch(e){console.warn("CAPITAL presence sync failed",e);}
@@ -4745,26 +4871,46 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   }
   function mpHandleChannelStatus(status){
     if(status==="SUBSCRIBED"){
+      clearTimeout(mpReconnectTimer);mpReconnectTimer=null;
       mp.connected=true;
+      mp.awaitingSnapshot=!mp.host&&mpGameRunning();
+      if(mp.resyncTimer)clearTimeout(mp.resyncTimer);
+      mp.resyncTimer=null;
       mp.channel.track(mpLocalPresence()).catch(()=>{});
       if(mp.host){
         // A host resuming a stored session has not confirmed it still holds
         // authority yet. mpConnect owns that path end to end; acting here as well
         // would publish a snapshot before the check had run.
         if(mp.restorePending)return;
+        if(!mp.connecting&&mpGameRunning()){
+          const epoch=mp.transportEpoch,channel=mp.channel;
+          mp.restorePending=true;
+          mpServerLoadState().then(saved=>{
+            if(!mp.active||epoch!==mp.transportEpoch||mp.channel!==channel)return;
+            mp.restorePending=false;
+            if(!mp.host)return;
+            if(saved?.hostClientId!==mp.clientId&&Number(saved?.authorityTerm)>mp.authorityTerm){
+              mp.authorityTerm=Number(saved.authorityTerm);mpStepDownHost(saved.hostClientId);return;
+            }
+            mp.hostId=mp.clientId;mpPublishSnapshot(true);mpStartRealtimeHeartbeat();
+          });
+          return;
+        }
         mp.hostId=mp.clientId;
         mpRefreshMembersFromPresence(false);if(mpGameRunning())mpPublishSnapshot(true);else mpShowLobby();mpStartRealtimeHeartbeat();
       }
       else{
         setTimeout(()=>{if(mp.active&&mp.connected&&!mp.host)mpSend({kind:"join",member:mpLocalPresence(),wantSnapshot:true});},80);
+        mpRequestSync();
       }
       return;
     }
     if(status==="CHANNEL_ERROR"||status==="TIMED_OUT"||status==="CLOSED"){
       mp.connected=false;
+      mp.awaitingSnapshot=!mp.host&&mpGameRunning();
       if(!mp.active)return;
       mpStopRealtimeHeartbeat();
-      if(!mpReconnectTimer){
+      if(!mpReconnectTimer&&!mp.connecting){
         mpReconnectTimer=setTimeout(()=>{mpReconnectTimer=null;if(mp.active)mpReconnectChannel();},1500);
       }
     }
@@ -4776,34 +4922,81 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
      than making someone wait. A retry is only asking "is it still broken?", and
      there is no reason to make a player stare at a spinner for another 15s per
      attempt to learn that the answer has not changed. */
-  async function mpSubscribeChannel(deadlineMs=15000){
-    const client=await mpLoadSupabase();
-    if(!client)throw new Error("Supabase client unavailable");
-    if(mp.channel){try{await client.removeChannel(mp.channel);}catch(_){}mp.channel=null;}
-    const channel=client.channel(mpChannelName(),{config:{broadcast:{self:false,ack:true},presence:{key:mp.clientId}}});
-    mp.channel=channel;
-    channel.on("broadcast",{event:"capital"},({payload})=>{if(payload&&payload._capitalSender===mp.clientId)return;mpHandle(payload);});
-    channel.on("presence",{event:"sync"},()=>{mpRefreshMembersFromPresence(!!mp.host);});
-    channel.on("presence",{event:"join"},()=>{mpRefreshMembersFromPresence(!!mp.host);});
-    channel.on("presence",{event:"leave"},()=>{mpRefreshMembersFromPresence(!!mp.host);if(mp.host)mpScheduleRosterCheck();});
-    return new Promise((resolve,reject)=>{
-      let settled=false;
-      const finish=(ok,value)=>{if(settled)return;settled=true;ok?resolve(value):reject(value);};
-      channel.subscribe(status=>{mpHandleChannelStatus(status);if(status==="SUBSCRIBED")finish(true,channel);else if(status==="CHANNEL_ERROR"||status==="TIMED_OUT")finish(false,new Error(status));});
-      setTimeout(()=>finish(false,new Error("supabase-subscribe-timeout")),deadlineMs);
-    });
+  function mpSubscribeChannel(deadlineMs=15000){
+    // One subscription attempt owns the channel. Old callbacks cannot mutate a
+    // replacement room, and CLOSED from deliberate removal is ignored.
+    if(mp.subscribeTask)return mp.subscribeTask;
+    const epoch=mp.transportEpoch;
+    const task=(async()=>{
+      const client=await mpLoadSupabase();
+      if(!mp.active||epoch!==mp.transportEpoch)throw new Error("cancelled");
+      const old=mp.channel;mp.channel=null;
+      if(old)await client.removeChannel(old);
+      if(!mp.active||epoch!==mp.transportEpoch)throw new Error("cancelled");
+      const channel=client.channel(mpChannelName(),{config:{broadcast:{self:false,ack:true},presence:{key:mp.clientId}}});
+      mp.channel=channel;
+      const current=()=>mp.active&&mp.transportEpoch===epoch&&mp.channel===channel;
+      channel.on("broadcast",{event:"capital"},({payload})=>{
+        if(!current()||payload?._capitalSender===mp.clientId)return;
+        try{mpHandle(payload);}catch(e){console.error("CAPITAL message failed",e);if(!mp.host)mpRequestSync();}
+      });
+      for(const event of ["sync","join","leave"]){
+        channel.on("presence",{event},()=>{
+          if(!current())return;
+          mpRefreshMembersFromPresence(!!mp.host);
+          if(event==="leave"&&mp.host)mpScheduleRosterCheck();
+        });
+      }
+      try{
+        await new Promise((resolve,reject)=>{
+          let settled=false,timer=null;
+          const finish=(error)=>{
+            if(settled)return;settled=true;clearTimeout(timer);
+            if(mp.cancelSubscribe===cancel)mp.cancelSubscribe=null;
+            error?reject(error):resolve();
+          };
+          const cancel=()=>finish(new Error("cancelled"));
+          mp.cancelSubscribe=cancel;
+          timer=setTimeout(()=>finish(new Error("supabase-subscribe-timeout")),deadlineMs);
+          channel.subscribe(status=>{
+            if(!current())return;
+            if(status==="SUBSCRIBED"){
+              mpHandleChannelStatus(status);finish();
+            }else if(["CHANNEL_ERROR","TIMED_OUT","CLOSED"].includes(status)){
+              mp.connected=false;
+              if(!settled)finish(new Error(status));else mpHandleChannelStatus(status);
+            }
+          });
+        });
+        return channel;
+      }catch(e){
+        if(mp.channel===channel){mp.channel=null;mp.connected=false;}
+        await client.removeChannel(channel).catch(()=>{});
+        throw e;
+      }
+    })();
+    mp.subscribeTask=task;
+    task.finally(()=>{if(mp.subscribeTask===task)mp.subscribeTask=null;}).catch(()=>{});
+    return task;
   }
   async function mpReconnectChannel(){
+    if(!mp.active||mp.connecting)return false;
+    const epoch=mp.transportEpoch;
     try{await mpSubscribeChannel();}
-    catch(e){console.warn("CAPITAL Supabase reconnect failed",e);if(mp.active)mpReconnectTimer=setTimeout(()=>{mpReconnectTimer=null;mpReconnectChannel();},3000);}
+    catch(e){console.warn("CAPITAL Supabase reconnect failed",e);if(mp.active&&epoch===mp.transportEpoch)mpReconnectTimer=setTimeout(()=>{mpReconnectTimer=null;mpReconnectChannel();},3000);}
   }
   function mpTeardownTransport(delay=0){
+    mpFlushLocalSave();mpServerCancelSave();
     mpStopRealtimeHeartbeat();
     mpStopHostWatch();
     if(mpReconnectTimer){clearTimeout(mpReconnectTimer);mpReconnectTimer=null;}
     if(mpPresenceTimer){clearTimeout(mpPresenceTimer);mpPresenceTimer=null;}
+    if(mp.resyncTimer){clearTimeout(mp.resyncTimer);mp.resyncTimer=null;}
+    mp.transportEpoch++;
+    mp.cancelSubscribe?.();mp.cancelSubscribe=null;mp.subscribeTask=null;
+    clearTimeout(mpExitTimer);mpExitTimer=null;
     const channel=mp.channel,client=mpSupabaseClient;
-    mp.active=false;mp.connected=false;mp.channel=null;
+    mp.active=false;mp.connected=false;mp.connecting=false;mp.awaitingSnapshot=false;mp.channel=null;
     const close=async()=>{try{if(channel&&client)await client.removeChannel(channel);}catch(_){} };
     if(delay>0)setTimeout(close,delay);else close();
   }
@@ -4818,9 +5011,10 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
      Each attempt still removes the previous channel before making a new one
      (mpSubscribeChannel does that), so a retry cannot stack subscriptions. */
   async function mpSubscribeWithRetry(tries){
+    const epoch=mp.transportEpoch;
     let last=null;
     for(let i=0;i<tries;i++){
-      if(!mp.active)throw last||new Error("cancelled");
+      if(!mp.active||epoch!==mp.transportEpoch)throw new Error("cancelled");
       try{return await mpSubscribeChannel(i===0?15000:6000);}
       catch(e){
         last=e;
@@ -4831,24 +5025,13 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     }
     throw last||new Error("subscribe failed");
   }
-  /* A failed connection, shown rather than toasted.
+  // Subscription errors do not tell us whether the network or the service failed.
 
-     The old path tore the transport down, cleared the room and fired a toast.
-     Three seconds later the menu looked exactly as it had before you typed
-     anything, so joining a friend's code looked like it had done nothing at all -
-     which is the whole of the bug report.
-
-     It also sent people looking in the wrong place. A 5xx or Cloudflare's 1101
-     from the realtime edge is our problem and the anon key is fine, so telling
-     someone to check their connection or retype the code is worse than saying
-     nothing. The two cases get different words. */
   function mpConnectionFailed(room,name,host,err){
     const msg=String(err?.message||err||"");
-    const serverSide=/CHANNEL_ERROR|TIMED_OUT|timeout|1101|5\d\d|failed to fetch|fetch failed|network/i.test(msg);
-    const head=serverSide?"The game server is not answering right now.":"That room did not answer.";
-    const body=serverSide
-      ?"This is a problem on our side, not with the code. Your friend does not need to change anything — try again in a moment."
-      :"Check the six-character code with your friend and try again.";
+    const sdk=/SDK could not load/i.test(msg);
+    const head=sdk?"The multiplayer library could not load.":"Could not connect to multiplayer.";
+    const body="Check your connection and try again. If it continues, the multiplayer service may be temporarily unavailable.";
     modalOpen=true;modalKind="mpError";updateBadge();
     modalRoot.innerHTML=`<div class="modal-bg capital-mp-bg"><div class="modal capital-mp-modal" role="dialog" aria-modal="true">
       <div style="font-size:11px;letter-spacing:.16em;color:#ff8a96;font-weight:900">${"CONNECTION FAILED"}</div>
@@ -4866,6 +5049,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     });
   }
   async function mpConnect(room,host,name,restoreSession=false){
+    let epoch;
     try{
       const code=String(room||mpRandomCode()).toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6)||mpRandomCode();
       const autoCopyPromise=(host&&!restoreSession)?mpCopyText(code):null;
@@ -4877,6 +5061,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
         }catch(_){}
       }
       mpTeardownTransport();
+      epoch=mp.transportEpoch;mp.connecting=true;
       mp.room=code;mp.host=!!host;mp.localName=(name||"Player").trim().slice(0,16)||"Player";
       // Remembering the room here is what puts "return to room ABC123" back on
       // the menu, which together with the server copy is a real way back into a
@@ -4885,26 +5070,32 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       profileSet({name:mp.localName});
       if(!restoreSession||!mp.joinedAt)mp.joinedAt=Date.now();
       mp.active=true;mp.connected=false;mp.snapshotSeq=0;mp.lastAppliedSeq=0;mp.pendingSnapshotSeq=0;mp.realtimeStateSeq=0;mp.lastRealtimeStateSeq=0;mpEventSeq=0;mp.lastModalSig="";mpPendingTrade=null;mpLastTradeId=null;mp.members=host?[{clientId:mp.clientId,name:mp.localName,host:true,joinedAt:mp.joinedAt}]:[];
+      mp.packetSeq=0;mp.lastPacketSeq=0;mp.authorityTerm=0;mp.matchId="";mp.latestSnapshot=null;mp.startedMatch=null;
+      mp.transportSession=Date.now().toString(36)+Math.random().toString(36).slice(2);mp.actionSeqs=new Map();
       // A host coming back from a stored session may no longer be the authority.
       // Flag it before subscribing, so the SUBSCRIBED handler stands aside.
-      mp.restorePending=!!(host&&restoreSession);
+      mp.restorePending=!!host;
       mp.lastTickAt=0;
       mp.authoritySettled=false;
       mp.hostId=host?mp.clientId:null;
       mpStopHostWatch();
       mpPersistSession();
       await mpSubscribeWithRetry(3);
+      if(epoch!==mp.transportEpoch||!mp.active)return false;
       if(host){
         mpRefreshMembersFromPresence(false);
+        let serverState=null;
         if(mp.restorePending){
+          serverState=restoreSession?await mpServerLoadState():null;
+          if(!mp.active||epoch!==mp.transportEpoch)return false;
           mp.restorePending=false;
-          const serverState=await mpServerLoadState();
-          if(!mp.active)return false;
-          if(mpServerClaimsAnotherHost(serverState)){
+          if(mpServerClaimsAnotherHost(serverState)&&mpPresentClientIds().includes(String(serverState.hostClientId))){
             // Authority was inherited while this host was away. Stand down and
             // join as a guest, so its state cannot overwrite the live game.
             mp.host=false;
             mp.hostId=String(serverState.hostClientId);
+            mp.authorityTerm=Number(serverState.authorityTerm)||0;
+            mp.channel?.track(mpLocalPresence()).catch(()=>{});
             mpPersistSession();
             log("This game is now hosted by another player.");
             toast("Another player is hosting this game.","warn");
@@ -4913,34 +5104,22 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
           }
         }
         mp.hostId=mp.clientId;
-        mpStartRealtimeHeartbeat();
         if(restoreSession){
-          const saved=mpReadHostState();
-          if(saved&&Array.isArray(saved.players)&&saved.players.length>1){
-            try{
-              players=saved.players.map(p=>({...p}));
-              turn=Number(saved.turn)||0;state=saved.state||STATES.WAITING_FOR_ROLL;
-              lastRollTotal=Number(saved.lastRollTotal)||0;lastDice=Array.isArray(saved.lastDice)?saved.lastDice.slice(0,2):[1,1];
-              extraTurnPending=!!saved.extraTurnPending;completedRounds=Number(saved.completedRounds)||0;totalTurns=Number(saved.totalTurns)||0;fastPace=!!saved.fastPace;
-              if(Array.isArray(saved.logHistory)){gameLog=saved.logHistory.slice(-80);}
-              const tmap=new Map((saved.tiles||[]).map(t=>[Number(t.id),t]));
-              TILES.forEach(t=>{const x=tmap.get(Number(t.id));if(x){t.owner=x.owner??null;t.houses=x.houses||0;t.hotel=!!x.hotel;t.mortgaged=!!x.mortgaged;}});
-              mpPendingTrade=saved.trade?{...saved.trade}:null;
-              mp.snapshotSeq=Number(saved.seq)||0;
-              menuScreen.style.display="none";setupScreen.style.display="none";gameWrap.style.display="block";
-              if(!document.querySelector("#gameWrap .board > .tile"))buildBoard();
-              renderDice();renderTokens();renderPlayers();renderEventLog();updateBadge();refreshDevPlayers();syncActionPanel();
-              toast("Multiplayer session restored after refresh.","good");
-              mpPublishSnapshot(true);
-              if(autoCopyPromise)autoCopyPromise.catch(()=>{});
-              return true;
-            }catch(_){}
+          const local=mpReadHostState();
+          const saved=[local,serverState].filter(mpServerStateUsable).sort((a,b)=>(Number(b.authorityTerm)||0)-(Number(a.authorityTerm)||0)||(Number(b.seq)||0)-(Number(a.seq)||0))[0];
+          if(saved){
+            mp.authorityTerm=(Number(saved.authorityTerm)||0)+1;
+            mpRestoreAuthority(saved);
+            mpSend({kind:"hostClaim",clientId:mp.clientId,previousHostId:saved.hostClientId,term:mp.authorityTerm});
+            mpStartRealtimeHeartbeat();mpPublishSnapshot(true);
+            toast("Multiplayer session restored after refresh.","good");
+            return true;
           }
         }
         // The host came back in a browser with no local mirror, or cleared it.
         // The server copy can still bring the room back, so an empty lobby is
         // only shown once we know there is nothing to restore.
-        mpTryServerRestore("host-reconnect").then(restored=>{if(!restored)mpShowLobby();});
+        mpShowLobby();mpStartRealtimeHeartbeat();
         if(autoCopyPromise)autoCopyPromise.catch(()=>{});
         return true;
       }
@@ -4954,30 +5133,70 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       setTimeout(()=>{if(mp.active&&!mp.host)mpTryServerRestore("guest-join");},2600);
       return true;
     }catch(e){
+      if(epoch!==mp.transportEpoch)return false;
       console.error("CAPITAL Supabase multiplayer connect",e);
       mpTeardownTransport();mp.host=false;mp.room="";
       // Show it. The toast this replaces was gone within three seconds and left
       // the menu indistinguishable from never having typed a code at all.
       mpConnectionFailed(room,name,host,e);
       return false;
+    }finally{
+      if(epoch===mp.transportEpoch)mp.connecting=false;
     }
   }
-  /* Whether a message sender is the room's host of record. When nothing is known
-     yet (no host flag in the member list and no host id) it stays permissive, so
-     a guest that has only just joined is never locked out of its own game. */
+  // Presence establishes the host before authoritative messages are accepted.
   function mpSenderIsHost(sid){
     sid=String(sid||"");
     if(!sid)return false;
     if(mp.hostId)return String(mp.hostId)===sid;
     const flagged=(mp.members||[]).filter(m=>m&&m.host);
-    if(flagged.length)return flagged.some(m=>String(m.clientId)===sid);
-    return true;
+    return flagged.some(m=>String(m.clientId)===sid);
   }
   function mpHandle(msg){
-    if(!msg||!msg.kind)return;
+    if(!mp.active||!msg||!msg.kind)return;
+    if(msg._capitalRoom&&msg._capitalRoom!==mp.room)return;
+    const authoritative=["start","snapshot","stateTick","realtimeEvent","actionEvent","lobby"].includes(msg.kind);
+    if(authoritative){
+      if(mp.host)return;
+      if(!mp.hostId){
+        mpRefreshMembersFromPresence(false);
+        if(mpSenderIsHost(msg._capitalSender))mp.hostId=String(msg._capitalSender);
+      }
+      if(!mpSenderIsHost(msg._capitalSender))return;
+      const term=Number(msg._capitalTerm)||0;
+      if(term<mp.authorityTerm)return;
+      if(term>mp.authorityTerm){mp.authorityTerm=term;mp.lastPacketSeq=0;mp.lastAppliedSeq=0;mp.lastRealtimeStateSeq=0;}
+      if(mp.matchId&&msg._capitalMatch&&msg._capitalMatch!==mp.matchId&&msg.kind!=="start")return;
+      const packet=Number(msg._capitalSeq)||0;
+      const visual=msg.kind==="actionEvent"||(msg.kind==="realtimeEvent"&&msg.event?.type==="LOG");
+      // Broadcast acknowledgements may complete in a different order. A newer
+      // snapshot must not swallow a rent notification that was already sent.
+      if(visual&&packet){
+        if(!mp.seenVisuals)mp.seenVisuals=new Set();
+        const key=String(msg._capitalSender)+"|"+term+"|"+packet;
+        if(mp.seenVisuals.has(key))return;
+        mp.seenVisuals.add(key);
+        if(mp.seenVisuals.size>128)mp.seenVisuals.delete(mp.seenVisuals.values().next().value);
+      }else{
+        if(packet&&packet<=mp.lastPacketSeq){if(msg.kind==="snapshot"&&Number(msg.snapshot?.seq)>mp.lastAppliedSeq)mpRequestSync();return;}
+        if(packet)mp.lastPacketSeq=packet;
+      }
+      if(msg._capitalMatch)mp.matchId=String(msg._capitalMatch);
+      mp.lastTickAt=Date.now();
+    }
+    if(msg.kind==="action"&&mp.matchId&&msg._capitalMatch&&msg._capitalMatch!==mp.matchId)return;
+    if(msg.kind==="action"&&msg._capitalSeq){
+      const key=String(msg._capitalSender||""),seq=Number(msg._capitalSeq)||0;
+      const requestKey=key+"|"+String(msg._capitalSession||"");
+      if(seq<=(mp.actionSeqs?.get(requestKey)||0))return;
+      if(!mp.actionSeqs)mp.actionSeqs=new Map();
+      mp.actionSeqs.set(requestKey,seq);
+      if(mp.actionSeqs.size>64)mp.actionSeqs.delete(mp.actionSeqs.keys().next().value);
+    }
     if(msg.kind==="join"&&mp.host){
       const incoming=msg.member;
       if(!incoming?.clientId||incoming.clientId===mp.clientId)return;
+      if(String(incoming.clientId)!==String(msg._capitalSender||""))return;
       mpRefreshMembersFromPresence(false);
       if(!mp.members.some(m=>m.clientId===incoming.clientId)&&mp.members.length<8)mp.members.push({...incoming,host:false});
       mp.members=mpMembersSorted();
@@ -4988,17 +5207,34 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       if(msg.wantSnapshot&&players.length>1)mpPublishSnapshot(true);
       return;
     }
-    if(msg.kind==="lobby"){mp.members=mpMembersSortedFrom(msg.members);if(!mpGameRunning())mpShowLobby();return;}
+    if(msg.kind==="lobby"){
+      mp.members=mpMembersSortedFrom(msg.members);
+      const hostMember=mp.members.find(m=>m&&m.host&&m.clientId);
+      if(hostMember&&!mp.hostId)mp.hostId=String(hostMember.clientId);
+      if(!mpGameRunning())mpShowLobby();
+      return;
+    }
+    if(msg.kind==="syncRequest"&&mp.host){if(players.length>1)mpPublishSnapshot(true);return;}
     if(msg.kind==="stateTick"&&!mp.host){
       // The host's heartbeat is what everyone else watches to notice it died.
       // Only the host sends these, so the sender is the authority - and knowing
       // which client that is lets the election exclude it instead of waiting for
       // presence to notice the corpse.
-      if(msg._capitalSender)mp.hostId=String(msg._capitalSender);
       mp.lastTickAt=Date.now();
       mpStartHostWatch();
       const st=msg.state||{};const seq=Number(st.seq)||0;
       if(seq&&seq<=mp.lastRealtimeStateSeq)return;if(seq)mp.lastRealtimeStateSeq=seq;
+      if(mp.latestSnapshot){
+        const full=mp.latestSnapshot;
+        // Heartbeats carry newer animation/auction timing, but not tiles/modal
+        // decisions; only merge when they describe the same full revision.
+        if(Number(st.snapshotSeq)===Number(full.seq)){
+          full.state=st.state;full.turn=st.turn;full.movement=st.movement;
+          full.pendingRoll=st.pendingRoll;full.auction=st.auction;
+          full.lastDice=st.lastDice;full.lastRollTotal=st.lastRollTotal;
+        }
+      }
+      if(!players.length||mp.awaitingSnapshot||Number(st.snapshotSeq)>mp.lastAppliedSeq)mpRequestSync();
       if(Array.isArray(st.players)){const byId=new Map(st.players.map(x=>[Number(x.id),x]));players.forEach(p=>{const x=byId.get(Number(p.id));if(!x)return;p.pos=Number(x.pos)||0;p.money=Number(x.money)||0;p.bankrupt=!!x.bankrupt;p.inJail=!!x.inJail;p.jailAttempts=Number(x.jailAttempts)||0;p.getOutCards=Number(x.getOutCards)||0;p.doubles=Number(x.doubles)||0;});}
       turn=Number(st.turn)||0;state=st.state||state;extraTurnPending=!!st.extraTurnPending;lastRollTotal=Number(st.lastRollTotal)||0;if(Array.isArray(st.lastDice))lastDice=st.lastDice.slice(0,2);
       const movement=st.movement&&st.movement.playerId!=null?st.movement:null;if(movement){const same=mpRemoteMovement&&mpRemoteMovement.id===movement.id;if(!same)startRemoteMovement(movement);}else if(mpRemoteMovement&&state!==STATES.MOVING)finishRemoteMovement(true);
@@ -5035,7 +5271,12 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       if(ev.type==="STATE_SYNC"&&ev.snapshot){mpApplySnapshot(ev.snapshot);return;}
       return;
     }
-    if(msg.kind==="start"){if(!mp.host&&!mpSenderIsHost(msg._capitalSender))return;mp.pendingStart=Array.isArray(msg.members)?mpMembersSortedFrom(msg.members):[];mp.members=mp.pendingStart;if(!mp.host){clearModal();modalOpen=false;modalKind=null;startGame(msg.startingMoney);}return;}
+    if(msg.kind==="start"){
+      if(mpGameRunning()&&mp.startedMatch===mp.matchId)return;
+      mp.startedMatch=mp.matchId;mp.lastAppliedSeq=0;mp.lastRealtimeStateSeq=0;
+      mp.pendingStart=Array.isArray(msg.members)?mpMembersSortedFrom(msg.members):[];mp.members=mp.pendingStart;
+      clearModal();startGame(msg.startingMoney);return;
+    }
     if(msg.kind==="action"&&mp.host){
       // The actor is named inside the message, so it has to agree with who actually
       // sent it. Otherwise any room member could replay another player's clientId
@@ -5044,27 +5285,38 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       mpExecuteAction(msg);return;
     }
     if(msg.kind==="actionEvent"&&!mp.host){const ev=msg.event||{};const p=players.find(x=>x&&x.id===msg.playerId)||null;if(p)showActionEvent(ev.kind||"event",p,ev);return;}
-    if(msg.kind==="snapshot"&&!mp.host){mp.lastTickAt=Date.now();mpApplySnapshot(msg.snapshot);return;}
+    if(msg.kind==="snapshot"&&!mp.host){
+      if(!mpServerStateUsable(msg.snapshot))return;
+      if(mp.hostId&&String(msg._capitalSender||"")!==String(mp.hostId))return;
+      if(!mp.hostId&&msg._capitalSender)mp.hostId=String(msg._capitalSender);
+      mp.lastTickAt=Date.now();mp.awaitingSnapshot=false;mp.lastFullSyncAt=Date.now();
+      if(mp.resyncTimer){clearTimeout(mp.resyncTimer);mp.resyncTimer=null;}
+      mpApplySnapshot(msg.snapshot);return;
+    }
     if(msg.kind==="hostClaim"){
       const cid=String(msg.clientId||"");
       if(!cid||cid===mp.clientId)return;
       // A claim only counts when the sender is the claimant and is actually in this
       // room; a made-up low id could otherwise force the real host to step down.
       if(String(msg._capitalSender||"")!==cid||!mpPresentClientIds().includes(cid))return;
+      const term=Number(msg.term)||0;
+      const reconnect=cid===mp.hostId&&term>mp.authorityTerm;
+      if(term<mp.authorityTerm||(!reconnect&&mpElectedHostId(msg.previousHostId)!==cid))return;
       // Authority is now established, whoever won. Stop electing, or a second
       // client that also decided it was elected would claim as well and the room
       // would end up with two hosts publishing divergent snapshots.
-      mp.authoritySettled=true;
+      mp.authoritySettled=false;
       mpStopHostWatch();
       // Residual race: two clients elected at the same instant. The lower id
       // wins, so both sides converge on the same host without further messages.
-      if(cid<mp.clientId){
-        mp.hostId=cid;
-        if(mp.host)mpStepDownHost(cid);
-      }
+      mp.authorityTerm=term;
+      if(mp.host)mpStepDownHost(cid);
+      mp.hostId=cid;mp.lastAppliedSeq=0;mp.lastRealtimeStateSeq=0;mp.lastPacketSeq=0;
+      mp.lastTickAt=Date.now();mpStartHostWatch();mpRequestSync();
       return;
     }
     if(msg.kind==="leave"&&mp.host){
+      if(String(msg.clientId||"")!==String(msg._capitalSender||""))return;
       mpRefreshMembersFromPresence(false);
       const leaver=String(msg.clientId||"");
       mp.members=mp.members.filter(m=>m.clientId!==leaver);
@@ -5082,6 +5334,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   }
   function mpStartGame(){
     if(!mp.active||!mp.host||mpMembersSorted().length<2)return;
+    mp.matchId=Date.now().toString(36)+"-"+mp.clientId;mp.authorityTerm=0;
     mp.members=mpMembersSorted();mp.pendingStart=mp.members;mpPersistSession();mpSend({kind:"start",members:mp.members,startingMoney:selectedStartingMoney});clearModal();modalOpen=false;modalKind=null;startGame(selectedStartingMoney);
   }
   function mpLeaveRoom(){
@@ -5199,15 +5452,24 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     const turnPlayer=currentPlayer();
     const sharedModal = modalKind==="auction" || modalKind==="gameover";
     const turnBoundModal = modalKind==="buy" || modalKind==="jail" || modalKind==="card" || modalKind==="debt";
+    let data=authoritativeModalData;
+    if(!data&&modalKind==="buy"&&turnPlayer)data={kind:"buy",tileId:turnPlayer.pos,playerId:turnPlayer.id};
+    if(!data&&modalKind==="jail")data={kind:"jail"};
+    if(!data&&modalKind==="card"&&mpPendingCard)data={kind:"card",playerId:mpPendingCard.playerId,deck:mpPendingCard.card.deck,index:mpPendingCard.card.index};
+    if(!data&&modalKind==="debt"&&mpPendingDebt)data={kind:"debt",playerId:mpPendingDebt.playerId,amount:mpPendingDebt.amount,creditorId:mpPendingDebt.creditorId,reason:mpPendingDebt.reason};
     return {
       seq:++mp.snapshotSeq,
+      matchId:mp.matchId,authorityTerm:mp.authorityTerm,packetSeq:mp.packetSeq,
+      decks:{chance:[...cardDecks.chance],chest:[...cardDecks.chest]},
+      pendingDebt:mpPendingDebt?{playerId:mpPendingDebt.playerId,amount:mpPendingDebt.amount,creditorId:mpPendingDebt.creditorId,reason:mpPendingDebt.reason,continuation:mpPendingDebt.continuation||null}:null,
+      pendingRoll:pendingRoll?{...pendingRoll}:null,
       players:players.map(p=>({...p})),
       tiles:TILES.map(t=>({id:t.id,owner:t.owner,houses:t.houses||0,hotel:!!t.hotel,mortgaged:!!t.mortgaged})),
       turn,state,lastRollTotal,lastDice:[...lastDice],extraTurnPending,completedRounds,totalTurns,fastPace,
       modalKind:(sharedModal||turnBoundModal)?(modalKind||null):null,
       // State only, never host markup. See authoritativeModalData.
-      modalData:(modalKind!=="auction"&&(sharedModal||turnBoundModal))?authoritativeModalData:null,
-      modalOwnerClientId:turnPlayer?.mpClientId||null,
+      modalData:(modalKind!=="auction"&&(sharedModal||turnBoundModal))?data:null,
+      modalOwnerClientId:(modalKind==="debt"&&mpPendingDebt?players[mpPendingDebt.playerId]:turnPlayer)?.mpClientId||null,
       movement:mpAuthoritativeMovement?{...mpAuthoritativeMovement}:null,
       logHistory:gameLog.slice(-80),
       auction:activeAuction&&!activeAuction.closed?{tileId:activeAuction.tile?.id,turnPlayerId:activeAuction.turnPlayer?.id??null,currentBid:activeAuction.currentBid,highestBidder:activeAuction.highestBidder,clockSeq:Number(activeAuction.clockSeq)||0,remainingMs:Math.max(0,(activeAuction.endsAt||performance.now())-performance.now()),history:activeAuction.history||[]}:null,
@@ -5259,26 +5521,34 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 
      The wording is built here, on whoever ran the payment, and travels inside the
      event - a guest that rebuilt it would not know who paid. */
+  function paintRentIndicator(pid){
+    const row=playerRowEl(pid),entry=rentIndicators.get(pid);
+    if(!row)return;
+    row.classList.toggle("capital-gain",!!entry);
+    const old=row.querySelector(".capital-rent-gain");
+    if(!entry){old?.remove();return;}
+    const parent=row.querySelector(".pr-name")||row;
+    const badge=old||document.createElement("span");
+    badge.className="capital-rent-gain";
+    badge.textContent="+$"+entry.amount;
+    if(badge.parentNode!==parent)parent.appendChild(badge);
+  }
+  function showRentIndicator(owner,amount){
+    if(!owner||owner.bankrupt||!(Number(amount)>0))return;
+    const old=rentIndicators.get(owner.id);
+    if(old)clearTimeout(old.timer);
+    const entry={amount:Math.round(amount),timer:null};
+    rentIndicators.set(owner.id,entry);
+    entry.timer=setTimeout(()=>{
+      if(rentIndicators.get(owner.id)!==entry)return;
+      rentIndicators.delete(owner.id);paintRentIndicator(owner.id);
+    },2400);
+    paintRentIndicator(owner.id);
+  }
   function showRentIncome(owner,payer,amount,t){
     if(!owner||owner.bankrupt||!amount)return;
-    try{
-      const row=playerRowEl(owner.id);
-      if(row){
-        row.classList.add("capital-gain");
-        // A green row says something changed; it does not say money arrived. Put
-        // the plus next to the landlord's name, where they are already looking.
-        const old=row.querySelector(".capital-rent-gain");
-        if(old)old.remove();
-        const badge=document.createElement("span");
-        badge.className="capital-rent-gain";
-        badge.textContent="+$"+Math.round(amount);
-        (row.querySelector(".pr-name")||row).appendChild(badge);
-        const off=()=>{try{badge.remove();row.classList.remove("capital-gain");}catch(_){}};
-        setTimeout(off,2400);
-      }
-    }catch(_){}
     const from=payer&&players[payer.id]?("From "+playerLabel(players[payer.id])):"Rent collected";
-    showActionEvent("rent-in",owner,{titleEn:"RENT RECEIVED",detailEn:`${from} · ${tileLabel(t)}`,amount:amount,icon:"\U0001F4B0",tone:"green",duration:1500});
+    showActionEvent("rent-in",owner,{titleEn:"RENT RECEIVED",detailEn:`${from} · ${tileLabel(t)}`,amount:amount,icon:"💰",tone:"green",duration:1500});
   }
   function remoteMovementPoint(tileId){return tokenPoint(tileId);}
   function finishRemoteMovement(force=false){
@@ -5307,6 +5577,8 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     if(!rm)return;
     if(rm.raf)cancelWalkFrame(rm.raf);
     if(rm.el?.isConnected)rm.el.remove();
+    const slot=cap3d.tokens.get(rm.p.id);
+    if(slot)slot.animating=false;
     mpRemoteMovement=null;
     movingPlayerId=null;
     movingPieceEl=null;
@@ -5347,13 +5619,26 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     // 450ms movement arrive already finished whenever network latency was high.
     const duration=path?Math.max(1,Number(m.duration)||tokenWalkDuration(steps)):0;
     const rm={id:String(m.id),el,p,from,to:target,started,duration,raf:null,done:false,settled:false};
+    const nodes=[];
+    for(let i=0;i<=steps;i++)nodes.push(cap3dBoardXZ((fromPos+i)%40));
+    const paint3d=progress=>{
+      const slot=cap3d.tokens.get(p.id);
+      if(!slot?.group)return;
+      slot.animating=true;
+      const distance=progress*steps,index=Math.min(Math.floor(distance),Math.max(0,steps-1));
+      const a=nodes[index],b=nodes[Math.min(index+1,steps)],f=distance-index;
+      slot.vis.x=a.x+(b.x-a.x)*f;slot.vis.z=a.z+(b.z-a.z)*f;
+      slot.vis.tx=slot.vis.x;slot.vis.tz=slot.vis.z;slot.vis.init=true;
+      slot.group.position.set(slot.vis.x,0.15,slot.vis.z);
+    };
+    paint3d(0);
     mpRemoteMovement=rm;
     // No walkable path (missing geometry, or a zero-tile move): settle the piece
     // on the destination and report the movement as finished, so the turn can
     // continue instead of leaving a frozen piece on the board.
     if(!path){
       el.style.setProperty("transform",`translate3d(${target.x}px,${target.y}px,0)`,'important');
-      rm.done=true;rm.raf=null;return;
+      paint3d(1);rm.done=true;rm.raf=null;return;
     }
     const frame=()=>{
       if(mpRemoteMovement!==rm||!el.isConnected)return;
@@ -5361,6 +5646,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       const t=Math.min(1,elapsed/duration);
       const e=t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
       const pt=tokenWalkAt(path,e*path.length);
+      paint3d(e);
       el.dataset.x=String(pt.x);el.dataset.y=String(pt.y);
       el.style.setProperty("transform",`translate3d(${pt.x}px,${pt.y}px,0)`,'important');
       if(t<1){rm.raf=scheduleWalkFrame(frame);return;}
@@ -5394,8 +5680,8 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     }catch(_){}
   }
 
-    function mpApplySnapshot(s){
-    if(!s||!Array.isArray(s.players)||!Array.isArray(s.tiles))return;
+  function mpApplySnapshot(s){
+    if(!mpServerStateUsable(s))return;
     const seq=Number(s.seq)||0;
     // A realtime event may announce the sequence of the snapshot that is
     // about to follow. It must NOT mark that snapshot as already applied.
@@ -5405,6 +5691,12 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     if(seq){
       mp.lastAppliedSeq=seq;
       if(seq>=mp.pendingSnapshotSeq)mp.pendingSnapshotSeq=0;
+    }
+    mp.latestSnapshot=JSON.parse(JSON.stringify(s));
+    if(s.matchId)mp.matchId=s.matchId;
+    if(s.decks){
+      cardDecks.chance=validDeck(s.decks.chance,CHANCE_CARDS)||cardDecks.chance;
+      cardDecks.chest=validDeck(s.decks.chest,CHEST_CARDS)||cardDecks.chest;
     }
     players=s.players.map(p=>({...p}));
     turn=Number(s.turn)||0;
@@ -5434,9 +5726,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       finishRemoteMovement(true);
     }
     if(!movement&&!mpRemoteMovement)renderTokens();
-    // A remote snapshot can carry a position the cache does not know yet, so
-    // make sure geometry is fresh before the next local move reads it.
-    try{invalidateTokenPoints();}catch(_){}
+    // Tile geometry is invalidated by board builds, resize and view changes.
 
     // Auctions are shared state: every player may bid, but only the host can close/settle it.
     if(!mp.host){
@@ -5508,6 +5798,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       // Rebuild the dialog locally from the host's state. No host markup is
       // inserted into this document at any point.
       const data=shouldShowModal?(s.modalData||null):null;
+      authoritativeModalData=data;
       const sig=data?mpModalSig(data):"";
       if(sig!==mp.lastModalSig || (!sig&&modalOpen&&modalKind!=="auction")){
         mp.lastModalSig=sig;
@@ -5591,16 +5882,18 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     if(mp.host||!mp.active)return;
     const root=modalRoot?.querySelector(".modal-bg");
     if(!root)return;
+    if(root.dataset.remoteBound)return;
+    root.dataset.remoteBound="1";
     if(modalKind==="buy"){
       const tileId=Number(root.dataset.tileId);
-      root.querySelector("#buyYes")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"buyProperty",tileId}});},{once:true});
-      root.querySelector("#buyNo")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"declineProperty",tileId}});},{once:true});
+      root.querySelector("#buyYes")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"buyProperty",tileId}});});
+      root.querySelector("#buyNo")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"declineProperty",tileId}});});
     }else if(modalKind==="jail"){
-      root.querySelector("#jRoll")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"jailRoll"}});},{once:true});
-      root.querySelector("#jPay")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"jailPay"}});},{once:true});
-      root.querySelector("#jCard")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"jailCard"}});},{once:true});
+      root.querySelector("#jRoll")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"jailRoll"}});});
+      root.querySelector("#jPay")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"jailPay"}});});
+      root.querySelector("#jCard")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"jailCard"}});});
     }else if(modalKind==="card"){
-      root.querySelector("#cardOk")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"cardOk"}});},{once:true});
+      root.querySelector("#cardOk")?.addEventListener("click",e=>{e.preventDefault();mpSend({kind:"action",playerId:mp.clientId,action:{type:"cardOk"}});});
     }else if(modalKind==="debt"){
       // The guest does not touch its own money: every button is a request to the
       // host, which re-checks it and publishes the result. The host is the only
@@ -5632,7 +5925,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 
   function mpExecuteAction(msg){
     const p=players.find(x=>x&&x.mpClientId===msg.playerId)||null;
-    if(!p||p.bankrupt)return;
+    if(!p||p.bankrupt||p.left)return;
     const a=msg.action||{};
     const isTurn=validTurn(p);
 
@@ -5705,7 +5998,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     }
 
     if(a.type==="auctionBid"){
-      if(activeAuction&&activeAuction.tile&&tIsFree(activeAuction.tile)){
+      if(activeAuction&&activeAuction.tile&&Number(a.tileId)===activeAuction.tile.id&&tIsFree(activeAuction.tile)){
         auctionPlaceBid(activeAuction,p,Number(a.amount));
       }
       return;
@@ -5818,6 +6111,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     }
 
     if(a.type==="devMoney"||a.type==="devZero"||a.type==="devWin"||a.type==="devLose"||a.type==="devTakeProps"||a.type==="devDice"){
+      if(msg.playerId!==mp.clientId)return;
       const target=Number.isInteger(Number(a.targetId))?players[Number(a.targetId)]:p;
       const tp=target||p;
       if(a.type==="devMoney"){
@@ -5849,11 +6143,10 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     }
   }
   function mpProxyAction(action){
-    if(!mp.active||mp.host)return false;
+    if(!mp.active||mp.host||!mp.connected)return false;
     const me=mpLocalPlayer();
-    if(!me||me.bankrupt)return false;
-    mpSend({kind:"action",playerId:mp.clientId,action});
-    return true;
+    if(!me||me.bankrupt||me.left)return false;
+    return mpSend({kind:"action",playerId:mp.clientId,action});
   }
   /* ---------- Action panel: retarget Trade label/tooltip per mode ---------- */
   function syncActionPanel(){
@@ -6656,12 +6949,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       openPropertyModal(id);
     }catch(_){}
   }
-  /* Which "<player>|<group>" pairs hold a complete colour group, in one pass.
-     hasMonopoly() answered this by filtering all 40 tiles on every call, and
-     cap3dSync asks it twice for each of the 40 tiles on every animation frame:
-     roughly eighty throwaway arrays and three thousand element visits per frame,
-     which was most of what the 3D view spent between frames. One pass per sync
-     gives the same answer for a fraction of the work. */
+  // Compute group ownership once per visual state update, not per frame/tile.
   function cap3dMonopolySet(){
     const groups=new Map();
     for(const t of TILES){
@@ -6672,8 +6960,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       if(t.owner!=null)g.owned.set(t.owner,(g.owned.get(t.owner)||0)+1);
     }
     const set=new Set();
-    // The group name is the Map key; the value only carries the counts. Reading it
-    // off the entry silently built every key as "<player>|undefined".
+    // Group names are Map keys; values carry ownership counts.
     for(const name of groups.keys()){
       const g=groups.get(name);
       if(g.need<1)continue;
@@ -6689,6 +6976,8 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   }
   function cap3dSync(force){
     if(!cap3d.ready||!cap3d.scene)return;
+    if(!force&&!boardVisualDirty)return;
+    boardVisualDirty=false;
     const THREE=window.THREE;
     const monopoly=cap3dMonopolySet();
     TILES.forEach(function(t){
@@ -6897,9 +7186,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       grp.add(d);
     }
   }
-  /* 3D tile-by-tile movement (renderer only). Reads game state, writes only its
-     own visual slot. Resolves strictly on rAF animation completion — the game
-     continuation (finish()/landPlayer()) runs in .then(), never on a timeout. */
+  // 3D movement uses the visibility-safe walk clock shared with 2D.
   function cap3dMoverTarget(p,tileId){
     const base=cap3dBoardXZ(((Number(tileId)||0)%40+40)%40);
     try{
@@ -6978,9 +7265,9 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
             try{slot.group.position.set(finishAt.x,0.15,finishAt.z);}catch(_){}
             cur.x=finishAt.x;cur.z=finishAt.z;done();return;
           }
-          requestAnimationFrame(frame);
+         scheduleWalkFrame(frame);
         };
-        requestAnimationFrame(frame);
+        scheduleWalkFrame(frame);
       }catch(_){done();}
     });
   }
@@ -7392,6 +7679,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     try{
       const amt=ev&&ev.amount;
       if(!amt)return;
+      if(kind==="rent-in")showRentIndicator(p,amt);
       /* Both board views. Each renderer ignores the other's view, so this covers
          the 3D board and the 2D board without either knowing about the other.
          "rent-in" is the landlord's side of a rent payment; until now the payout
@@ -7447,7 +7735,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     if(!cap3d.running)return;
     cap3d.raf=requestAnimationFrame(cap3dLoop);
     try{
-      if(boardView!=="3d"||!gameWrap||gameWrap.style.display==="none")return;
+      if(document.hidden||boardView!=="3d"||!gameWrap||gameWrap.style.display==="none")return;
       const dt=Math.min(0.05,cap3d.lastTs?(ts-cap3d.lastTs)/1000:0.016);cap3d.lastTs=ts;
       const reduced=cap3dReducedMotion;
       const c=cap3d.cam;
@@ -7554,6 +7842,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     try{cap3d.tiles.forEach(function(entry){if(entry){entry.grow=null;cap3dGrowSettle(entry);}});}catch(_){}
   }
   function setBoardView(v){
+    boardVisualDirty=true;
     boardView=(v==="3d")?"3d":"2d";
     try{localStorage.setItem(BOARD_VIEW_KEY,boardView);}catch(_){}
     const outer=document.querySelector("#gameWrap .board-outer");
@@ -7953,7 +8242,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     const id=requestAnimationFrame(ts=>{animationFrames.delete(id);fn(ts);});
     animationFrames.add(id);return id;
   }
-  function cancelFrames(){animationFrames.forEach(id=>cancelAnimationFrame(id));animationFrames.clear();walkTimers.forEach(id=>clearTimeout(id));walkTimers.clear();}
+  function cancelFrames(){animationFrames.forEach(id=>cancelAnimationFrame(id));animationFrames.clear();for(const slot of [...walkTimers])cancelWalkFrame(slot);}
   /* Frame clock for walks that decide game state, not just pixels.
 
      requestAnimationFrame is the right clock for a walk: it is synced to the
@@ -7972,20 +8261,23 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
      elapsed time rather than counting frames, it simply continues. */
   const walkTimers=new Set();
   function scheduleWalkFrame(fn){
-    const hidden=(typeof document!=="undefined"&&document.hidden);
-    if(hidden){
-      const id=setTimeout(()=>{walkTimers.delete(id);try{fn(performance.now());}catch(_){}},60);
-      walkTimers.add(id);
-      return {kind:"timer",id};
-    }
-    const id=requestAnimationFrame(ts=>{walkTimers.delete(id);fn(ts);});
-    walkTimers.add(id);
-    return {kind:"raf",id};
+    const slot={raf:null,timer:null,done:false};
+    const fire=()=>{
+      if(slot.done)return;
+      cancelWalkFrame(slot);
+      fn(performance.now());
+    };
+    // A tab may become hidden after a frame was requested. The fallback races
+    // the frame once, so visibility changes cannot strand a gameplay callback.
+    if(!document.hidden)slot.raf=requestAnimationFrame(fire);
+    slot.timer=setTimeout(fire,document.hidden?60:250);
+    walkTimers.add(slot);
+    return slot;
   }
   function cancelWalkFrame(slot){
     if(!slot)return;
-    try{if(slot.kind==="timer")clearTimeout(slot.id);else cancelAnimationFrame(slot.id);}catch(_){}
-    walkTimers.delete(slot.id);
+    slot.done=true;cancelAnimationFrame(slot.raf);clearTimeout(slot.timer);
+    walkTimers.delete(slot);
   }
   function cancelBotTimers(){botTimers.forEach(id=>clearTimeout(id));botTimers.clear();}
   /* ---------- Game speed (single player) ----------
@@ -8032,7 +8324,11 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
   let musicPausedByPause=false;
   const pausedSteps=[];
   // Only single-player games pause; a multiplayer host must keep serving the other players.
-  function whenRunning(fn){if(gamePaused&&!mp.active)pausedSteps.push(fn);else fn();}
+  function whenRunning(fn){
+    const generation=runId;
+    const guarded=()=>{if(validRun(generation))fn();};
+    if(gamePaused&&!mp.active)pausedSteps.push(guarded);else guarded();
+  }
   function pauseGame(){
     if(gamePaused)return;
     gamePaused=true;
@@ -8652,7 +8948,8 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
   }
   function renderDice(){setDie(document.getElementById("d1"),lastDice[0]);setDie(document.getElementById("d2"),lastDice[1]);}
 
-    function renderTokens(){
+  function renderTokens(){
+    boardVisualDirty=true;
     if(boardEl){
       const activeMoving=(movingPieceEl&&movingPieceEl.isConnected&&movingPlayerId!=null)?movingPieceEl:null;
       boardEl.querySelectorAll(".moving-piece").forEach(el=>{if(el!==activeMoving)el.remove();});
@@ -8794,6 +9091,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     return parts.join(" · ");
   }
   function renderPlayers(){
+    boardVisualDirty=true;
     const box=document.getElementById("players");if(!box)return;
     /* One pass over the board instead of three filters per player. Eight players
        used to mean twenty-four walks of all 40 tiles on every single render. */
@@ -8860,6 +9158,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
         }else if(c.inv){c.inv.remove();c.inv=null;}
         c.invSig=invSig;
       }
+      paintRentIndicator(p.id);
       rows.push(row);
       if(delta)pendingDeltas.push([p,delta,row]);
     });
@@ -9337,13 +9636,13 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     SFX.coin();renderTokens();renderPlayers();saveGame();
     try{modalRoot.innerHTML="";}catch(_){}
     modalOpen=false;modalKind=null;updateBadge();
-    mpPublishSnapshot(true);
     if(typeof d.onDone==="function")d.onDone(p.money>=0&&!p.bankrupt);
+    mpPublishSnapshot(true);
   }
   /* One entry point for every payment. Cash that is already in hand is spent
      straight away; anything else asks the player to find the rest, and only
      falls back to the automatic liquidation if there is nobody to ask. */
-  function requirePayment(p,amount,creditorId,reason,onDone){
+  function requirePayment(p,amount,creditorId,reason,onDone,continuation=null){
     const owed=Math.max(0,Math.floor(Number(amount)||0));
     if(!p||p.bankrupt){onDone&&onDone(false);return;}
     if(p.money>=owed){p.money-=owed;if(owed&&creditorId!=null){const c=players[creditorId];if(c&&!c.bankrupt)c.money+=owed;}onDone&&onDone(true);return;}
@@ -9353,7 +9652,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
        only, the guest rebuilds the dialog in its own language from its own state,
        and every button comes back as an action the host re-checks. */
     if(mp.active&&mp.host&&!mpIsLocalPlayer(p)&&p.mpClientId){
-      mpPendingDebt={playerId:p.id,amount:owed,creditorId:creditorId==null?null:Number(creditorId),reason:reason||"",onDone};
+      mpPendingDebt={playerId:p.id,amount:owed,creditorId:creditorId==null?null:Number(creditorId),reason:reason||"",onDone,continuation};
       authoritativeModalData={kind:"debt",playerId:p.id,amount:owed,creditorId:mpPendingDebt.creditorId,reason:mpPendingDebt.reason};
       debtConfirmOpen=false;
       modalRoot.innerHTML="";modalOpen=false;modalKind="debt";updateBadge();
@@ -9365,7 +9664,9 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
       if(p.money>=owed){p.money-=owed;const c=creditorId!=null?players[creditorId]:null;if(owed&&c&&!c.bankrupt)c.money+=owed;onDone&&onDone(true);return;}
       declareBankruptcy(p,creditorId);onDone&&onDone(false);return;
     }
-    openDebtDialog(p,owed,creditorId,reason,settled=>{onDone&&onDone(settled);});
+    if(mp.active&&mp.host&&!mpPendingDebt)mpPendingDebt={playerId:p.id,amount:owed,creditorId,reason,onDone,continuation};
+    openDebtDialog(p,owed,creditorId,reason,settled=>{mpPendingDebt=null;onDone&&onDone(settled);});
+    if(mp.active&&mp.host){authoritativeModalData={kind:"debt",playerId:p.id,amount:owed,creditorId,reason};mpPublishSnapshot(true);}
   }
 
   /* A player who closes their tab is not bankrupt and must not be treated as
@@ -9392,6 +9693,11 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     const p=players.find(x=>x&&x.mpClientId===clientId&&!x.left);
     if(!p)return;
     p.left=true;
+    if(players[turn]===p){
+      cancelFrames();clearMovingPiece();
+      if(activeAuction){activeAuction.closed=true;auctionCancelTimers(activeAuction);activeAuction=null;}
+      mpPendingDebt=null;mpPendingCard=null;clearModal();
+    }
     TILES.forEach(t=>{if(t.owner===p.id){t.owner=null;t.houses=0;t.hotel=false;t.mortgaged=false;}});
     log(`${playerLabel(p)} left the game. Their property returns to the bank.`);
     showActionEvent("playerleft",p,{titleEn:"PLAYER LEFT",detailEn:`${playerLabel(p)} left the game.`,icon:"🚪",tone:"red",duration:2800});
@@ -9404,12 +9710,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     const present=new Set(mpPresentClientIds());
     const gone=players.filter(p=>p&&p.mpClientId&&!p.left&&!present.has(String(p.mpClientId)));
     if(!gone.length)return;
-    gone.forEach(p=>{
-      p.left=true;
-      TILES.forEach(t=>{if(t.owner===p.id){t.owner=null;t.houses=0;t.hotel=false;t.mortgaged=false;}});
-      log(`${playerLabel(p)} left the game. Their property returns to the bank.`);
-      showActionEvent("playerleft",p,{titleEn:"PLAYER LEFT",detailEn:`${playerLabel(p)} closed the game.`,icon:"🚪",tone:"red",duration:2800});
-    });
+    gone.forEach(p=>mpDropLeaverNow(p.mpClientId));
     renderTokens();renderPlayers();
     // Publish before deciding the winner: the snapshot is what tells the
     // remaining clients the player is gone, and it carries the turn the winner
@@ -9535,43 +9836,46 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
   }
   /* ---------- State machine ---------- */
   function setState(next){
+    boardVisualDirty=true;
     state=next;updateBadge();
   }
-  function validTurn(p){return !!p&&players[turn]===p&&!p.bankrupt&&validRun(runId);}
+  function validTurn(p){return !!p&&players[turn]===p&&!p.bankrupt&&!p.left;}
 
   function animateDice(a,b,onDone){
+    const localRun=runId;
     const stage=document.getElementById("diceStage");
     const d1=document.getElementById("d1"),d2=document.getElementById("d2");
-    if(!d1||!d2){if(onDone)onDone();return;}
+    if(!d1||!d2){onDone?.(a,b);return;}
     const finalA=Math.max(1,Math.min(6,Number(a)||1));
     const finalB=Math.max(1,Math.min(6,Number(b)||1));
     const start=performance.now(),duration=isFast()?500:1000;
     let nextSwap=0,finished=false;
     const finish=()=>{
       if(finished)return;finished=true;
+      if(!validRun(localRun))return;
       setDie(d1,finalA);setDie(d2,finalB);
       d1.classList.remove("rolling");d2.classList.remove("rolling");
       if(stage)stage.classList.remove("rolling");
       lastDice=[finalA,finalB];
       renderDice();
-      if(onDone)setTimeout(()=>onDone(finalA,finalB),40);
+      if(onDone)setTimeout(()=>{if(validRun(localRun))onDone(finalA,finalB);},40);
     };
     if(stage){stage.classList.remove("rolling");void stage.offsetWidth;stage.classList.add("rolling");}
     playDiceSfx();
     d1.classList.remove("rolling");d2.classList.remove("rolling");void d1.offsetWidth;
     d1.classList.add("rolling");d2.classList.add("rolling");
     const frame=ts=>{
-      if(finished)return;
+      if(finished||!validRun(localRun))return;
       const elapsed=ts-start;
       if(elapsed>=nextSwap){
         setDie(d1,1+Math.floor(Math.random()*6));
         setDie(d2,1+Math.floor(Math.random()*6));
         nextSwap+=60;
       }
-      if(elapsed<duration){requestAnimationFrame(frame);return;}
+      if(elapsed<duration){scheduleWalkFrame(frame);return;}
       finish();
     };
-    requestAnimationFrame(frame);
+    scheduleWalkFrame(frame);
     setTimeout(finish,duration+200);
   }
 
@@ -9739,7 +10043,11 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     movingPieceEl=makeMovingPiece(p);
     boardEl.appendChild(movingPieceEl);
     const startPoint=tokenPoint(fromPos),targetPoint=tokenPoint(finalPos);
-    if(!startPoint||!targetPoint){clearMovingPiece();return;}
+    if(!startPoint||!targetPoint){
+      p.pos=finalPos;
+      if(moveSteps>0&&fromPos+moveSteps>=40)p.money+=200;
+      mpAuthoritativeMovement=null;clearMovingPiece();renderTokens();renderPlayers();onDone?.();return;
+    }
     // The walk path is rebuilt from the tile the piece left, so remember it.
     movingPieceEl.dataset.fromPos=String(fromPos);
     movingPieceEl.style.setProperty("transform",`translate3d(${startPoint.x}px,${startPoint.y}px,0)`,"important");
@@ -9751,7 +10059,9 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
       mpPublishSnapshot(true);
     }
 
+    let finished=false;
     const finish=()=>{
+      if(finished)return;finished=true;
       if(!validRun(localRun)||state!==STATES.MOVING||!validTurn(p)){
         clearMovingPiece();renderTokens();return;
       }
@@ -9771,8 +10081,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
       }
       const tile=document.getElementById("tile-"+p.pos);
       if(tile){tile.classList.remove("cap-landed");void tile.offsetWidth;tile.classList.add("cap-landed");}
-      if(mp.active&&mp.host)mpPublishSnapshot(true);
-      onDone?.();
+      whenRunning(()=>{onDone?.();if(mp.active&&mp.host)mpPublishSnapshot(true);});
     };
     SFX.step();
     // In 3D the SAME finish()/landPlayer() continuation runs, but only after the
@@ -9787,8 +10096,10 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     if(state!==STATES.ROLLING)setState(STATES.ROLLING);
     const d1=forcedA??(1+Math.floor(Math.random()*6));
     const d2=forcedB??(1+Math.floor(Math.random()*6));
+    pendingRoll={playerId:p.id,d1,d2,jailRoll};
     if(mp.active&&mp.host){
       mpRealtimeEvent("DICE_ROLLED",{playerId:p.mpClientId||null,playerIndex:p.id,d1,d2});
+      mpPublishSnapshot(true);
     }
     animateDice(d1,d2,(a,b)=>whenRunning(()=>{
       if(validTurn(p)&&state===STATES.ROLLING)resolveRoll(p,a,b,jailRoll);
@@ -9796,6 +10107,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
   }
 
   function resolveRoll(p,d1,d2,jailRoll){
+    pendingRoll=null;
     if(!validTurn(p)||state!==STATES.ROLLING)return;
     const total=d1+d2,isDouble=d1===d2;lastRollTotal=total;
     // The celebration fires on the roll itself, not after the piece has
@@ -9948,7 +10260,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     let guard=0;
     while(guard<players.length){
       turn=(turn+1)%players.length;guard++;
-      if(!players[turn]?.bankrupt)break;
+      if(players[turn]&&!players[turn].bankrupt&&!players[turn].left)break;
     }
     totalTurns++;
     if(turn<=previousTurn)completedRounds++;
@@ -10159,13 +10471,13 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     const current=t.hotel?6:(t.houses>0?1+t.houses:(hasMonopoly(t.owner,t.group)?1:0));
     return `<div class="capital-rent-ladder capital-rent-ladder-7">${labels.map((label,i)=>`<div class="capital-rent-step ${i===current?'active':''}"><span>${escapeHtml(label)}</span><strong>$${values[i]}</strong></div>`).join("")}</div>`;
   }
-  const actionEventQueue=[];let actionEventBusy=false;
+  const actionEventQueue=[];let actionEventBusy=false,actionEventTimer=null;
   function actionEventAvatar(p){
     if(!p)return `<div class="capital-action-avatar neutral"><span class="win-avatar-shadow"></span><span class="win-avatar-base"></span><span class="win-avatar-body"></span><span class="win-avatar-head"></span></div>`;
     return `<div class="capital-action-avatar" style="--piece-color:${p.color||"#f6c84e"}" aria-hidden="true"><span class="win-avatar-shadow"></span><span class="win-avatar-base"></span><span class="win-avatar-body"><i class="win-avatar-tie"></i><i class="win-avatar-arm left"></i><i class="win-avatar-arm right"></i></span><span class="win-avatar-head"><i class="win-avatar-hair"></i><i class="win-avatar-eye left"></i><i class="win-avatar-eye right"></i></span></div>`;
   }
   function showActionEvent(kind,p,{titleEn,titleRu,detailEn="",detailRu="",amount=null,icon="✦",tone="gold",duration=1450}={}){
-    actionEventQueue.push({kind,p,titleEn,titleRu,detailEn,detailRu,amount,icon,tone,duration});
+    actionEventQueue.push({kind,p,titleEn,titleRu,detailEn,detailRu,amount,icon,tone,duration,at:Date.now()});
     /* One card is on screen at a time and each holds it for its whole duration, so
        a turn that produces several events drains far slower than it makes them -
        a bot building a house alone can queue three. The queue had no ceiling, so it
@@ -10183,18 +10495,21 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
   }
   function runActionEventQueue(){
     if(actionEventBusy||!actionEventQueue.length)return;
+    while(actionEventQueue.length&&Date.now()-actionEventQueue[0].at>5000)actionEventQueue.shift();
+    if(!actionEventQueue.length)return;
     actionEventBusy=true;
     const ev=actionEventQueue.shift();
     const old=document.querySelector(".capital-action-event");if(old)old.remove();
     const title=lang==="en"?ev.titleEn:ev.titleRu;
     const detail=lang==="en"?ev.detailEn:ev.detailRu;
     const amount=ev.amount==null?"":`<strong class="capital-action-amount ${ev.amount<0?"negative":"positive"}">${ev.amount>0?"+":""}$${Math.abs(ev.amount)}</strong>`;
-    const root=document.createElement("div");root.className=`capital-action-event tone-${ev.tone}`;root.setAttribute("role","status");root.innerHTML=`<div class="capital-action-card"><div class="capital-action-icon">${ev.icon}</div>${actionEventAvatar(ev.p)}<div class="capital-action-copy"><span class="capital-action-player">${escapeHtml(ev.p?playerLabel(ev.p):"")}</span><b>${escapeHtml(title)}</b>${detail?`<small>${escapeHtml(detail)}</small>`:""}</div>${amount}</div>`;
+    const root=document.createElement("div");root.className=`capital-action-event tone-${["gold","red","green","blue"].includes(ev.tone)?ev.tone:"gold"}`;root.setAttribute("role","status");root.innerHTML=`<div class="capital-action-card"><div class="capital-action-icon">${escapeHtml(ev.icon)}</div>${actionEventAvatar(ev.p)}<div class="capital-action-copy"><span class="capital-action-player">${escapeHtml(ev.p?playerLabel(ev.p):"")}</span><b>${escapeHtml(title)}</b>${detail?`<small>${escapeHtml(detail)}</small>`:""}</div>${amount}</div>`;
     document.body.appendChild(root);
-    const done=()=>{if(root.parentNode)root.remove();actionEventBusy=false;setTimeout(runActionEventQueue,80);};
-    setTimeout(done,(ev.duration||1450)*(isFast()?.6:1));
+    const done=()=>{if(root.parentNode)root.remove();actionEventBusy=false;actionEventTimer=setTimeout(runActionEventQueue,80);};
+    const duration=Math.max(350,Math.min(2800,Number(ev.duration)||1450));
+    actionEventTimer=setTimeout(done,duration*(isFast()?.6:1)*(actionEventQueue.length>2?.65:1));
   }
-  function clearActionEventQueue(){actionEventQueue.length=0;const el=document.querySelector(".capital-action-event");if(el)el.remove();actionEventBusy=false;}
+  function clearActionEventQueue(){clearTimeout(actionEventTimer);actionEventTimer=null;actionEventQueue.length=0;const el=document.querySelector(".capital-action-event");if(el)el.remove();actionEventBusy=false;}
 
   function showPropertyAcquiredFx(p,t){
     const old=document.querySelector(".capital-acquired-fx");if(old)old.remove();
@@ -10492,6 +10807,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
 
   function auctionCancelTimers(a){
     if(!a)return;
+    if(a.clockFrame){cancelWalkFrame(a.clockFrame);a.clockFrame=null;}
     a.botTimers.forEach(id=>clearTimeout(id));
     a.botTimers.clear();
     a.rafIds.forEach(id=>cancelAnimationFrame(id));
@@ -10514,6 +10830,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
   }
 
   function auctionFinish(a){
+    if(mp.active&&!mp.host)return;
     if(!a||a.closed)return;
     a.closed=true;
     auctionCancelTimers(a);
@@ -10543,7 +10860,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
         if(mp.active&&mp.host)mpRealtimeEvent("AUCTION_FINISHED",{tileId:a.tile.id,winnerIndex:winner?.id??null,winnerPlayerId:winner?.mpClientId||null,price});
         saveGame();
         completeTileAction(a.turnPlayer);
-      });
+      },{kind:"auction",tileId:a.tile.id,turnPlayerId:a.turnPlayer.id});
       return;
     }
     log(`The auction for "${tileLabel(a.tile)}" ended without bids — the property remains free.`);
@@ -10585,6 +10902,16 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     if(!id)return;
     if(mp.auctionClockIsRaf)cancelAnimationFrame(id);else clearInterval(id);
     mp.auctionTimer=null;mp.auctionClockIsRaf=false;
+  }
+  function mpEnsureAuctionClock(){
+    if(mp.auctionTimer)return;
+    const tick=()=>{
+      mp.auctionTimer=null;
+      if(!mp.active||mp.host||!activeAuction||activeAuction.closed||modalKind!=="auction")return;
+      auctionPaintTimer(activeAuction,performance.now());
+      mp.auctionTimer=requestAnimationFrame(tick);
+    };
+    mp.auctionClockIsRaf=true;mp.auctionTimer=requestAnimationFrame(tick);
   }
 
   /* A new auction starts with a full bar. Called when the dialog is built, which
@@ -10649,20 +10976,20 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
   }
 
   function auctionStartTimer(a){
+    if(a.clockFrame)cancelWalkFrame(a.clockFrame);
     const tick=()=>{
+      a.clockFrame=null;
       if(!a||a.closed||activeAuction!==a)return;
       // The clock is frozen while a single-player game is paused.
-      if(a.pausedLeft!=null){const id=requestAnimationFrame(tick);a.rafIds.add(id);return;}
+      if(a.pausedLeft!=null){a.clockFrame=scheduleWalkFrame(tick);return;}
       if(auctionPaintTimer(a,performance.now())<=0){auctionFinish(a);return;}
-      const id=requestAnimationFrame(tick);
-      a.rafIds.add(id);
+      a.clockFrame=scheduleWalkFrame(tick);
     };
-    const id=requestAnimationFrame(tick);
-    a.rafIds.add(id);
+    a.clockFrame=scheduleWalkFrame(tick);
   }
 
   function auctionPlaceBid(a,p,amount){
-    if(!a||a.closed||activeAuction!==a||!p||p.bankrupt||!tIsFree(a.tile))return false;
+    if(!a||a.closed||activeAuction!==a||!p||p.bankrupt||p.left||!tIsFree(a.tile))return false;
     const min=a.currentBid+AUCTION_STEP;
     const bid=Math.floor(Number(amount)||0);
     if(bid<min||bid>p.money)return false;
@@ -11014,6 +11341,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
 
   function renderAuction(a){
     if(!a||a.closed)return;
+    if(mp.active&&!mp.host)mpEnsureAuctionClock();
 
     // IMPORTANT: once the live auction is open, never destroy/recreate its modal.
     // Updating the existing DOM keeps the auction visually live with zero flicker.
@@ -11457,6 +11785,8 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
       const d=JSON.parse(raw);
       if(!d||d.v!==1||!Array.isArray(d.players)||d.players.length<2||d.players.length>8||!Array.isArray(d.tiles))return null;
       if(!(d.turn>=0&&d.turn<d.players.length))return null;
+      if(!d.players.every(p=>p&&Number.isFinite(p.money)&&Number.isInteger(p.pos)&&p.pos>=0&&p.pos<40))return null;
+      if(!d.tiles.every(t=>t&&Number.isInteger(t.id)&&!!TILES[t.id]&&(t.owner==null||Number.isInteger(t.owner)&&!!d.players[t.owner])))return null;
       return d;
     }catch(e){return null;}
   }
@@ -11477,11 +11807,11 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     try{
       if(mp.active)mpPersistSession();
       if(mp.active&&mp.host)mpCommitState("save");
-      if(!mp.active)writeSave();
+      if(!mp.active)return writeSave();
       return true;
     }catch(e){return false;}
   }
-  function validDeck(list,cards){return Array.isArray(list)&&list.every(i=>Number.isInteger(i)&&i>=0&&i<cards.length)?[...list]:null;}
+  function validDeck(list,cards){return Array.isArray(list)&&new Set(list).size===list.length&&list.every(i=>Number.isInteger(i)&&i>=0&&i<cards.length)?[...list]:null;}
   function continueSavedGame(){
     const d=readSave();
     if(!d||mp.active){updateContinueButton();return false;}
@@ -11529,10 +11859,16 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
   window.saveGame=saveGame;window.loadGame=loadGame;
 
   function resetState(){
+    pausedSteps.length=0;clearMovingPiece();dropRemoteMovement();mpPendingDebt=null;debtConfirmOpen=false;
+    document.querySelectorAll(".capital-float-amount").forEach(el=>el.remove());
+    cap3d.tokens.forEach(slot=>{slot.animating=false;slot.vis.init=false;});
+    for(const f of cap3dFx.floaters){f.spr.parent?.remove(f.spr);f.tex.dispose();f.mat.dispose();}
+    cap3dFx.floaters.length=0;boardVisualDirty=true;
     cancelFrames();cancelBotTimers();runId++;modalOpen=false;modalKind=null;completedRounds=0;totalTurns=0;fastPace=false;
     pausedByUser=false;syncPause();renderPauseUI();
     // A live auction keeps its own timers; left running it would close dialogs in the next game.
     if(activeAuction){activeAuction.closed=true;auctionCancelTimers(activeAuction);activeAuction=null;}
+    rentIndicators.forEach(e=>clearTimeout(e.timer));rentIndicators.clear();pendingRoll=null;
     mpStopAuctionClock();mpPendingCard=null;authoritativeModalData=null;mp.lastModalSig="";mpPendingTrade=null;mpLastTradeId=null;
     if(toastStack){toastStack.remove();toastStack=null;}clearActionEventQueue();if(modalRoot)modalRoot.innerHTML="";if(howModalRoot)howModalRoot.innerHTML="";if(tooltip)tooltip.classList.remove("show");tutorialClearFocus();document.getElementById("capitalTutorial")?.remove();tutorialActive=false;tutorialStep=0;
     document.querySelectorAll("#gameWrap .cap-hover-main,#gameWrap .cap-hover-group,#gameWrap .cap-hover-dim").forEach(e=>e.classList.remove("cap-hover-main","cap-hover-group","cap-hover-dim"));
@@ -11595,6 +11931,9 @@ function setCount(n){selectedCount=Math.max(2,Math.min(8,Number(n)||4));window.c
   function devStatus(msg){const el=document.getElementById("devStatus");if(el)el.textContent=msg||"";}
   function refreshDevPlayers(){
     const sel=document.getElementById("devPlayer");if(!sel)return;
+    const signature=players.map(p=>p?[p.id,p.name,p.money,p.human,p.bankrupt].join("|"):"").join(";");
+    if(sel.dataset.playersSig===signature)return;
+    sel.dataset.playersSig=signature;
     const prev=sel.value;sel.innerHTML="";
     players.forEach(p=>{if(!p)return;const o=document.createElement("option");o.value=p.id;o.textContent=`${p.human?"👤":"🤖"} ${playerLabel(p)} — $${Math.max(0,Math.floor(p.money))}${p.bankrupt?` · ${lang==="en"?"bankrupt":"банкрот"}`:""}`;sel.appendChild(o);});
     if(players.some(p=>String(p.id)===prev))sel.value=prev;else if(players[0])sel.value=String(players[0].id);
@@ -11963,8 +12302,3 @@ document.addEventListener("keydown",e=>{
 </body>
 
 </html>
-
-
-
-
-
