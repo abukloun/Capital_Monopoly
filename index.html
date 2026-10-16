@@ -4001,7 +4001,6 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 <div class="board-outer">
 <div class="board" id="board">
 <div class="center" id="center">
-<h2>CAPITAL</h2>
 <div class="dice-row dice-stage" id="diceStage" aria-label="Dice">
 <div class="die2d" id="d1" role="button" tabindex="0" aria-label="Die 1"></div>
 <div class="die2d" id="d2" role="button" tabindex="0" aria-label="Die 2"></div>
@@ -6661,14 +6660,18 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   function cap3dPipTexture(v){
     const cv=document.createElement("canvas");cv.width=128;cv.height=128;
     const ctx=cv.getContext("2d");
-    // warm die face with a rounded bevel edge catching the light
-    ctx.fillStyle="#d6ceba";ctx.fillRect(0,0,128,128);
-    const face=function(){ctx.beginPath();if(ctx.roundRect)ctx.roundRect(7,7,114,114,24);else ctx.rect(7,7,114,114);};
-    ctx.fillStyle="#f6f1e5";face();ctx.fill();
-    const shade=ctx.createRadialGradient(64,50,8,64,64,92);
-    shade.addColorStop(0,"rgba(255,255,255,.55)");shade.addColorStop(1,"rgba(122,110,88,.22)");
+    // Glossy white die: rounded body, key light from the top left, thin bright
+    // bevel and recessed dark pips with a tiny specular dot.
+    ctx.fillStyle="#b9b3a6";ctx.fillRect(0,0,128,128);
+    const face=function(){ctx.beginPath();if(ctx.roundRect)ctx.roundRect(6,6,116,116,26);else ctx.rect(6,6,116,116);};
+    const body=ctx.createLinearGradient(0,0,128,128);
+    body.addColorStop(0,"#ffffff");body.addColorStop(.55,"#f7f7f9");body.addColorStop(1,"#e7e8ec");
+    ctx.fillStyle=body;face();ctx.fill();
+    const shade=ctx.createRadialGradient(46,34,6,64,64,96);
+    shade.addColorStop(0,"rgba(255,255,255,.9)");shade.addColorStop(.55,"rgba(255,255,255,.12)");shade.addColorStop(1,"rgba(70,74,92,.20)");
     ctx.fillStyle=shade;face();ctx.fill();
-    ctx.fillStyle="#2a2f3a";
+    ctx.lineWidth=3;ctx.strokeStyle="rgba(255,255,255,.75)";face();ctx.stroke();
+    ctx.save();ctx.clip();ctx.translate(3,3);ctx.lineWidth=4;ctx.strokeStyle="rgba(96,101,126,.28)";face();ctx.stroke();ctx.restore();
     const P={1:[[64,64]],2:[[38,38],[90,90]],3:[[38,38],[64,64],[90,90]],4:[[38,38],[90,38],[38,90],[90,90]],5:[[38,38],[90,38],[64,64],[38,90],[90,90]],6:[[38,34],[90,34],[38,64],[90,64],[38,94],[90,94]]}[v]||[[64,64]];
     P.forEach(function(p){
       const pg=ctx.createRadialGradient(p[0]-3,p[1]-3,1,p[0],p[1],12);
@@ -6883,11 +6886,26 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
        textures come from cap3dDiceFaceTable, the same table the resting
        orientation is solved from, so the picture can never disagree with the
        number. */
-    const diceGeo=new THREE.BoxGeometry(0.34,0.34,0.34);
+    /* Rounded-corner dice matching the 2D face art. three.js r152 does not ship
+       RoundedBoxGeometry in the min bundle, so a small vertex pass pulls the
+       corners toward a rounded-box surface; normals are recomputed after. */
+    const dieSize=0.36;
+    const diceGeo=(function(){
+      const g=new THREE.BoxGeometry(dieSize,dieSize,dieSize,7,7,7);
+      const pos=g.attributes.position,r=dieSize*0.18,h=dieSize/2,eps=1e-6;
+      for(let i=0;i<pos.count;i++){
+        const ox=pos.getX(i),oy=pos.getY(i),oz=pos.getZ(i);
+        const cx=Math.max(-h+r,Math.min(h-r,ox)),cy=Math.max(-h+r,Math.min(h-r,oy)),cz=Math.max(-h+r,Math.min(h-r,oz));
+        const dx=ox-cx,dy=oy-cy,dz=oz-cz,len=Math.hypot(dx,dy,dz);
+        if(len>r){const k=r/len;pos.setXYZ(i,cx+dx*k+ (Math.abs(dx)<eps?ox-cx:0)*0,cy+dy*k+(Math.abs(dy)<eps?oy-cy:0)*0,cz+dz*k+(Math.abs(dz)<eps?oz-cz:0)*0);}
+      }
+      g.computeVertexNormals();
+      return g;
+    })();
     const impactGeo=new THREE.RingGeometry(0.3,0.4,40);
     for(let d=0;d<2;d++){
       const mats=faceTex.map(function(tx){
-        return new THREE.MeshPhysicalMaterial({color:0xffffff,roughness:0.3,metalness:0,clearcoat:0.4,clearcoatRoughness:0.35,emissive:0x000000,map:tx});
+        return new THREE.MeshPhysicalMaterial({color:0xffffff,roughness:0.18,metalness:0,clearcoat:0.85,clearcoatRoughness:0.18,envMapIntensity:1.1,emissive:0x000000,map:tx});
       });
       const m=new THREE.Mesh(diceGeo,mats);
       m.castShadow=true;m.visible=false;scene.add(m);
