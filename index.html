@@ -840,6 +840,7 @@ body{
 .capital-settings-note{font-size:11px;color:#7f8da0}
 .capital-mp-settings-summary{font-size:11px;color:#9aa8ba;margin:8px 0 2px;text-align:center}
 .capital-mp-settings-summary b{color:#f4c95d}
+#capitalSettingsLayer .capital-settings-bg{position:fixed;inset:0;z-index:40102;display:flex;align-items:center;justify-content:center;background:#04070ccc;padding:16px}
 #turnClockBadge{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:9000;background:#0d141eee;border:1px solid #ffffff22;color:#e8edf4;font-weight:900;padding:4px 12px;border-radius:999px;font-size:13px;display:none;pointer-events:none}
 #turnClockBadge.low{color:#ff8a96;border-color:#ff8a9666}
 /* The "+" itself, sitting next to the landlord's name in the panel.
@@ -4943,25 +4944,44 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
      touches game state directly - Save goes through applyGameSettings, which is
      the single writer, and the host broadcasts the result to the room. */
   function openGameSettings(editable=true){
+    /* The Create/Join form and this window both live in modalRoot, and opening
+       settings used to wipe the form's markup - so Cancel closed the whole flow.
+       Over that form the settings render into their own layer instead: the form
+       keeps its DOM, its values and its handlers, and only this layer closes. */
+    if(modalRoot?.querySelector("#capitalMpFlow"))return openGameSettingsLayer(editable);
+    return openGameSettingsIn(null,editable);
+  }
+  function openGameSettingsLayer(editable){
+    const old=document.getElementById("capitalSettingsLayer");
+    if(old)old.remove();
+    const layer=document.createElement("div");
+    layer.id="capitalSettingsLayer";
+    document.body.appendChild(layer);
+    return openGameSettingsIn(layer,editable);
+  }
+  function closeGameSettingsLayer(){document.getElementById("capitalSettingsLayer")?.remove();}
+  function openGameSettingsIn(container,editable){
+    const root=container||modalRoot;
+    const layered=!!container;
     const canEdit=!!editable&&(!mp.active||mp.host);
     const draft={...gameSettings};
     const tabs=[["general","General"],["economy","Economy"],["rules","Gameplay Rules"],["bots","Bots"]];
     let tab="general";
-    const close=()=>{clearModal();};
+    const close=()=>{if(layered)closeGameSettingsLayer();else clearModal();};
     const save=()=>{
       applyGameSettings(draft);close();
       toast("Game rules saved.","good");
-      if(mp.active&&mp.host){mpSend({kind:"lobbySettings",settings:gameSettings});mpShowLobby();}
+      if(mp.active&&mp.host){mpSend({kind:"lobbySettings",settings:gameSettings});if(!layered)mpShowLobby();}
     };
     const row=(label,ctl,hint)=>`<div class="gs-row"><div class="gs-row-text"><b>${label}</b>${hint?`<small>${hint}</small>`:""}</div><div class="gs-row-ctl">${ctl}</div></div>`;
     const sel=(id,opts,val)=>`<select class="gs-input" id="${id}" ${canEdit?"":"disabled"}>${opts.map(o=>`<option value="${o[0]}"${String(val)===String(o[0])?" selected":""}>${o[1]}</option>`).join("")}</select>`;
     const tog=(id,on)=>`<button type="button" class="gs-toggle${on?" on":""}" id="${id}" role="switch" aria-checked="${!!on}" ${canEdit?"":"disabled"}><i></i></button>`;
     const num=(id,val,min,max,step)=>`<input type="number" class="gs-input" id="${id}" value="${val}" min="${min}" max="${max}" step="${step}" ${canEdit?"":"disabled"}>`;
-    const bindNum=(id,key,min,max)=>{const el=modalRoot.querySelector("#"+id);if(!el)return;el.addEventListener("change",()=>{draft[key]=Math.min(max,Math.max(min,Math.round(Number(el.value)||0)));el.value=draft[key];});};
-    const bindSel=(id,key,cast)=>{const el=modalRoot.querySelector("#"+id);if(!el)return;el.addEventListener("change",()=>{draft[key]=cast?Number(el.value):el.value;});};
-    const bindTog=(id,key)=>{const el=modalRoot.querySelector("#"+id);if(!el)return;el.addEventListener("click",()=>{draft[key]=!draft[key];el.classList.toggle("on",draft[key]);el.setAttribute("aria-checked",String(!!draft[key]));});};
+    const bindNum=(id,key,min,max)=>{const el=root.querySelector("#"+id);if(!el)return;el.addEventListener("change",()=>{draft[key]=Math.min(max,Math.max(min,Math.round(Number(el.value)||0)));el.value=draft[key];});};
+    const bindSel=(id,key,cast)=>{const el=root.querySelector("#"+id);if(!el)return;el.addEventListener("change",()=>{draft[key]=cast?Number(el.value):el.value;});};
+    const bindTog=(id,key)=>{const el=root.querySelector("#"+id);if(!el)return;el.addEventListener("click",()=>{draft[key]=!draft[key];el.classList.toggle("on",draft[key]);el.setAttribute("aria-checked",String(!!draft[key]));});};
     const renderBody=()=>{
-      const body=modalRoot.querySelector("#gsBody");if(!body)return;
+      const body=root.querySelector("#gsBody");if(!body)return;
       if(tab==="general"){
         body.innerHTML=
           row("Starting cash",sel("gsCash",[["500","$500"],["1000","$1,000"],["1500","$1,500"],["2000","$2,000"],["3000","$3,000"]],draft.startingCash),"Each player begins with this amount.")+
@@ -4989,15 +5009,15 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       }
     };
     const renderTabs=()=>{
-      const el=modalRoot.querySelector("#gsTabs");if(!el)return;
+      const el=root.querySelector("#gsTabs");if(!el)return;
       el.innerHTML=tabs.map(t=>`<button type="button" class="gs-tab${tab===t[0]?" sel":""}" data-tab="${t[0]}">${t[1]}</button>`).join("");
       el.querySelectorAll(".gs-tab").forEach(b=>b.addEventListener("click",()=>{tab=b.dataset.tab;renderTabs();renderBody();}));
     };
-    modalRoot.innerHTML=`<div class="modal-bg capital-settings-bg"><div class="modal capital-settings-modal"><div class="capital-settings-head"><div><div class="capital-settings-kicker">${"GAME SETTINGS"}</div><h3>${"Room rules"}</h3></div><button class="btn no capital-settings-x" id="gsClose">✕</button></div><div class="capital-settings-tabs" id="gsTabs"></div><div class="capital-settings-body" id="gsBody"></div><div class="capital-settings-foot"><span class="capital-settings-note">${canEdit?(mp.active?"Host only — every player receives the same rules.":"Applies to the next game you start."):"Only the host can change the rules."}</span><div class="modal-btns">${canEdit?`<button class="btn no" id="gsCancel">${"Cancel"}</button><button class="btn yes" id="gsSave">${"Save rules"}</button>`:`<button class="btn no" id="gsCancel">${"Close"}</button>`}</div></div></div></div>`;
-    modalOpen=true;modalKind="gsheet";updateBadge();
-    modalRoot.querySelector("#gsClose").onclick=close;
-    modalRoot.querySelector("#gsCancel").onclick=close;
-    if(canEdit)modalRoot.querySelector("#gsSave").onclick=save;
+    root.innerHTML=`<div class="modal-bg capital-settings-bg"><div class="modal capital-settings-modal"><div class="capital-settings-head"><div><div class="capital-settings-kicker">${"GAME SETTINGS"}</div><h3>${"Room rules"}</h3></div><button class="btn no capital-settings-x" id="gsClose">✕</button></div><div class="capital-settings-tabs" id="gsTabs"></div><div class="capital-settings-body" id="gsBody"></div><div class="capital-settings-foot"><span class="capital-settings-note">${canEdit?(mp.active?"Host only — every player receives the same rules.":"Applies to the next game you start."):"Only the host can change the rules."}</span><div class="modal-btns">${canEdit?`<button class="btn no" id="gsCancel">${"Cancel"}</button><button class="btn yes" id="gsSave">${"Save rules"}</button>`:`<button class="btn no" id="gsCancel">${"Close"}</button>`}</div></div></div></div>`;
+    if(!layered){modalOpen=true;modalKind="gsheet";updateBadge();}
+    root.querySelector("#gsClose").onclick=close;
+    root.querySelector("#gsCancel").onclick=close;
+    if(canEdit)root.querySelector("#gsSave").onclick=save;
     renderTabs();renderBody();
   }
   function mpCopyText(text){
@@ -5508,6 +5528,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     try{syncActionPanel();}catch(_){}
   }
   function mpFlowClose(){
+    closeGameSettingsLayer();
     const el=modalRoot?.querySelector("#capitalMpFlow");
     if(el)el.remove();
   }
@@ -5558,7 +5579,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     const moneySelect=modalRoot.querySelector("#mpCreateStartingMoney");
     if(moneySelect)moneySelect.value=String([500,1000,1500,2000,3000].includes(selectedStartingMoney)?selectedStartingMoney:1500);
     input?.focus();
-    modalRoot.querySelector("#mpFlowCancel")?.addEventListener("click",()=>{clearModal();modalOpen=false;modalKind=null;});
+    modalRoot.querySelector("#mpFlowCancel")?.addEventListener("click",()=>{closeGameSettingsLayer();clearModal();modalOpen=false;modalKind=null;});
     modalRoot.querySelector("#mpFlowContinue")?.addEventListener("click",()=>{
       const name=(input?.value||"").trim().slice(0,16);
       if(!name){input?.focus();toast("Enter a nickname.","warn");return;}
@@ -5596,7 +5617,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     mpFlowShell(title,subtitle,`<div class="mp-field"><label class="mp-label">${codeLabel}</label><input id="mpJoinRoom" class="mp-input code-input" maxlength="6" autocomplete="off" value="${escapeHtml(presetRoom)}" placeholder="ABC123"></div><div class="mp-field"><label class="mp-label">${nameLabel}</label><input id="mpJoinName" class="mp-input" maxlength="16" autocomplete="nickname" value="${escapeHtml(preset)}" placeholder="${"Your nickname"}"></div>`, `<button class="btn no" id="mpFlowCancel">${cancel}</button><button class="btn yes" id="mpFlowContinue">${join}</button>`);
     const roomInput=modalRoot.querySelector("#mpJoinRoom"),nameInput=modalRoot.querySelector("#mpJoinName");
     (presetRoom?nameInput:roomInput)?.focus();
-    modalRoot.querySelector("#mpFlowCancel")?.addEventListener("click",()=>{clearModal();modalOpen=false;modalKind=null;});
+    modalRoot.querySelector("#mpFlowCancel")?.addEventListener("click",()=>{closeGameSettingsLayer();clearModal();modalOpen=false;modalKind=null;});
     modalRoot.querySelector("#mpFlowContinue")?.addEventListener("click",()=>{
       const room=(roomInput?.value||"").trim().toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6);
       const name=(nameInput?.value||"").trim().slice(0,16);
