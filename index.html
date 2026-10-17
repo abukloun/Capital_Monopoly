@@ -9607,7 +9607,13 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
        there is no clawback to do - just hand over the cash that exists. */
     if(creditor&&!creditor.bankrupt)creditor.money=Math.max(0,creditor.money+Math.max(0,p.money));
     p.money=0;
-    TILES.forEach(t=>{if(t.owner===p.id){if(creditor&&!creditor.bankrupt){t.owner=creditor.id;}else{t.owner=null;t.houses=0;t.hotel=false;t.mortgaged=false;}}});
+    /* Every property the bankrupt player held returns to the bank immediately:
+       owner cleared, buildings and mortgage state wiped, so the next player who
+       lands on the tile sees the ordinary buy offer. The bankrupt flag alone
+       already locks the former owner out of acting, but leaving the tiles
+       registered to them would leave rent flowing to a player who can never
+       collect a turn again. */
+    TILES.forEach(t=>{if(t.owner===p.id){t.owner=null;t.houses=0;t.hotel=false;t.mortgaged=false;}});
     log(`${playerLabel(p)} cannot pay and goes bankrupt.`);playBankruptSfx();showActionEvent("bankrupt",p,{titleEn:"BANKRUPT",detailEn:"The player can no longer pay",amount:null,icon:"💀",tone:"red",duration:1600});renderTokens();renderPlayers();return true;
   }
   function checkBankrupt(p,creditorId=null){
@@ -9972,8 +9978,21 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     if(!mp.active||!mp.host||!mpGameRunning())return;
     const present=new Set(mpPresentClientIds());
     const gone=players.filter(p=>p&&p.mpClientId&&!p.left&&!present.has(String(p.mpClientId)));
-    if(!gone.length)return;
-    gone.forEach(p=>mpDropLeaverNow(p.mpClientId));
+    // A refresh briefly removes a client from presence while it resubscribes.
+    // Requiring the client to be absent from two consecutive sweeps (about 8s)
+    // keeps that gap from being mistaken for a deliberate exit, which used to
+    // eject reloading players and strand the turn on them.
+    if(!gone.length){if(mp.absentCounts)mp.absentCounts.clear();return;}
+    const counts=mp.absentCounts||(mp.absentCounts=new Map());
+    const confirmed=gone.filter(p=>{const id=String(p.mpClientId);const n=(counts.get(id)||0)+1;counts.set(id,n);return n>=2;});
+    gone.forEach(p=>counts.delete(String(p.mpClientId)+"#keep"));
+    gone.forEach(p=>{const id=String(p.mpClientId);if(!confirmed.includes(p))counts.set(id,counts.get(id)||1);});
+    gone.forEach(p=>counts.delete(String(p.mpClientId)+"#"));
+    [...present].forEach(id=>counts.delete(id));
+    const confirmedIds=confirmed.map(p=>String(p.mpClientId));
+    gone.forEach(p=>{if(!confirmedIds.includes(String(p.mpClientId)))return;});
+    confirmed.forEach(p=>mpDropLeaverNow(p.mpClientId));
+    if(!confirmed.length)return;
     renderTokens();renderPlayers();
     // Publish before deciding the winner: the snapshot is what tells the
     // remaining clients the player is gone, and it carries the turn the winner
