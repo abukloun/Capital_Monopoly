@@ -4753,8 +4753,9 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
        - when the host disappears, whoever inherits authority can pull a
          complete snapshot from the server rather than trusting whatever the
          last broadcast happened to contain.
-     Access needs no login: the room code is the only key, and anyone holding it
-     can already join the room and play, so this exposes nothing new. */
+     Each browser receives a Supabase anonymous identity. RLS then limits reads
+     to room members and writes to the room owner. The room code remains the
+     invite, while the publishable API key alone grants no table access. */
   const MP_SERVER_SAVE_DEBOUNCE=1200;
   let mpServerSaveTimer=null;
   let mpServerSaveSeq=0;
@@ -4769,12 +4770,11 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     const seq=++mpServerSaveSeq;
     return mpLoadSupabase().then(client=>{
       if(!client||!mp.active||!mp.host||epoch!==mp.transportEpoch||code!==mpServerRoomCode())return false;
-      return client.from("rooms").upsert(
-        {code:code,state:{...snapshot,serverSavedAt:Date.now(),serverSeq:seq}},
-        {onConflict:"code"}
-      ).then(({error})=>{
+      return client.from("rooms").update(
+        {state:{...snapshot,serverSavedAt:Date.now(),serverSeq:seq},updated_at:new Date().toISOString()}
+      ).eq("code",code).select("code").then(({data,error})=>{
         if(error){console.warn("CAPITAL server state save failed",error);return false;}
-        return true;
+        return Array.isArray(data)&&data.length>0;
       });
     }).catch(e=>{console.warn("CAPITAL server state save failed",e);return false;});
   }
@@ -4812,6 +4812,57 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       if(!client)return false;
       return client.from("rooms").delete().eq("code",code).then(({error})=>!error);
     }).catch(()=>false);
+  }
+  async function mpEnsureRoomMembership(host,restoreSession){
+    const code=mpServerRoomCode();
+    if(!code)throw new Error("Invalid room code");
+    const client=await mpLoadSupabase();
+    // Deploy the client before the policy migration without interrupting play:
+    // the old schema has no owner_id/membership table, so it keeps using public
+    // rooms until the secure schema is installed. Once installed, private room
+    // membership is required.
+    const {error:roomSchemaError}=await client.from("rooms").select("owner_id").limit(0);
+    if(roomSchemaError&&(/42703|PGRST204|column .*owner_id.*does not exist/i.test(String(roomSchemaError.code||"")+" "+String(roomSchemaError.message||""))))return "legacy";
+    if(roomSchemaError)throw roomSchemaError;
+    const {error:membersSchemaError}=await client.from("room_members").select("user_id").limit(0);
+    if(membersSchemaError&&(/42P01|PGRST205|could not find the table|relation .* does not exist/i.test(String(membersSchemaError.code||"")+" "+String(membersSchemaError.message||""))))return "legacy";
+    if(membersSchemaError)throw membersSchemaError;
+    const {data:authData,error:authError}=await client.auth.getUser();
+    if(authError||!authData?.user)throw authError||new Error("Anonymous sign-in is required");
+    const userId=authData.user.id;
+    const addMembership=async()=>{
+      const {error}=await client.from("room_members").insert({room_code:code,user_id:userId});
+      if(error&&error.code!=="23505")throw error;
+    };
+    if(host&&!restoreSession){
+      const {data:existing,error:lookupError}=await client.from("rooms").select("owner_id").eq("code",code).limit(1);
+      if(lookupError)throw lookupError;
+      if(existing?.length&&existing[0].owner_id!==userId)throw new Error("That room code is already in use. Please create another room.");
+      if(!existing?.length){
+        const {error}=await client.from("rooms").insert({code,state:{},owner_id:userId});
+        if(error)throw error;
+      }
+      await addMembership();
+      return true;
+    }
+    if(host&&restoreSession){
+      // Old sessions may predate server persistence. Create their room only if
+      // it has not already been claimed; otherwise rejoin as a regular member.
+      const {data,error}=await client.from("rooms").select("owner_id").eq("code",code).limit(1);
+      if(error)throw error;
+      if(!data?.length){
+        const created=await client.from("rooms").insert({code,state:{},owner_id:userId});
+        if(created.error&&created.error.code!=="23505")throw created.error;
+      }
+      await addMembership();
+      const {data:room,error:ownerError}=await client.from("rooms").select("owner_id").eq("code",code).limit(1);
+      if(ownerError)throw ownerError;
+      if(!room?.length)throw new Error("Room not found");
+      if(room[0].owner_id!==userId){mp.host=false;return false;}
+      return true;
+    }
+    await addMembership();
+    return true;
   }
   /* A stored state is only usable if it is a real game for this room. Anything
      else means a stale or hand-written row, and loading that into a live board
@@ -5089,12 +5140,14 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   const SUPABASE_CHANNEL_PREFIX = "capital-v21-room-";
   let mpSupabaseClient = null;
   let mpSupabaseLoading = null;
+  let mpSupabaseAuthTask = null;
+  let mpSecureRoomAuth = false;
   let mpReconnectTimer = null;
   let mpPresenceTimer = null;
 
   function mpLoadSupabase(){
     if(window.supabase?.createClient){
-      mpSupabaseClient=mpSupabaseClient||window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{realtime:{params:{eventsPerSecond:40}}});
+      mpSupabaseClient=mpSupabaseClient||window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{realtime:{params:{eventsPerSecond:40}},auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
       return Promise.resolve(mpSupabaseClient);
     }
     if(mpSupabaseLoading)return mpSupabaseLoading;
@@ -5106,7 +5159,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       let i=0;
       const next=()=>{
         if(window.supabase?.createClient){
-          try{mpSupabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{realtime:{params:{eventsPerSecond:40}}});resolve(mpSupabaseClient);}catch(e){reject(e);}return;
+          try{mpSupabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{realtime:{params:{eventsPerSecond:40}},auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});resolve(mpSupabaseClient);}catch(e){reject(e);}return;
         }
         if(i>=urls.length){reject(new Error("Supabase SDK could not load"));return;}
         const sc=document.createElement("script");sc.src=urls[i++];sc.async=true;
@@ -5118,6 +5171,20 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       next();
     }).finally(()=>{mpSupabaseLoading=null;});
     return mpSupabaseLoading;
+  }
+
+  function mpEnsureSupabaseAuth(){
+    if(mpSupabaseAuthTask)return mpSupabaseAuthTask;
+    mpSupabaseAuthTask=mpLoadSupabase().then(async client=>{
+      const {data,error}=await client.auth.getSession();
+      if(error)throw error;
+      if(data?.session?.user)return data.session.user;
+      const signed=await client.auth.signInAnonymously();
+      if(signed.error)throw signed.error;
+      if(!signed.data?.user)throw new Error("Supabase did not return an anonymous user");
+      return signed.data.user;
+    }).finally(()=>{mpSupabaseAuthTask=null;});
+    return mpSupabaseAuthTask;
   }
 
   function mpChannelName(){return SUPABASE_CHANNEL_PREFIX+String(mp.room||"").toUpperCase();}
@@ -5439,7 +5506,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       const old=mp.channel;mp.channel=null;
       if(old)await client.removeChannel(old);
       if(!mp.active||epoch!==mp.transportEpoch)throw new Error("cancelled");
-      const channel=client.channel(mpChannelName(),{config:{broadcast:{self:false,ack:true},presence:{key:mp.clientId}}});
+      const channel=client.channel(mpChannelName(),{config:{private:mpSecureRoomAuth,broadcast:{self:false,ack:true},presence:{key:mp.clientId}}});
       mp.channel=channel;
       const current=()=>mp.active&&mp.transportEpoch===epoch&&mp.channel===channel;
       channel.on("broadcast",{event:"capital"},({payload})=>{
@@ -5536,8 +5603,9 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   function mpConnectionFailed(room,name,host,err){
     const msg=String(err?.message||err||"");
     const sdk=/SDK could not load/i.test(msg);
-    const head=sdk?"The multiplayer library could not load.":"Could not connect to multiplayer.";
-    const body="Check your connection and try again. If it continues, the multiplayer service may be temporarily unavailable.";
+    const anonymousDisabled=/anonymous_provider_disabled|anonymous sign-in.*disabled|anonymous sign-ins.*disabled/i.test(msg);
+    const head=anonymousDisabled?"Anonymous sign-in is not enabled for this game yet.":sdk?"The multiplayer library could not load.":"Could not connect to multiplayer.";
+    const body=anonymousDisabled?"The project owner needs to enable Anonymous Sign-Ins in Supabase Auth settings, then try again.":"Check your connection and try again. If it continues, the multiplayer service may be temporarily unavailable.";
     modalOpen=true;modalKind="mpError";updateBadge();
     modalRoot.innerHTML=`<div class="modal-bg capital-mp-bg"><div class="modal capital-mp-modal" role="dialog" aria-modal="true">
       <div style="font-size:11px;letter-spacing:.16em;color:#ff8a96;font-weight:900">${"CONNECTION FAILED"}</div>
@@ -5586,9 +5654,16 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       mp.hostId=host?mp.clientId:null;
       mpStopHostWatch();
       mpPersistSession();
+      await mpEnsureSupabaseAuth();
+      const remainsOwner=await mpEnsureRoomMembership(host,restoreSession);
+      mpSecureRoomAuth=remainsOwner!=="legacy";
+      if(remainsOwner===false){
+        mp.host=false;mp.restorePending=false;mp.hostId=null;mp.members=[];mpPersistSession();
+      }
+      if(epoch!==mp.transportEpoch||!mp.active)return false;
       await mpSubscribeWithRetry(3);
       if(epoch!==mp.transportEpoch||!mp.active)return false;
-      if(host){
+      if(mp.host){
         mpRefreshMembersFromPresence(false);
         let serverState=null;
         if(mp.restorePending){
