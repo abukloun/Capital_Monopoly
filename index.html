@@ -65,7 +65,6 @@ h1,h2,h3,p{margin:0}
   min-height:0;
   transition:filter .15s;
 }
-.tile:hover{filter:brightness(.97)}
 .tile .stripe{height:22%;width:100%;border-radius:2px}
 .tile .name{color:var(--tileText);line-height:1.05;padding:3px 2px 1px;flex:1;overflow:hidden;font-weight:700;letter-spacing:-.02em}
 .tile .price{color:#697382;padding:0 2px 2px;font-size:.9em;font-weight:700}
@@ -322,6 +321,7 @@ html,body{background:var(--c-bg)!important;color:var(--c-text)!important}
 #gameWrap .tile .owner-dot{border-color:#0d1520!important}
 #gameWrap .center{overflow:hidden!important;position:relative}
 #gameWrap .center:before{
+  display:none!important;
   content:"";
   position:absolute;
   left:7%;
@@ -356,6 +356,8 @@ html,body{background:var(--c-bg)!important;color:var(--c-text)!important}
   .board{border-width:4px!important}
   .center h2{font-size:30px!important}
   .roll-btn{min-width:150px!important}
+  #gameWrap .die2d{width:156px!important;height:156px!important}
+  #gameWrap .dice-stage{gap:6px!important;min-height:200px!important}
 }
 
 /* ── capital-perfect-board ── */
@@ -433,12 +435,12 @@ body{
   padding:5px!important;
   transition:background .18s ease,transform .18s ease,box-shadow .18s ease,filter .18s ease!important;
 }
-#gameWrap .tile:hover{
-  background:linear-gradient(145deg,#1b2633,#141e2a)!important;
-  filter:none!important;
-  z-index:5!important;
-  box-shadow:0 5px 16px rgba(0,0,0,.24)!important;
-}
+.tile-side-content{position:absolute;inset:0;display:flex;flex-direction:column;transform-origin:center;}
+.tile-left .tile-side-content{transform:rotate(90deg)}
+.tile-right .tile-side-content{transform:rotate(-90deg)}
+#gameWrap .tile.cap-hover-main{transform:translateY(-2px) scale(1.018)!important;z-index:30!important;box-shadow:0 0 0 2px rgba(139,155,179,.72),0 8px 20px rgba(0,0,0,.34)!important;filter:brightness(1.06)!important}
+#gameWrap .tile.cap-hover-group{transform:translateY(-1px)!important;z-index:20!important;box-shadow:0 0 0 1px rgba(139,155,179,.48),0 0 14px rgba(148,163,184,.08)!important}
+#gameWrap .tile.cap-hover-dim{opacity:.72!important;filter:brightness(.76)!important;transition:opacity .16s ease,filter .16s ease,transform .16s ease!important}
 #gameWrap .tile .stripe{height:18%!important;min-height:7px!important;border-radius:3px!important}
 #gameWrap .tile .name{color:#edf2f8!important;font-weight:750!important;letter-spacing:-.025em!important}
 #gameWrap .tile.corner{background:linear-gradient(145deg,#101823,#0c131d)!important;color:#dce3ed!important;font-size:clamp(8px,.75vw,11px)!important}
@@ -622,7 +624,6 @@ body{
   box-shadow:0 3px 8px rgba(0,0,0,.5)!important;
 }
 #gameWrap .board > .tile .build-badge{position:absolute!important;z-index:10!important}
-#gameWrap .board > .tile:hover{background:linear-gradient(145deg,#1c2735,#141e2a)!important;z-index:8!important}
 #gameWrap .center h2{color:#f5d477!important;letter-spacing:.1em!important;text-transform:uppercase!important}
 @media (max-width:760px){
   #gameWrap .board{min-width:620px!important}
@@ -733,17 +734,6 @@ body{
 
 /* ── capital-stability-overrides ── */
 /* Stable runtime layer */
-#gameWrap .tile.cap-hover-main{
-  transform:translateY(-3px) scale(1.025)!important;
-  z-index:30!important;
-  box-shadow:0 0 0 2px rgba(244,201,93,.7),0 12px 30px rgba(0,0,0,.35)!important;
-  filter:brightness(1.16)!important;
-}
-#gameWrap .tile.cap-hover-group{
-  transform:translateY(-1px)!important;
-  z-index:20!important;
-  box-shadow:0 0 0 1px rgba(255,255,255,.2),0 0 20px rgba(255,255,255,.08)!important;
-}
 .capital-tooltip{
   position:fixed;
   z-index:10000;
@@ -1362,6 +1352,9 @@ body{
   background:rgba(224,90,107,.18)!important;border-color:rgba(224,90,107,.55)!important;
 }
 #modalRoot .capital-debt-empty{padding:20px 16px;text-align:center;font-size:12.5px;color:#8d9aad}
+.capital-debt-resume{position:fixed;right:22px;bottom:22px;z-index:19;display:flex;align-items:center;gap:9px;min-height:42px;padding:9px 15px;border:1px solid rgba(245,196,81,.55);border-radius:999px;background:linear-gradient(135deg,#2a2b3e,#171d29);box-shadow:0 8px 24px #0008;color:#f5c451;font:800 13px/1.2 Inter,system-ui,sans-serif;cursor:pointer}
+.capital-debt-resume:hover{filter:brightness(1.12);transform:translateY(-1px)}
+@media(max-width:560px){.capital-debt-resume{right:12px;bottom:12px;min-height:38px;font-size:12px}}
 /* Bankruptcy confirmation */
 #modalRoot .capital-debt-confirm{padding:20px}
 #modalRoot .capital-debt-warn{
@@ -1580,6 +1573,51 @@ body{
 .capital-rent-step span{display:block;font-size:9px;font-weight:800;text-transform:uppercase}
 .capital-rent-step strong{display:block;margin-top:4px;color:#e8edf4;font-size:11px}
 .capital-rent-step.active{border-color:rgba(245,196,81,.48);background:rgba(245,196,81,.09);box-shadow:inset 0 0 0 1px rgba(245,196,81,.08)}
+#modalRoot .modal-bg.capital-property-modal-bg-2d{display:block!important;padding:0!important;background:transparent!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;pointer-events:none!important;animation:none!important}
+#modalRoot .capital-property-modal.capital-property-modal-2d{position:fixed!important;width:min(280px,calc(100vw - 24px))!important;max-width:280px!important;max-height:min(70dvh,calc(100dvh - 24px))!important;overflow:auto!important;padding:0!important;border:1px solid #344154!important;border-radius:14px!important;background:radial-gradient(circle at 90% 0%,var(--property-glow),transparent 48%),linear-gradient(145deg,#151d29,#0f151f)!important;box-shadow:0 24px 60px rgba(0,0,0,.62),0 0 0 1px rgba(109,124,255,.08)!important;animation:propertyModalIn .2s cubic-bezier(.2,.9,.25,1) both!important}
+#modalRoot .capital-property-modal.capital-property-modal-2d::before{display:none!important}
+.capital-property-modal-2d{pointer-events:auto}
+.capital-property-side-card,.capital-property-side-card *{writing-mode:horizontal-tb!important;text-orientation:mixed!important}
+.capital-property-modal-2d .capital-property-hero{padding:11px 13px 8px;background:radial-gradient(circle at 90% 0%,var(--property-glow),transparent 48%),linear-gradient(135deg,rgba(255,255,255,.035),transparent);text-align:center}
+.capital-property-modal-2d .capital-property-hero:after{display:none}
+.capital-property-2d-kicker{display:flex;align-items:center;justify-content:center;gap:7px;margin:0 0 5px;color:#9aa8ba;font-size:8px;font-weight:900;letter-spacing:.13em;text-transform:uppercase}
+.capital-property-2d-kicker i{display:block;width:23px;height:3px;border-radius:9px;background:var(--property-color);box-shadow:0 0 10px var(--property-glow)}
+.capital-property-modal-2d .capital-property-kicker{justify-content:center;margin-bottom:5px;font-size:9px;color:#9aa8ba}
+.capital-property-modal-2d .capital-property-kicker .capital-property-swatch{flex:0 0 38px}
+.capital-property-modal-2d .capital-property-swatch{width:38px;height:4px;border-radius:99px}
+.capital-property-modal-2d .capital-property-title{margin-top:2px;font-size:18px;font-weight:900;letter-spacing:-.04em}
+.capital-property-modal-2d .capital-property-title.has-city-flag{display:flex;align-items:center;justify-content:center;gap:7px}
+.capital-property-city-flag{display:inline-grid;place-items:center;width:22px;height:22px;flex:0 0 22px;border:2px solid rgba(255,255,255,.9);border-radius:50%;background:#fff;box-shadow:0 2px 7px rgba(0,0,0,.35);font:14px/1 "Apple Color Emoji","Segoe UI Emoji",sans-serif}
+.capital-property-modal-2d .capital-property-symbol{margin:0 auto 3px;color:#dce6ff;font-size:20px;line-height:1;filter:drop-shadow(0 0 12px rgba(109,124,255,.35))}
+.capital-property-modal-2d .capital-property-symbol svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.capital-property-modal-2d .capital-property-price{display:none}
+.capital-property-modal-2d .capital-property-owner{margin-top:6px;padding:4px 9px;font-size:10px;color:#d9e1ed}
+.capital-property-modal-2d .capital-property-body{padding:6px 13px 10px}
+.capital-property-2d-table{margin:0 0 9px}
+.capital-property-2d-table-head,.capital-property-2d-rent-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:18px}
+.capital-property-2d-table-head{padding:0 2px 6px;border-bottom:1px solid rgba(109,124,255,.3);color:#9aa8ba;font-size:10px;font-weight:800}
+.capital-property-2d-rent-row{min-height:26px;padding:3px 2px;border-bottom:1px solid rgba(255,255,255,.055);color:#d8e0eb;font-size:10px}
+.capital-property-2d-rent-row strong{color:#e8edf4;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums}
+.capital-property-2d-rent-row.is-current{color:#fff}
+.capital-property-2d-rent-row.is-current strong{color:#f5c451}
+.capital-property-2d-costs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding-top:7px;border-top:1px solid rgba(109,124,255,.28);text-align:center}
+.capital-property-2d-costs-single{grid-template-columns:1fr;width:42%;margin:0 auto}
+.capital-property-2d-cost{display:flex;min-width:0;flex-direction:column;align-items:center;gap:4px;color:#9aa8ba}
+.capital-property-2d-cost span{font-size:10px}
+.capital-property-2d-cost svg{width:17px;height:17px;fill:none;stroke:#aebcde;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.capital-property-2d-cost strong{color:#f5c451;font-size:12px;font-weight:850;font-variant-numeric:tabular-nums}
+.capital-property-modal-2d .capital-property-actions{margin-top:10px}
+.capital-property-modal-2d .capital-property-actions .btn{min-height:34px;font-size:10px}
+.capital-property-modal-2d .capital-property-actions #mClose{grid-column:1/-1}
+@media(max-width:560px){
+  #modalRoot .capital-property-modal.capital-property-modal-2d{width:min(280px,calc(100vw - 20px))!important;max-width:280px!important;max-height:min(72dvh,calc(100dvh - 20px))!important;border-radius:13px!important}
+  .capital-property-modal-2d .capital-property-hero{padding:10px 12px 7px}
+  .capital-property-modal-2d .capital-property-body{padding:5px 12px 9px}
+  .capital-property-2d-rent-row{min-height:25px;font-size:10px}
+  .capital-property-2d-rent-row strong{font-size:12px}
+  .capital-property-2d-costs{padding-top:7px}
+  .capital-property-2d-costs-single{width:48%}
+}
 .capital-property-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .capital-property-actions .btn{min-height:45px;font-size:13px}
 .capital-property-buy{
@@ -1680,14 +1718,6 @@ body{
   text-shadow:0 2px 8px #000;
   z-index:25;
 }
-/* Group hover: spotlight one group, gently dim the rest */
-#gameWrap .tile.cap-hover-dim{
-  opacity:.6!important;
-  filter:brightness(.58)!important;
-  transition:opacity .16s ease,filter .16s ease,transform .16s ease!important;
-}
-#gameWrap .tile.cap-hover-group{opacity:1!important;filter:brightness(1.08)!important}
-#gameWrap .tile.cap-hover-main{opacity:1!important}
 /* All gameplay modals */
 #modalRoot .modal-bg,#howModalRoot .modal-bg{backdrop-filter:blur(8px)!important;-webkit-backdrop-filter:blur(8px)!important}
 #modalRoot .modal,#howModalRoot .modal{transform:scale(.95);animation:capitalRichupModal .24s cubic-bezier(.2,.8,.2,1) forwards!important}
@@ -1734,15 +1764,36 @@ body{
   display:flex;
   justify-content:center;
   align-items:center;
-  gap:18px;
-  min-height:118px;
+  gap:0!important;
+  min-height:clamp(174px,19vw,200px);
   transform-origin:center;
   will-change:transform;
 }
+/* The board and sidebar dice share the same live Three.js dice renderer. */
+#gameWrap .dice-stage.cap-live-3d{isolation:isolate}
+#gameWrap .dice-stage.cap-live-3d .die2d{opacity:0!important;background:transparent!important;border:0!important;box-shadow:none!important}
+#gameWrap .dice-stage .cap-live-dice-canvas{position:absolute;left:50%;top:50%;width:min(100%,520px);height:100%;transform:translate(-50%,-50%);z-index:2;pointer-events:none;filter:drop-shadow(0 12px 11px rgba(0,0,0,.35))}
+#gameWrap .dice-stage.cap-live-3d.rolling .cap-live-dice-canvas{animation:capitalDiceCanvasToss var(--dice-roll-duration,1s) cubic-bezier(.22,.9,.3,1) both}
+/* The 3D meshes already tumble in WebGL; avoid stacking a second CSS bounce
+   over that rotation, which made the final settle look like a restart. */
+#gameWrap .dice-stage.cap-live-3d.rolling{animation:none!important}
+#gameWrap .dice-stage.cap-live-3d.rolling .cap-live-dice-canvas{animation:none!important}
+#gameWrap .dice-stage.cap-live-3d .die2d.rolling{animation:none!important}
+@keyframes capitalDiceCanvasToss{0%{translate:0 0;scale:.96}22%{translate:0 -7px;scale:1.035}46%{translate:0 3px;scale:1.04}72%{translate:0 -2px;scale:1.015}100%{translate:0 0;scale:1}}
+/* Reference pose: the pair leans towards each other a few degrees, so the two
+   dice read as one thrown pair rather than two separate tiles. Applied to the
+   portrait image, not the element - the roll keyframes own the element's
+   transform and would wipe a tilt set there. */
+#gameWrap .die2d:nth-child(1) .die3d-img{transform:translateX(24%) rotate(-3deg)}
+#gameWrap .die2d:nth-child(2) .die3d-img{transform:translateX(-24%) rotate(3deg)}
+/* The one-line result line under Roll Dice is retired; the game log panel
+   keeps the full history. */
+#gameWrap #quickLog{display:none!important}
 #gameWrap .die2d{
-  width:76px;
-  height:76px;
+  width:clamp(132px,16vw,168px)!important;
+  height:clamp(132px,16vw,168px)!important;
   box-sizing:border-box;
+  flex:0 0 auto;
   position:relative;
   display:grid;
   place-items:center;
@@ -1756,11 +1807,28 @@ body{
   will-change:transform,filter;
 }
 #gameWrap .die2d::after{content:"";position:absolute;inset:1px;border-radius:16px;box-shadow:inset 0 0 0 1px rgba(30,40,55,.08);pointer-events:none}
+/* Rendered-3D portrait mode: the image is the whole die, so the container's
+   own body, bevel and shadow must not double underneath it. */
+#gameWrap .die2d.die3d-mode{
+  background:transparent!important;
+  border:none!important;
+  box-shadow:none!important;
+  overflow:visible!important;
+}
+#gameWrap .die2d.die3d-mode::after{display:none!important}
+#gameWrap .die2d .die3d-img{
+  position:absolute;inset:0;width:100%;height:100%;
+  object-fit:contain;
+  filter:drop-shadow(0 10px 14px rgba(0,0,0,.38));
+  pointer-events:none;
+  user-select:none;
+  -webkit-user-drag:none;
+}
 #gameWrap .die2d .die-pips{position:relative;z-index:1}
 #gameWrap .die2d .die-pip{background:transparent}
 #gameWrap .die2d .die-pip.on{background:#202938;box-shadow:inset 0 1px 2px rgba(255,255,255,.32),0 2px 3px rgba(0,0,0,.3)}
-#gameWrap .dice-stage.rolling{animation:capitalDiceContainerFinal 1s cubic-bezier(.22,.9,.3,1) both}
-#gameWrap .die2d.rolling{animation:capitalDieRollFinal 1s cubic-bezier(.2,.86,.28,1) both!important;pointer-events:none;filter:brightness(1.03)}
+#gameWrap .dice-stage.rolling{animation:capitalDiceContainerFinal var(--dice-roll-duration,1s) cubic-bezier(.22,.9,.3,1) both}
+#gameWrap .die2d.rolling{animation:capitalDieRollFinal var(--dice-roll-duration,1s) cubic-bezier(.42,0,.28,1) both!important;pointer-events:none;filter:brightness(1.03)}
 #gameWrap .die2d:not(.rolling):hover{transform:translateY(-2px) scale(1.025)}
 @keyframes capitalDiceContainerFinal{
   0%{transform:translateY(0) rotate(-1deg) scale(.96)}
@@ -1770,16 +1838,20 @@ body{
   78%{transform:translateY(2px) rotate(-.8deg) scale(1.015)}
   100%{transform:translateY(0) rotate(0) scale(1)}
 }
+/* Fluid multi-axis tumble: eased in and out, gentle bob and sway while the
+   faces swap underneath, then a clean stop on the exact base pose. The
+   element lives inside .dice-row's 3D perspective, so rotate3d reads as a
+   real tumbling die rather than a flat spin. */
 @keyframes capitalDieRollFinal{
-  0%{transform:translateY(0) rotate(0deg) scale(1)}
-  14%{transform:translateY(-8px) rotate(95deg) scale(1.05)}
-  32%{transform:translateY(3px) rotate(205deg) scale(1.08)}
-  52%{transform:translateY(-4px) rotate(330deg) scale(1.05)}
-  72%{transform:translateY(2px) rotate(430deg) scale(1.02)}
-  88%{transform:translateY(-2px) rotate(485deg) scale(1.01)}
-  100%{transform:translateY(0) rotate(540deg) scale(1)}
+  0%{transform:translate3d(0,0,0) rotate(0deg) scale(1)}
+  16%{transform:translate3d(0,-9px,0) rotate(105deg) scale(1.02)}
+  34%{transform:translate3d(0,2px,0) rotate(250deg) scale(1.02)}
+  52%{transform:translate3d(0,-4px,0) rotate(390deg) scale(1.02)}
+  70%{transform:translate3d(0,1px,0) rotate(505deg) scale(1.01)}
+  86%{transform:translate3d(0,0,0) rotate(590deg) scale(1.004)}
+  100%{transform:translate3d(0,0,0) rotate(630deg) scale(1)}
 }
-#gameWrap #d1.rolling,#gameWrap #d2.rolling{animation:capitalDieRollFinal 1s cubic-bezier(.2,.86,.28,1) both!important}
+#gameWrap #d1.rolling,#gameWrap #d2.rolling{animation:capitalDieRollFinal 1s cubic-bezier(.42,0,.28,1) both!important}
 
 /* ── capital-dice-final-fix ── */
 #gameWrap .die2d .die-pips{
@@ -1797,10 +1869,6 @@ body{
 /* Clean board typography: never break words into ugly fragments. */
 #gameWrap .board > .tile .name{display:-webkit-box!important;-webkit-box-orient:vertical!important;-webkit-line-clamp:2!important}
 #gameWrap .board > .tile .price{margin-top:2px!important}
-#gameWrap .board > .tile:hover{
-  transform:translateY(-1px)!important;
-  box-shadow:0 7px 18px rgba(0,0,0,.28),inset 0 0 0 1px rgba(255,255,255,.08)!important;
-}
 /* Board player pieces: miniature 3D character/pawn instead of flat dots. */
 /* ---- The figure, copied from the 3D pawn ----
    cap3dInit builds: a dark truncated-cone base (#111722), a body cone that is
@@ -2551,6 +2619,112 @@ html,body{height:100vh!important;overflow:hidden!important}
   .capital-mp-modal .btn{flex:1;min-width:120px!important}
 }
 
+/* Full room lobby: a calm pre-game table that borrows the colorful board
+   framing from the in-game board while keeping room actions easy to find. */
+#modalRoot .capital-mp-bg.capital-room-bg{
+  position:fixed!important;inset:0!important;display:grid!important;place-items:center!important;
+  overflow:auto!important;padding:clamp(12px,3vw,32px)!important;
+  background:radial-gradient(ellipse at 28% 38%,rgba(61,91,151,.18),transparent 44%),linear-gradient(145deg,#0c1420,#080b11 68%)!important;
+  backdrop-filter:none!important;
+}
+#modalRoot .capital-room-lobby{
+  width:min(1120px,100%)!important;max-width:1120px!important;min-height:min(700px,calc(100dvh - 48px));
+  display:grid!important;grid-template-columns:minmax(0,1.45fr) minmax(310px,.82fr);gap:clamp(18px,3vw,34px)!important;
+  padding:clamp(22px,4vw,48px)!important;overflow:auto!important;max-height:calc(100dvh - 32px);position:relative!important;
+  color:#eef2f8!important;background:linear-gradient(145deg,rgba(16,24,38,.98),rgba(10,14,22,.99))!important;
+  border:1px solid rgba(93,119,158,.24)!important;border-radius:28px!important;
+  box-shadow:0 34px 110px rgba(0,0,0,.62),inset 0 1px rgba(255,255,255,.06)!important;
+}
+.capital-room-lobby:before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 18% 0%,rgba(84,119,180,.12),transparent 38%)}
+.capital-room-main,.capital-room-sidebar{position:relative;z-index:1;min-width:0}
+.capital-room-main{display:flex;flex-direction:column;justify-content:space-between;gap:16px}
+.capital-room-brand{display:flex;align-items:center;gap:12px;color:#fff;font-size:22px;font-weight:950;letter-spacing:-.06em}
+.capital-room-brand-mark{display:grid;place-items:center;width:38px;height:38px;border-radius:13px;background:linear-gradient(145deg,#7183ff,#5368d9);box-shadow:0 8px 22px #405bb844;font-size:18px}
+.capital-room-brand small{display:block;margin-top:2px;color:#8796aa;font-size:9px;font-weight:800;letter-spacing:.2em}
+.capital-room-intro{margin:16px 0 12px;max-width:560px}
+.capital-room-kicker{display:inline-flex;align-items:center;gap:8px;color:#aebcff;font-size:10px;font-weight:900;letter-spacing:.19em;text-transform:uppercase}
+.capital-room-kicker:before{content:"";width:7px;height:7px;border-radius:50%;background:#62dfa4;box-shadow:0 0 12px #62dfa4}
+.capital-room-intro h2{margin:12px 0 9px;color:#fff;font-size:clamp(30px,4.2vw,48px);line-height:1.02;letter-spacing:-.055em}
+.capital-room-intro p{max-width:440px;margin:0;color:#9eabbc;font-size:14px;line-height:1.6}
+.capital-lobby-board{position:relative;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));grid-template-rows:repeat(5,minmax(42px,1fr));gap:5px;width:100%;min-height:260px;padding:10px;border:1px solid #29374b;border-radius:20px;background:linear-gradient(145deg,rgba(16,25,39,.94),rgba(9,14,23,.98));box-shadow:inset 0 1px rgba(255,255,255,.04),0 18px 45px #0004}
+.capital-lobby-tile{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;overflow:hidden;border:1px solid rgba(255,255,255,.07);border-radius:8px;background:linear-gradient(150deg,#1a2636,#111a27);color:#e6ebf2;text-align:center;font-size:clamp(8px,.78vw,10px);font-weight:800;line-height:1.1;box-shadow:inset 0 1px rgba(255,255,255,.04)}
+.capital-lobby-tile:before{content:"";position:absolute;top:0;left:0;right:0;height:5px;background:var(--tile-color,#f0bd4f)}
+.capital-lobby-tile span{padding:5px 2px 0}.capital-lobby-tile small{margin-top:4px;color:#9eabbc;font-size:8px;font-weight:700}
+.capital-lobby-tile.corner{--tile-color:#7183ff;background:linear-gradient(145deg,#152136,#101827);font-size:9px;color:#dce5f1}
+.capital-lobby-tile.pink{--tile-color:#6d7cff;background:linear-gradient(145deg,#1b2638,#111a27)}
+.capital-lobby-tile.blue{--tile-color:#55a6db;background:linear-gradient(145deg,#17283a,#111a27)}
+.capital-lobby-tile.green{--tile-color:#4caf7d;background:linear-gradient(145deg,#172a2b,#111a27)}
+.capital-lobby-tile.gold{--tile-color:#f4c95d;background:linear-gradient(145deg,#29281f,#171d27)}
+.capital-lobby-tile:nth-child(1){grid-row:1;grid-column:1}.capital-lobby-tile:nth-child(2){grid-row:1;grid-column:2}.capital-lobby-tile:nth-child(3){grid-row:1;grid-column:3}.capital-lobby-tile:nth-child(4){grid-row:1;grid-column:4}.capital-lobby-tile:nth-child(5){grid-row:1;grid-column:5}
+.capital-lobby-tile:nth-child(6){grid-row:2;grid-column:5}.capital-lobby-tile:nth-child(7){grid-row:3;grid-column:5}.capital-lobby-tile:nth-child(8){grid-row:4;grid-column:5}
+.capital-lobby-tile:nth-child(9){grid-row:5;grid-column:5}.capital-lobby-tile:nth-child(10){grid-row:5;grid-column:4}.capital-lobby-tile:nth-child(11){grid-row:5;grid-column:3}.capital-lobby-tile:nth-child(12){grid-row:5;grid-column:2}.capital-lobby-tile:nth-child(13){grid-row:5;grid-column:1}
+.capital-lobby-tile:nth-child(14){grid-row:4;grid-column:1}.capital-lobby-tile:nth-child(15){grid-row:3;grid-column:1}.capital-lobby-tile:nth-child(16){grid-row:2;grid-column:1}
+.capital-lobby-center{grid-row:2/5;grid-column:2/5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border-radius:14px;background:radial-gradient(ellipse at 50% 42%,rgba(69,97,155,.18),transparent 68%);text-align:center}
+.capital-lobby-center strong{color:#f3d77b;font-size:clamp(19px,2.8vw,30px);font-weight:950;letter-spacing:.14em}
+.capital-lobby-center small{color:#8999b0;font-size:9px;font-weight:800;letter-spacing:.19em}
+.capital-lobby-dice{display:flex;gap:22px;align-items:center;justify-content:center;perspective:600px;margin:3px 0 5px}
+.capital-lobby-die{--die-size:clamp(48px,6vw,68px);position:relative;width:var(--die-size);height:var(--die-size);transform-style:preserve-3d;transform:rotateX(-22deg) rotateY(-32deg);animation:lobbyDiceFloat 3.4s ease-in-out infinite;filter:drop-shadow(0 12px 10px #0008)}
+.capital-lobby-die:nth-child(2){animation-delay:-1.2s;transform:rotateX(-20deg) rotateY(28deg) rotateZ(5deg)}
+.capital-lobby-die i{position:absolute;inset:0;display:grid;grid-template:repeat(3,1fr)/repeat(3,1fr);gap:3px;padding:9px;border:1px solid #d9d9df;border-radius:13px;background:linear-gradient(145deg,#fff,#e5e4eb);box-shadow:inset 0 2px 2px #fff, inset 0 -4px 8px #9a9cab70;backface-visibility:hidden}
+.capital-lobby-die i.face-front{transform:translateZ(calc(var(--die-size)/2))}.capital-lobby-die i.face-right{transform:rotateY(90deg) translateZ(calc(var(--die-size)/2))}.capital-lobby-die i.face-top{transform:rotateX(90deg) translateZ(calc(var(--die-size)/2))}
+.capital-lobby-die b{align-self:center;justify-self:center;width:7px;height:7px;border-radius:50%;background:#171923;box-shadow:0 1px 1px #fff7}
+@keyframes lobbyDiceFloat{0%,100%{translate:0 0;rotate:0deg}50%{translate:0 -7px;rotate:3deg}}
+.capital-room-code-wrap{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;padding:10px 13px;border:1px solid #29374b;border-radius:14px;background:#ffffff06}
+.capital-room-code-label{color:#8999b0;font-size:9px;font-weight:900;letter-spacing:.15em;text-transform:uppercase}
+.capital-room-code{display:block;margin-top:4px;color:#fff;font-size:21px;font-weight:950;letter-spacing:.16em}
+.capital-room-invite-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px}
+.capital-room-copy{flex:0 0 auto;min-height:38px!important;border-radius:10px!important;padding:8px 12px!important;font-size:11px!important}
+.capital-room-sidebar{display:flex;flex-direction:column;gap:10px;padding:18px;border:1px solid #29374b;border-radius:22px;background:linear-gradient(155deg,rgba(16,24,38,.88),rgba(10,15,24,.96));box-shadow:0 18px 55px #0003}
+.capital-room-roster-head{display:flex;align-items:flex-end;justify-content:space-between;gap:8px}
+.capital-room-roster-head h3{margin:0;color:#fff;font-size:20px;letter-spacing:-.035em}
+.capital-room-count{color:#9eabbc;font-size:11px;font-weight:800}
+.capital-room-count b{color:#fff}
+.capital-room-roster{display:grid;grid-template-columns:1fr 1fr;gap:8px;max-height:340px;overflow:auto;padding:2px 2px 4px}
+.capital-room-player,.capital-room-empty{display:flex;align-items:center;gap:8px;min-width:0;min-height:50px;padding:7px;border:1px solid rgba(255,255,255,.08);border-radius:13px;background:rgba(255,255,255,.045)}
+.capital-room-player{animation:lobbySeatIn .24s ease both}
+@keyframes lobbySeatIn{from{opacity:0;translate:0 5px}to{opacity:1;translate:0 0}}
+.capital-room-avatar{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;border:2px solid rgba(255,255,255,.72);border-radius:50%;background:var(--seat-color);color:#14131b;font-size:14px;font-weight:950;box-shadow:0 4px 12px #0004}
+.capital-room-player-copy{min-width:0;display:flex;flex:1;flex-direction:column;gap:3px}
+.capital-room-player-copy strong{overflow:hidden;color:#f5f2fb;font-size:11px;text-overflow:ellipsis;white-space:nowrap}
+.capital-room-player-copy small{color:#a9a2b8;font-size:9px;font-weight:750}
+.capital-room-host{color:#efc95b!important}.capital-room-you{color:#8fe2bd!important}
+.capital-room-seat{color:#aaa1bc;font-size:9px;font-weight:900}
+.capital-room-empty{border-style:dashed;background:rgba(255,255,255,.018);color:#827b93;font-size:10px;font-weight:750}
+.capital-room-empty span:first-child{display:grid;place-items:center;flex:0 0 28px;width:28px;height:28px;border:1px dashed #665d78;border-radius:50%;font-size:14px}
+.capital-room-empty span:last-child{min-width:0;color:#827b93;font-size:10px;font-weight:750}
+.capital-room-status{display:flex;align-items:flex-start;gap:10px;padding:9px 11px;border-radius:12px;background:rgba(109,124,255,.09);color:#b2bfd0;font-size:11px;line-height:1.4}
+.capital-room-status:before{content:"";flex:0 0 7px;width:7px;height:7px;margin-top:4px;border-radius:50%;background:#7183ff;box-shadow:0 0 11px #7183ff88}
+.capital-room-rules{padding-top:12px;border-top:1px solid rgba(255,255,255,.08)}
+.capital-room-rules-label{display:block;margin-bottom:5px;color:#8796aa;font-size:9px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}
+.capital-room-rules strong{display:block;color:#e8e3f1;font-size:11px;line-height:1.45}
+.capital-room-actions{display:grid;grid-template-columns:auto auto minmax(150px,1fr);gap:8px;margin-top:auto;padding-top:3px}
+.capital-room-actions .btn{min-height:44px!important;border-radius:11px!important;font-size:11px!important;font-weight:850!important}
+.capital-room-actions .btn.yes{background:linear-gradient(135deg,#f5d46f,#e5ad40)!important;color:#241d2d!important;border:0!important;box-shadow:0 8px 22px rgba(229,173,64,.2)!important}
+.capital-room-actions .btn.yes:disabled{background:#243044!important;color:#91a0b5!important;border:1px solid #344256!important;box-shadow:none!important;opacity:1!important}
+.capital-room-actions .btn.no{background:#ffffff08!important;border-color:#ffffff16!important;color:#d4cfe0!important}
+@media(max-width:780px){
+  #modalRoot .capital-room-lobby{grid-template-columns:minmax(0,1fr);gap:12px!important;min-height:0;padding:20px!important}
+  .capital-room-main{gap:10px}.capital-room-intro{margin:12px 0 10px}.capital-room-intro h2{font-size:clamp(27px,5vw,36px)}
+  .capital-lobby-board{min-height:168px;grid-template-rows:repeat(5,minmax(27px,1fr))}
+  .capital-room-sidebar{padding:14px;gap:6px}.capital-room-roster{max-height:110px}
+  .capital-room-empty:nth-child(n+5){display:none}
+  .capital-room-status{padding:7px 10px}.capital-room-rules{padding-top:8px}
+  .capital-room-actions{padding-top:1px}
+}
+@media(max-width:480px){
+  #modalRoot .capital-mp-bg.capital-room-bg{place-items:start center;padding:8px!important}
+  #modalRoot .capital-room-lobby{padding:18px!important;border-radius:20px!important;min-height:calc(100dvh - 16px)}
+  .capital-room-brand{font-size:19px}.capital-room-intro h2{font-size:30px}.capital-room-intro p{font-size:12px}
+  .capital-lobby-board{min-height:158px;grid-template-rows:repeat(5,minmax(25px,1fr));gap:3px;padding:7px}
+  .capital-lobby-tile{border-radius:6px;font-size:7px}.capital-lobby-tile:before{height:3px}.capital-lobby-tile small{font-size:7px}
+  .capital-lobby-die{--die-size:44px}.capital-lobby-die i{padding:7px;border-radius:10px}
+  .capital-room-roster{grid-template-columns:1fr 1fr;max-height:110px}.capital-room-actions{grid-template-columns:1fr 1fr}.capital-room-actions #mpStart{grid-column:1/-1;grid-row:1}
+  .capital-room-code{font-size:18px}.capital-room-copy{padding:7px!important}.capital-room-invite-actions{max-width:150px}
+}
+@media(prefers-reduced-motion:reduce){
+  .capital-lobby-die,.capital-room-player{animation:none!important}
+}
+
 /* ── capital-win-effects ── */
 /* Minimal victory treatment: glow, floating trophy and restrained particles. */
 .capital-win-bg{background:radial-gradient(circle at 50% 38%,rgba(255,205,78,.10),rgba(2,7,15,.82) 48%,rgba(2,7,15,.94));backdrop-filter:blur(10px)}
@@ -2920,11 +3094,6 @@ html,body{height:100vh!important;overflow:hidden!important}
 #gameWrap .board > .tile.tile-top .name,#gameWrap .board > .tile.tile-bottom .name{font-size:clamp(9px,.65vw,11px)!important}
 #gameWrap .board > .tile.tile-left .name,#gameWrap .board > .tile.tile-right .name{font-size:clamp(9px,.62vw,11px)!important}
 #gameWrap .board > .tile.corner .name{font-size:clamp(9px,.65vw,11px)!important}
-#gameWrap .board > .tile.property:hover,#gameWrap .board > .tile[data-group]:hover{
-  transform:translateY(-2px) scale(1.018)!important;
-  z-index:40!important;
-  filter:brightness(1.08)!important;
-}
 #gameWrap .board > .tile .tokens{max-width:70%!important}
 #gameWrap .board > .tile .build-badge{
   right:3px!important;
@@ -3086,6 +3255,13 @@ html,body{height:100vh!important;overflow:hidden!important}
   margin-top:4px!important;
   font-size:clamp(7px,.62vw,10px)!important;
   line-height:1.05!important;
+}
+#gameWrap .board > .tile.corner .corner-vacation .vacation-pot-badge:not([hidden]){
+  display:inline-flex!important;align-items:center;justify-content:center;
+  margin-top:3px!important;padding:2px 5px;border:1px solid rgba(245,196,81,.48);
+  border-radius:999px;background:rgba(245,196,81,.13);color:#f5c451;
+  font-size:clamp(6px,.54vw,9px)!important;font-weight:800;line-height:1!important;
+  white-space:nowrap;box-shadow:0 0 12px rgba(245,196,81,.12)
 }
 #gameWrap .board > .tile.corner .tokens{transform:none!important}
 #gameWrap .board > .tile.corner .player-piece[data-index="1"],#gameWrap .board > .tile.corner .player-piece[data-index="2"],#gameWrap .board > .tile.corner .player-piece[data-index="3"]{
@@ -3738,6 +3914,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   color:#dbe3ee;
   font:700 11px/16px Inter,system-ui,sans-serif;
 }
+#gameWrap #turnHint .dice-roll-tip{display:block;opacity:.86}
 /* ---------- Tablet & phone: page scrolls, board fits the width ---------- */
 @media (max-width:1050px){
   html,body{height:auto!important;min-height:100%!important;overflow-x:hidden!important;overflow-y:auto!important}
@@ -3847,23 +4024,15 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 #cap3dCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
 #cap3dCanvas:active{cursor:grabbing}
 #cap3dHud{position:absolute;inset:0;pointer-events:none;z-index:5}
-/* Where #center lives while the 3D board is showing. It used to sit in
-   #cap3dHud, dead centre over the canvas: a 262px panel covering the bottom row
-   of properties with the roll button on top of the board. It is now parked at
-   the top of the right-hand column — beside the board, above Players — so the
-   board is never covered and the dice stay in the player's eyeline.
-   Same node and the same handlers, only a new parent. */
+/* The 3D controls sit over the upper-left corner of the 3D board. */
 #gameWrap .cap-controls-slot{display:none}
-/* Shown only in 3D; its place in the column (order, flex sizing) is set with the
-   rest of the 3D sidebar rules further down this sheet. */
-#gameWrap.view-3d .cap-controls-slot{display:block}
-#gameWrap.view-3d .cap-controls-slot .center{pointer-events:auto;width:100%;background:radial-gradient(circle at 50% 36%,rgba(76,93,129,.22),transparent 38%),linear-gradient(145deg,rgba(17,26,40,.88),rgba(9,15,24,.88))!important;border:1px solid rgba(244,201,93,.16)!important;border-radius:14px!important;box-shadow:0 14px 40px rgba(0,0,0,.45)!important;padding:8px 12px!important;gap:6px!important;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
-#gameWrap.view-3d .cap-controls-slot .center h2{font-size:11.5px!important;letter-spacing:.1em!important}
-#gameWrap.view-3d .cap-controls-slot .dice-row{gap:8px!important}
-#gameWrap.view-3d .cap-controls-slot .die2d{width:42px!important;height:42px!important;border-radius:10px!important;box-shadow:inset 0 2px 0 rgba(255,255,255,.9),inset 0 -5px 10px rgba(24,34,48,.1),0 8px 16px rgba(0,0,0,.28)!important}
-#gameWrap.view-3d .cap-controls-slot .die2d .die-pip{width:8px!important;height:8px!important}
-#gameWrap.view-3d .cap-controls-slot .roll-btn{min-width:132px!important;min-height:40px!important;font-size:12px!important;padding:7px 11px!important}
-#gameWrap.view-3d .cap-controls-slot .log{display:none!important}
+#gameWrap.view-3d .cap-controls-slot{display:block;position:absolute;z-index:7;top:16px;left:16px;width:min(224px,26%);pointer-events:auto}
+#gameWrap.view-3d .cap-controls-slot .center{pointer-events:auto;width:100%;gap:2px!important;padding:8px 10px!important;background:linear-gradient(145deg,rgba(14,21,34,.91),rgba(9,14,24,.86))!important;border:1px solid rgba(255,255,255,.12)!important;border-radius:14px!important;box-shadow:0 12px 34px rgba(0,0,0,.38)!important;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+#gameWrap.view-3d .cap-controls-slot .center h2{display:none!important}
+#gameWrap.view-3d .cap-controls-slot .dice-row{gap:0!important}
+#gameWrap.view-3d .cap-controls-slot .dice-stage{min-height:clamp(104px,10vw,124px)!important}
+#gameWrap.view-3d .cap-controls-slot .die2d{width:clamp(72px,6.2vw,88px)!important;height:clamp(72px,6.2vw,88px)!important}
+#gameWrap.view-3d .cap-controls-slot .roll-btn{width:100%;min-width:0!important;min-height:42px!important;font-size:13px!important;padding:8px 12px!important}
 #gameWrap.view-3d .cap-controls-slot #turnHint{font-size:10px!important}
 /* 3D-mode sidebar: premium glass HUD. All rules scoped to .view-3d — 2D untouched. */
 #gameWrap.view-3d .side .panel{background:rgba(13,19,29,.68)!important;border:1px solid rgba(244,201,93,.14)!important;border-radius:16px!important;box-shadow:0 18px 50px rgba(0,0,0,.45)!important;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
@@ -3873,22 +4042,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 #gameWrap.view-3d .player-row.active{background:rgba(244,201,93,.07)!important;border-color:rgba(244,201,93,.45)!important;box-shadow:0 0 18px rgba(244,201,93,.16)!important}
 #gameWrap.view-3d .player-row .pmoney{color:#fff!important}
 #gameWrap.view-3d .eventlog li{border-bottom:1px solid rgba(255,255,255,.06)!important}
-/* The sidebar now carries the dice and the roll button as well. It is ordered
-   first so the one control the player has to reach is always at the top of the
-   column: appended last it sat below the fold on a 768px-tall window, where it
-   was cut off and could not be clicked at all. `order` rather than moving the
-   node, because the existing layout rules address the panels by nth-child. */
-#gameWrap.view-3d .cap-controls-slot{order:-1!important;flex:0 0 auto!important;min-height:0!important;margin-bottom:2px}
 #gameWrap.view-3d .side{overflow-y:auto!important;overflow-x:hidden!important;scrollbar-width:thin}
-/* No log in the 3D sidebar: the dice panel already sits at the top of the column
-   and the board is the thing the player is reading. Both log surfaces go — the
-   one-line #quickLog under the roll button and the Game Log panel. The DOM
-   is untouched (log() and the sync path keep writing to #eventlog, so switching
-   back to 2D shows the full history intact), only the panels are hidden.
-
-   The players panel then has the column to itself, so it takes the freed height
-   instead of leaving a gap under it. */
-#gameWrap.view-3d .side > .panel:nth-child(2){display:none!important}
 #gameWrap.view-3d .side > .panel:first-child{max-height:none!important}
 #gameWrap.view-3d .action-panel .btn.yes{background:linear-gradient(135deg,#f7d36a,#dfa83c)!important;color:#151a21!important;border:0!important}
 #gameWrap.view-3d .action-panel .btn.no:hover{border-color:rgba(244,201,93,.4)!important}
@@ -3911,6 +4065,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 #gameWrap.view-3d .board-outer #board{display:none!important}
 /* In 3D the viewport is the scene: no gutters, no card styling. 2D keeps its own. */
 #gameWrap.view-3d .board-outer{padding:0!important;background:transparent!important}
+@media (max-width:560px){#gameWrap.view-3d .cap-controls-slot{top:8px;left:8px;width:min(224px,calc(100% - 16px))}#gameWrap.view-3d .cap-controls-slot .dice-stage{min-height:94px!important}#gameWrap.view-3d .cap-controls-slot .die2d{width:clamp(64px,15vw,78px)!important;height:clamp(64px,15vw,78px)!important}}
 @media (max-width:760px){
   #gameWrap .topbar{flex-wrap:wrap}
   #cap3dHud{padding:8px 8px 12px}
@@ -3918,8 +4073,132 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 @media (prefers-reduced-motion:reduce){
   #gameWrap .board{transition:none}
 }
+/* ── Capital 2D board refresh ──
+   A crisp, colorful tabletop with Capital's own navy-and-copper identity. */
+#gameWrap:not(.view-3d) .board{
+  gap:3px!important;
+  padding:5px!important;
+  overflow:visible!important;
+  background:linear-gradient(145deg,#33445d,#1c293a)!important;
+  border:1px solid rgba(255,255,255,.16)!important;
+  border-radius:25px!important;
+  box-shadow:0 26px 72px rgba(0,0,0,.48),inset 0 1px rgba(255,255,255,.16),0 0 0 5px rgba(10,15,23,.72)!important;
+}
+#gameWrap:not(.view-3d) .board>.tile{
+  border:1px solid rgba(219,231,245,.14)!important;
+  border-radius:9px!important;
+  padding:5px 4px!important;
+  overflow:visible!important;
+  background:linear-gradient(150deg,#27364a,#1a2637)!important;
+  box-shadow:inset 0 1px rgba(255,255,255,.08),0 2px 5px rgba(0,0,0,.18)!important;
+  transition:transform .16s ease,filter .16s ease,box-shadow .16s ease!important;
+}
+#gameWrap:not(.view-3d) .board>.tile.property{
+  background:linear-gradient(155deg,color-mix(in srgb,var(--group-color) 32%,#26364a),color-mix(in srgb,var(--group-color) 18%,#151f2d))!important;
+  border-color:color-mix(in srgb,var(--group-color) 48%,#536078)!important;
+}
+#gameWrap:not(.view-3d) .board>.tile .stripe{
+  height:12px!important;min-height:12px!important;max-height:12px!important;flex-basis:12px!important;
+  margin:0 0 3px!important;border-radius:5px!important;
+  box-shadow:inset 0 1px rgba(255,255,255,.28),0 2px 5px rgba(0,0,0,.2)!important;
+}
+#gameWrap:not(.view-3d) .board>.tile .name{
+  color:#f6f8fc!important;font-weight:750!important;letter-spacing:-.025em!important;
+  text-shadow:0 1px 2px rgba(0,0,0,.3)!important;
+}
+#gameWrap:not(.view-3d) .board>.tile .price{
+  color:#fff1c8!important;font-size:clamp(9px,.7vw,12px)!important;font-weight:800!important;
+  background:rgba(10,16,25,.28)!important;border-radius:5px!important;padding:4px 2px 3px!important;
+}
+#gameWrap:not(.view-3d) .board>.tile:not(.property):not(.corner){
+  background:linear-gradient(150deg,#26364b,#192638)!important;
+}
+#gameWrap:not(.view-3d) .board>.tile.tile-type-tax{background:linear-gradient(145deg,#58452b,#342b28)!important}
+#gameWrap:not(.view-3d) .board>.tile.tile-type-chance{background:linear-gradient(145deg,#4b3b66,#2c2a4a)!important}
+#gameWrap:not(.view-3d) .board>.tile.tile-type-chest{background:linear-gradient(145deg,#4b3b2b,#302a29)!important}
+#gameWrap:not(.view-3d) .board>.tile.tile-type-station{background:linear-gradient(145deg,#294b5b,#203546)!important}
+#gameWrap:not(.view-3d) .board>.tile.tile-type-util{background:linear-gradient(145deg,#24606a,#1b3c4c)!important}
+#gameWrap:not(.view-3d) .board>.tile.corner{
+  background:linear-gradient(145deg,#303a5c,#222a45)!important;
+  border-color:rgba(255,255,255,.19)!important;
+  color:#f7f8fc!important;
+  box-shadow:inset 0 1px rgba(255,255,255,.12),0 3px 8px rgba(0,0,0,.2)!important;
+}
+#gameWrap:not(.view-3d) .board>.tile.corner.tile-type-go{background:linear-gradient(145deg,#76572d,#443821)!important}
+#gameWrap:not(.view-3d) .board>.tile.corner.tile-type-vacation{background:linear-gradient(145deg,#225b53,#1b3c42)!important}
+#gameWrap:not(.view-3d) .board>.tile.corner.tile-type-gotojail{background:linear-gradient(145deg,#68424b,#3d2b3a)!important}
+#gameWrap:not(.view-3d) .board>.tile .owner-dot{border-color:#1a2433!important;box-shadow:0 0 0 1px rgba(255,255,255,.26),0 2px 5px rgba(0,0,0,.35)!important}
+.city-flag{
+  position:absolute!important;z-index:32!important;display:grid!important;place-items:center!important;
+  width:clamp(17px,1.8vw,23px)!important;height:clamp(17px,1.8vw,23px)!important;
+  border:2px solid #f7f8fc!important;border-radius:50%!important;background:#fff!important;
+  box-shadow:0 2px 7px rgba(0,0,0,.42),0 0 0 1px rgba(15,24,36,.35)!important;
+  font-family:"Apple Color Emoji","Segoe UI Emoji",sans-serif!important;
+  font-size:clamp(11px,1.2vw,15px)!important;line-height:1!important;
+  pointer-events:none!important;overflow:hidden!important;
+}
+#gameWrap:not(.view-3d) .board>.tile.property:has(>.city-flag){overflow:visible!important;z-index:4!important}
+#gameWrap:not(.view-3d) .board>.tile.property:has(>.city-flag) .stripe{display:none!important}
+#gameWrap:not(.view-3d) .board>.tile .tile-icon{
+  display:flex!important;align-items:center!important;justify-content:center!important;
+  flex:0 0 clamp(17px,1.65vw,22px)!important;width:clamp(17px,1.65vw,22px)!important;height:clamp(17px,1.65vw,22px)!important;
+  margin:2px auto 0!important;color:#dce9ff!important;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))!important;
+}
+#gameWrap:not(.view-3d) .board>.tile .tile-icon svg{width:100%!important;height:100%!important;fill:none!important;stroke:currentColor!important;stroke-width:1.7!important;stroke-linecap:round!important;stroke-linejoin:round!important}
+#gameWrap:not(.view-3d) .board>.tile .tile-icon-airport{color:#a9eaff!important}
+#gameWrap:not(.view-3d) .board>.tile .tile-icon-power{color:#f5cb69!important}
+#gameWrap:not(.view-3d) .board>.tile .tile-icon-water{color:#73dcf5!important}
+#gameWrap:not(.view-3d) .board>.tile .tile-icon-tax{color:#f0d189!important}
+#gameWrap:not(.view-3d) .board>.tile .tile-icon-chance{color:#e6b0ff!important}
+#gameWrap:not(.view-3d) .board>.tile .tile-icon-chest{color:#ffc77e!important}
+#gameWrap:not(.view-3d) .board>.tile.corner .corner-label strong svg{width:clamp(22px,2.7vw,36px)!important;height:clamp(22px,2.7vw,36px)!important;fill:none!important;stroke:currentColor!important;stroke-width:1.7!important;stroke-linecap:round!important;stroke-linejoin:round!important}
+#gameWrap:not(.view-3d) .board>.tile.corner.tile-type-vacation .corner-label strong{color:#9ce4bf!important}
+#gameWrap:not(.view-3d) .board>.tile.corner.tile-type-jail .corner-label strong,#gameWrap:not(.view-3d) .board>.tile.corner.tile-type-gotojail .corner-label strong{color:#ffc874!important}
+#gameWrap:not(.view-3d) .board>.tile.tile-top .city-flag{left:50%!important;bottom:-9px!important;transform:translateX(-50%)!important}
+#gameWrap:not(.view-3d) .board>.tile.tile-bottom .city-flag{left:50%!important;top:-9px!important;transform:translateX(-50%)!important}
+#gameWrap:not(.view-3d) .board>.tile.tile-left .city-flag{left:-9px!important;top:50%!important;transform:translateY(-50%)!important}
+#gameWrap:not(.view-3d) .board>.tile.tile-right .city-flag{right:-9px!important;top:50%!important;transform:translateY(-50%)!important}
+/* City tile hierarchy follows the Richup reference: price toward the outside edge,
+   city name toward the board center. Keep Capital's own group-color stripe. */
+#gameWrap:not(.view-3d) .board>.tile.property.tile-top .price{order:-1!important}
+#gameWrap:not(.view-3d) .board>.tile.property.tile-top .name{-webkit-box-pack:end!important}
+#gameWrap:not(.view-3d) .board>.tile.property.tile-bottom .name{-webkit-box-pack:start!important}
+#gameWrap:not(.view-3d) .board>.tile.cap-hover-main{transform:translateY(-2px) scale(1.025)!important;z-index:35!important;filter:brightness(1.12)!important;box-shadow:0 0 0 2px rgba(247,211,115,.9),0 9px 20px rgba(0,0,0,.4)!important}
+#gameWrap:not(.view-3d) .board>.tile.cap-hover-group{z-index:25!important;filter:brightness(1.06)!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.32),0 4px 12px rgba(0,0,0,.2)!important}
+#gameWrap:not(.view-3d) .board>.tile.cap-hover-dim{opacity:.82!important;filter:saturate(.78) brightness(.78)!important}
+#gameWrap:not(.view-3d) .board>.center{
+  border:1px solid rgba(199,215,238,.14)!important;border-radius:18px!important;
+  background:radial-gradient(ellipse at 50% 38%,rgba(69,91,128,.25),transparent 58%),linear-gradient(145deg,#182538,#101925)!important;
+  box-shadow:inset 0 1px rgba(255,255,255,.06),inset 0 0 0 8px rgba(255,255,255,.012)!important;
+}
+#gameWrap:not(.view-3d) .board>.center h2{color:#f4d174!important;text-shadow:0 4px 24px rgba(244,201,93,.17)!important}
+#gameWrap:not(.view-3d) .board>.center .log{color:#aebbd0!important}
+@media(max-width:760px){
+  #gameWrap:not(.view-3d) .board{gap:2px!important;padding:3px!important;border-radius:17px!important}
+  #gameWrap:not(.view-3d) .board>.tile{border-radius:5px!important;padding:3px 2px!important}
+  #gameWrap:not(.view-3d) .board>.tile .stripe{height:8px!important;min-height:8px!important;max-height:8px!important;flex-basis:8px!important}
+  #gameWrap:not(.view-3d) .board>.tile .tile-icon{flex-basis:14px!important;width:14px!important;height:14px!important}
+  #gameWrap:not(.view-3d) .board>.center{border-radius:10px!important}
+  .city-flag{width:16px!important;height:16px!important;font-size:10px!important;border-width:1px!important}
+  #gameWrap:not(.view-3d) .board>.tile.tile-top .city-flag{bottom:-7px!important}
+  #gameWrap:not(.view-3d) .board>.tile.tile-bottom .city-flag{top:-7px!important}
+  #gameWrap:not(.view-3d) .board>.tile.tile-left .city-flag{left:-7px!important}
+  #gameWrap:not(.view-3d) .board>.tile.tile-right .city-flag{right:-7px!important}
+}
+#gameWrap #rollBtn,#gameWrap #endTurnBtn{font:850 18px/1.2 Inter,system-ui,-apple-system,"Segoe UI",sans-serif!important;letter-spacing:.01em!important;font-kerning:normal!important}
+#gameWrap #endTurnBtn{background:linear-gradient(135deg,#f7d36a,#dfa83c)!important;color:#151a21!important;border:0!important;box-shadow:0 13px 30px rgba(223,168,60,.20)!important}
+#gameWrap #endTurnBtn:hover:not(:disabled){background:linear-gradient(135deg,#f2c65c,#ffe08c)!important;filter:brightness(1.04)!important;box-shadow:0 12px 30px rgba(109,124,255,.35),0 0 0 1px rgba(255,255,255,.08)!important;transform:translateY(-2px)!important}
+#gameWrap #endTurnBtn:active:not(:disabled){transform:translateY(1px) scale(.985)!important}
+#gameWrap.view-3d #cap3dControls #rollBtn,#gameWrap.view-3d #cap3dControls #endTurnBtn{font-size:13px!important}
+.capital-building-controls{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+.capital-build-control{display:grid!important;place-items:center!important;min-width:0!important;min-height:38px!important;padding:5px!important;border:1px solid rgba(255,255,255,.06)!important;border-radius:8px!important;background:#7045d5!important;color:#fff!important}
+.capital-build-control svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.capital-build-control.sell-one{background:#5c3db4!important}.capital-build-control.sell-all{background:#7045d5!important}.capital-build-control:hover{filter:brightness(1.12)!important}
+.capital-property-other-actions{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:560px){.capital-build-control{min-height:36px!important}}
 </style>
 
+<link rel="stylesheet" href="board-2d-photo.css?v=capital-go-flags-1">
 </head>
 <body>
 <audio id="capitalMusic" preload="auto" loop aria-hidden="true">
@@ -4006,11 +4285,12 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 <div class="die2d" id="d2" role="button" tabindex="0" aria-label="Die 2"></div>
 </div>
 <button class="roll-btn" id="rollBtn">Roll Dice</button>
+<button class="roll-btn capital-end-turn-btn" id="endTurnBtn" type="button" style="display:none">End Turn</button>
 <div id="turnHint" aria-live="polite"></div>
 <div class="log" id="quickLog">Welcome! Roll the dice to start.</div>
 </div>
 </div>
-<div id="cap3dWrap" aria-label="3D board"><canvas id="cap3dCanvas"></canvas><div id="cap3dVig"></div><div id="cap3dHud"></div></div>
+<div id="cap3dWrap" aria-label="3D board"><canvas id="cap3dCanvas"></canvas><div id="cap3dVig"></div><div id="cap3dHud"></div><div class="cap-controls-slot" id="cap3dControls"></div></div>
 </div>
 <div class="side">
 <div class="panel">
@@ -4027,7 +4307,6 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 <button class="btn no" id="tradeBtn" data-tooltip="Trade cash and properties with bots." style="flex:1" type="button">Trade</button>
 </div>
 </div>
-<div class="cap-controls-slot" id="cap3dControls"></div>
 </div>
 </div>
 </div>
@@ -4246,17 +4525,17 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   const BOT_NAMES = BOT_NAMES_EN;
 
   const tileEN = [
-    "GO","Copper Street","COMMUNITY CHEST","Potter Street","Income Tax","North Station","Riverfront Avenue","CHANCE","Mill Street","Garden Street",
-    "JAIL / JUST VISITING","Weaver Lane","Electric Company","Tailor Lane","Dyer Lane","East Station","Market Square","COMMUNITY CHEST","Bread Square","Salt Square",
-    "FREE PARKING","Merchant Street","CHANCE","Bank Avenue","Exchange Avenue","South Station","Theatre Boulevard","Opera Boulevard","Water Works","Concert Boulevard",
-    "GO TO JAIL","Palace Quay","Cathedral Quay","COMMUNITY CHEST","Park Promenade","West Station","CHANCE","Kings Avenue","Luxury Tax","Imperial Square"
+    "GO","Rio","COMMUNITY CHEST","São Paulo","Income Tax","San Francisco Airport","Xiva","CHANCE","Bukhara","Tashkent",
+    "JAIL / JUST VISITING","Istanbul","Electric Company","Ankara","Izmir","Osaka Airport","Dubai","COMMUNITY CHEST","Abu Dhabi","Sharjah",
+    "VACATION","Tokyo","CHANCE","Yokohama","Nagoya","Istanbul Airport","Madrid","Barcelona","Water Works","Valencia",
+    "GO TO JAIL","Amsterdam","Rotterdam","COMMUNITY CHEST","The Hague","Dubai Airport","CHANCE","San Francisco","Luxury Tax","New York"
   ];
   const translations = {
     en:{
       menuSub:"BUY · BUILD · TRADE · WIN",play:"Play with bots",multiplayer:"Create game (multiplayer)",join:"Join by code",how:"How to play",
       setup:"Game setup",nickname:"Your nickname",players:"Total players (you + bots)",startingMoney:"Starting capital",start:"Start game",back:"Back",turn:"Turn",yourTurn:" (your turn)",roll:"Roll Dice",
       welcome:"Welcome! Roll the dice to start.",gameStarted:"Game started! Roll the dice.",playersTitle:"Players",logTitle:"Game Log",chance:"CHANCE",chest:"COMMUNITY CHEST",chestShort:"CHEST",
-      go:"GO",jail:"JAIL / JUST VISITING",freeParking:"FREE PARKING",goJail:"GO TO JAIL",owner:"Owner",free:"Unowned",price:"Price",rent:"Rent",mortgage:"Mortgaged",
+      go:"GO",jail:"JAIL / JUST VISITING",freeParking:"VACATION",goJail:"GO TO JAIL",owner:"Owner",free:"Unowned",price:"Price",rent:"Rent",mortgage:"Mortgaged",
       buildHouse:"Build house",buildHotel:"Build hotel",sellHouse:"Sell building",mortgageBtn:"Mortgage",unmortgage:"Unmortgage",close:"Close",buy:"Buy",startAuction:"Auction",
       freeProperty:"Available property.",buyQuestion:"Buy for",yourCash:"Your cash",bidTitle:"Auction",bankrupt:"Bankrupt",winner:"wins",playAgain:"Play again",mainMenu:"Main menu",trade:"Trade",save:"Save",
       gameOver:"Game over",actions:"Actions",tradeBtn:"Trade",saveBtn:"Save",tutorial:"Tutorial",soundOn:"🔊 Sound",soundOff:"🔇 Sound",musicSettings:"🎵 Background music",musicVolume:"Volume",musicHint:"Music volume is adjusted separately from sound effects.",dieLabel:"Die",diceLabel:"Dice",noBotProps:"No bot properties are available for trade.",decline:"Decline",ok:"OK",devTitle:"DEVELOPER PANEL",devSub:"TESTING ONLY",devPlayer:"Player / bot",devAmount:"Amount",devAdd:"＋ Add money",devSubMoney:"－ Subtract money",dev10k:"＋ $10,000",devZero:"Set $0",devWin:"🏆 Win game",devLose:"💀 Lose game",devProps:"🏠 All properties to me",devDiceLabel:"Next turn dice",devApply:"Apply",devClose:"Close developer panel",speed:"Game speed",speedNormal:"Normal",speedFast:"Fast"
@@ -4295,6 +4574,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   const GAME_SETTINGS_KEY="capital.gameSettings.v1";
   let gameSettings={...GAME_SETTINGS_DEFAULTS};
   let freeParkingPotAmount=0;
+  let inventoryHoverPlayerId=null;
   try{const raw=localStorage.getItem(GAME_SETTINGS_KEY);if(raw)gameSettings=sanitizeGameSettings(JSON.parse(raw));}catch(_){}
   function sanitizeGameSettings(v){
     const out={...GAME_SETTINGS_DEFAULTS};
@@ -4324,6 +4604,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     gameSettings=next;
     selectedStartingMoney=gameSettings.startingCash;
     window.chosenStartingMoney=selectedStartingMoney;
+    renderVacationPot();
     try{const el=document.getElementById("startingMoneySelect");if(el)el.value=String(selectedStartingMoney);}catch(_){}
     persistGameSettings();
   }
@@ -4342,7 +4623,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     if(!s.rentWhileInJail)out.push("No rent in jail");
     if(!s.mortgageEnabled)out.push("No mortgage");
     if(!s.evenBuild)out.push("Free build");
-    if(s.freeParkingPot)out.push("Vacation pot");
+    if(s.freeParkingPot)out.push("Vacation Cash");
     if(s.randomizePlayerOrder)out.push("Random order");
     if(s.botDifficulty!=="normal")out.push(`Bots ${s.botDifficulty}`);
     return out.length?out.join(" · "):"Classic rules";
@@ -4782,7 +5063,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     }else if(state===STATES.TILE_ACTION){
       onTileLand(p);
     }else if(state===STATES.TURN_END){
-      nextTurn();
+      updateBadge();
     }else{
       state=STATES.WAITING_FOR_ROLL;
       if(!p.human)scheduleBotAction(p,()=>beginBotTurn(p),350);
@@ -4932,17 +5213,58 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       if(mp.host&&announce&&before!==after){mpSend({kind:"lobby",members:mp.members});if(modalKind==="mpLobby")mpShowLobby();mpServerDropIfEmpty();}
     }catch(e){console.warn("CAPITAL presence sync failed",e);}
   }
-  function mpShowLobby(){
-    const members=mpMembersSorted();
-    const rows=members.map((m,i)=>`<div class="player-row" style="margin-bottom:6px"><div class="player-mini-piece" style="--piece-color:${PLAYER_COLORS[i]||PLAYER_COLORS[0]}"><span class="mini-head"></span><span class="mini-body"></span></div><div class="pname">${escapeHtml(m.name||"Player")}${m.clientId===mp.clientId?` <span style="color:#9db8a8">(${"You"})</span>`:""}${m.host?` <span style="color:#f6c84e">HOST</span>`:""}</div><div class="pmoney">#${i+1}</div></div>`).join("");
-    modalRoot.innerHTML=`<div class="modal-bg capital-mp-bg"><div class="modal capital-mp-modal"><div style="font-size:11px;letter-spacing:.16em;color:#8d9ab0;font-weight:900">${"MULTIPLAYER LOBBY"}</div><h3 style="margin:5px 0 4px">CAPITAL · ${escapeHtml(mp.room)}</h3><p>${"Share this room code with your friends."}</p><div class="capital-mp-code" role="button" tabindex="0" title="${"Click to copy the room code"}">${escapeHtml(mp.room)}</div><div style="font-size:11px;color:#7f8da0;margin:12px 0 7px">${"Players"} · ${members.length}/8</div><div class="capital-mp-settings-summary">${"Rules"}: <b>${escapeHtml(gameSettingsSummary(gameSettings))}</b></div><div>${rows||`<div class="auction-empty">${"Waiting for players…"}</div>`}</div><div class="modal-btns"><button class="btn no" id="mpSettings">⚙ ${"Rules"}</button><button class="btn yes" id="mpStart" ${mp.host&&members.length>=2?"":"disabled"}>${"Start game"}</button><button class="btn no" id="mpLeave">${"Leave"}</button></div></div></div>`;
-    modalOpen=true;modalKind="mpLobby";
+  function mpShowLobby(options={}){
+    const preview=!!options.preview;
+    const members=preview?[
+      {clientId:mp.clientId||"preview-host",name:"Player",host:true,joinedAt:1},
+      {clientId:"preview-guest",name:"Friend",host:false,joinedAt:2}
+    ]:mpMembersSorted();
+    const room=preview?"DEMO42":mp.room;
+    const lobbyDieFace=(value,side)=>{
+      const spots={1:["2/2"],2:["1/1","3/3"],3:["1/1","2/2","3/3"],4:["1/1","1/3","3/1","3/3"],5:["1/1","1/3","2/2","3/1","3/3"],6:["1/1","2/1","3/1","1/3","2/3","3/3"]}[value]||["2/2"];
+      return `<i class="face-${side}" aria-hidden="true">${spots.map(pos=>`<b style="grid-area:${pos}"></b>`).join("")}</i>`;
+    };
+    const lobbyDie=(top,front,right)=>`<span class="capital-lobby-die">${lobbyDieFace(front,"front")}${lobbyDieFace(right,"right")}${lobbyDieFace(top,"top")}</span>`;
+    const ownCount=members.length;
+    const ready=!preview&&mp.host&&ownCount>=2;
+    const status=preview?"Offline preview · sample players and room code. No room is created and no data is sent.":ownCount<2?"Invite at least one friend to start the game.":mp.host?"You can start now or invite a few more friends first.":"The host will start the game when the table is ready.";
+    const roster=members.map((m,i)=>`<div class="capital-room-player" style="--seat-color:${PLAYER_COLORS[i]||PLAYER_COLORS[0]}"><span class="capital-room-avatar" aria-hidden="true">${escapeHtml(String(m.name||"Player").trim().charAt(0).toUpperCase()||"P")}</span><span class="capital-room-player-copy"><strong>${escapeHtml(m.name||"Player")}</strong><small>${m.host?`<span class="capital-room-host">Host</span>`:"Player"}${m.clientId===mp.clientId?` · <span class="capital-room-you">You</span>`:""}</small></span><span class="capital-room-seat">${String(i+1).padStart(2,"0")}</span></div>`).join("");
+    const emptySeats=Array.from({length:Math.max(0,8-ownCount)},(_,i)=>`<div class="capital-room-empty"><span aria-hidden="true">＋</span><span>Open seat ${ownCount+i+1}</span></div>`).join("");
+    modalRoot.innerHTML=`<div class="modal-bg capital-mp-bg capital-room-bg"><section class="modal capital-mp-modal capital-room-lobby" role="dialog" aria-modal="true" aria-labelledby="capitalRoomTitle">
+      <main class="capital-room-main">
+        <div><div class="capital-room-brand"><span class="capital-room-brand-mark" aria-hidden="true">♟</span><span>CAPITAL<small>BUY · BUILD · TRADE · WIN</small></span></div>
+          <header class="capital-room-intro"><span class="capital-room-kicker">${preview?"Lobby preview":"Multiplayer room"}</span><h2 id="capitalRoomTitle">Gather around the table.</h2><p>Bring your friends in, check the rules, and start building an empire together.</p></header>
+          <div class="capital-lobby-board" aria-hidden="true">
+            <div class="capital-lobby-tile corner"><span>START</span><small>+ $200</small></div><div class="capital-lobby-tile gold"><span>Merchant</span><small>$220</small></div><div class="capital-lobby-tile pink"><span>CHANCE</span><small>Draw</small></div><div class="capital-lobby-tile gold"><span>Bank Ave.</span><small>$220</small></div><div class="capital-lobby-tile corner"><span>VACATION</span></div>
+            <div class="capital-lobby-tile blue"><span>Airport</span><small>$200</small></div><div class="capital-lobby-tile green"><span>Water Co.</span><small>$150</small></div><div class="capital-lobby-tile pink"><span>Surprise</span><small>Draw</small></div>
+            <div class="capital-lobby-tile corner"><span>VACATION</span></div><div class="capital-lobby-tile pink"><span>Surprise</span><small>Draw</small></div><div class="capital-lobby-tile blue"><span>Airport</span><small>$200</small></div><div class="capital-lobby-tile green"><span>Chest</span><small>Collect</small></div><div class="capital-lobby-tile corner"><span>JAIL</span></div>
+            <div class="capital-lobby-tile blue"><span>Airport</span><small>$200</small></div><div class="capital-lobby-tile gold"><span>Salt</span><small>$200</small></div><div class="capital-lobby-tile pink"><span>CHANCE</span><small>Draw</small></div>
+            <div class="capital-lobby-center"><small>THE GAME IS BETTER TOGETHER</small><div class="capital-lobby-dice">${lobbyDie(5,1,2)}${lobbyDie(4,1,5)}</div><strong>CAPITAL</strong></div>
+          </div>
+        </div>
+        <div class="capital-room-code-wrap"><div><span class="capital-room-code-label">${preview?"Sample room code":"Room code · share to invite"}</span><strong class="capital-room-code">${escapeHtml(room)}</strong></div><div class="capital-room-invite-actions"><button class="btn no capital-room-copy" id="mpCopyCode" type="button" ${preview?"disabled":""}>Copy code</button><button class="btn no capital-room-copy" id="mpCopyInvite" type="button" ${preview?"disabled":""}>Copy invite link</button></div></div>
+      </main>
+      <aside class="capital-room-sidebar"><div class="capital-room-roster-head"><h3>Players</h3><span class="capital-room-count"><b>${ownCount}</b> / 8 seats</span></div>
+        <div class="capital-room-roster" aria-label="Players in this room">${roster}${emptySeats}</div>
+        <div class="capital-room-status" role="status">${status}</div>
+        <div class="capital-room-rules"><span class="capital-room-rules-label">Game rules</span><strong>${escapeHtml(gameSettingsSummary(gameSettings))}</strong></div>
+        <div class="capital-room-actions"><button class="btn no" id="mpSettings" type="button" ${preview?"disabled":""}>⚙ Rules</button><button class="btn no" id="mpLeave" type="button">${preview?"Back":"Leave"}</button><button class="btn yes" id="mpStart" type="button" ${ready?"":"disabled"}>${preview?"Preview only":mp.host?"Start game":"Waiting for host"}<span aria-hidden="true">　→</span></button></div>
+      </aside>
+    </section></div>`;
+    modalOpen=true;modalKind=preview?"mpLobbyPreview":"mpLobby";
     const copyCode=()=>mpCopyRoomCode();
-    const codeEl=modalRoot.querySelector(".capital-mp-code");
-    if(codeEl){codeEl.addEventListener("click",copyCode);codeEl.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();copyCode();}});}
-    modalRoot.querySelector("#mpStart")?.addEventListener("click",mpStartGame);
-    modalRoot.querySelector("#mpLeave")?.addEventListener("click",mpLeaveRoom);
-    modalRoot.querySelector("#mpSettings")?.addEventListener("click",()=>openGameSettings(mp.host));
+    if(!preview){
+      modalRoot.querySelector("#mpCopyCode")?.addEventListener("click",copyCode);
+      modalRoot.querySelector("#mpCopyInvite")?.addEventListener("click",()=>mpCopyText(mpInviteLink()).then(ok=>toast(ok?"Invite link copied.":"Copy failed.",ok?"ok":"warn")));
+      modalRoot.querySelector("#mpStart")?.addEventListener("click",mpStartGame);
+      modalRoot.querySelector("#mpLeave")?.addEventListener("click",mpLeaveRoom);
+      modalRoot.querySelector("#mpSettings")?.addEventListener("click",()=>openGameSettings(mp.host));
+    }else{
+      modalRoot.querySelector("#mpLeave")?.addEventListener("click",()=>{
+        clearModal();modalOpen=false;modalKind=null;
+        if(typeof options.onPreviewClose==="function")options.onPreviewClose();
+      });
+    }
   }
   /* ---------- Game settings window (lobby / setup screen) ----------
      The host edits; everyone else sees the same values read-only. Nothing here
@@ -4998,7 +5320,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
         body.innerHTML=
           row("Starting cash",sel("gsCash",[["500","$500"],["1000","$1,000"],["1500","$1,500"],["2000","$2,000"],["3000","$3,000"]],draft.startingCash),"Each player begins with this amount.","💵")+
           row("Randomize player order",tog("gsRandom",draft.randomizePlayerOrder),"Shuffle the seating order at the start of every match.","🔀")+
-          row("Pass Start bonus",num("gsGo",draft.goBonus,0,2000,50),"Paid for passing or landing on GO.","➜")+
+          row("Pass Start bonus",num("gsGo",draft.goBonus,0,2000,50),"Paid when passing GO. Landing exactly on GO pays $300.","➜")+
           row("Turn timer",sel("gsTimer",[[0,"Off"],["60","60 seconds"],["90","90 seconds"],["120","120 seconds"],["180","180 seconds"]],draft.turnTimer),"The host auto-rolls and ends idle turns. Never bids in auctions.","⏱");
         bindSel("gsCash","startingCash",true);bindTog("gsRandom","randomizePlayerOrder");bindNum("gsGo","goBonus",0,2000);bindSel("gsTimer","turnTimer",true);
       }else if(tab==="economy"){
@@ -5010,7 +5332,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       }else if(tab==="rules"){
         body.innerHTML=
           row("x2 rent on full-set properties",tog("gsMono",draft.doubleRentOnMonopoly),"Owning every property in a colour group doubles its base rent.","🏘️")+
-          row("Vacation cash",tog("gsPot",draft.freeParkingPot),"Landing on Vacation pays out the taxes and bank payments collected so far.","🏖️")+
+          row("Vacation Cash",tog("gsPot",draft.freeParkingPot),"Taxes and fixed bank fees paid on their board squares go into a shared fund. The first player to land on Vacation collects it.","🏖️")+
           row("Auction",tog("gsAuction",draft.auctionOnDecline),"A property the landing player declines to buy is auctioned to the table.","🔨")+
           row("Don't collect rent while in prison",tog("gsJailRent",draft.rentWhileInJail),"While the owner sits in Jail their properties collect nothing.","⛓️")+
           row("Mortgage",tog("gsMortgage",draft.mortgageEnabled),"Mortgage a property for half its price; mortgaged property collects no rent.","🏦")+
@@ -5589,11 +5911,19 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     const label="Nickname";
     const next="Continue";
     const cancel="Cancel";
-    mpFlowShell(title,subtitle,`<div class="mp-field"><label class="mp-label">${label}</label><input id="mpCreateName" class="mp-input" maxlength="16" autocomplete="nickname" value="${escapeHtml(preset)}" placeholder="${"Your nickname"}"></div><div class="mp-field"><label class="mp-label">${"Starting capital"}</label><select id="mpCreateStartingMoney" class="mp-input" aria-label="${"Starting capital"}"><option value="500">$500</option><option value="1000">$1000</option><option value="1500" selected>$1500</option><option value="2000">$2000</option><option value="3000">$3000</option></select></div>`, `<button class="btn no" id="mpFlowCancel">${cancel}</button><button class="btn yes" id="mpFlowContinue">${next}</button>`);
+    mpFlowShell(title,subtitle,`<div class="mp-field"><label class="mp-label">${label}</label><input id="mpCreateName" class="mp-input" maxlength="16" autocomplete="nickname" value="${escapeHtml(preset)}" placeholder="${"Your nickname"}"></div><div class="mp-field"><label class="mp-label">${"Starting capital"}</label><select id="mpCreateStartingMoney" class="mp-input" aria-label="${"Starting capital"}"><option value="500">$500</option><option value="1000">$1000</option><option value="1500" selected>$1500</option><option value="2000">$2000</option><option value="3000">$3000</option></select></div><button class="btn no" id="mpLobbyPreview" type="button" style="width:100%;margin:4px 0 2px">Preview lobby · offline</button>`, `<button class="btn no" id="mpFlowCancel">${cancel}</button><button class="btn yes" id="mpFlowContinue">${next}</button>`);
     const input=modalRoot.querySelector("#mpCreateName");
     const moneySelect=modalRoot.querySelector("#mpCreateStartingMoney");
     if(moneySelect)moneySelect.value=String([500,1000,1500,2000,3000].includes(selectedStartingMoney)?selectedStartingMoney:1500);
     input?.focus();
+    modalRoot.querySelector("#mpLobbyPreview")?.addEventListener("click",()=>{
+      const previewName=(input?.value||preset||"Player").trim().slice(0,16)||"Player";
+      const previewMoney=Number(moneySelect?.value)||selectedStartingMoney;
+      mpShowLobby({preview:true,onPreviewClose:()=>{
+        if([500,1000,1500,2000,3000].includes(previewMoney))selectedStartingMoney=previewMoney;
+        mpCreate(previewName);
+      }});
+    });
     modalRoot.querySelector("#mpFlowCancel")?.addEventListener("click",()=>{closeGameSettingsLayer();clearModal();modalOpen=false;modalKind=null;});
     modalRoot.querySelector("#mpFlowContinue")?.addEventListener("click",()=>{
       const name=(input?.value||"").trim().slice(0,16);
@@ -5906,6 +6236,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     fastPace=!!s.fastPace;
     if(s.settings)applyGameSettings(s.settings);
     freeParkingPotAmount=Math.max(0,Math.round(Number(s.freeParkingPot)||0));
+    renderVacationPot();
     if(Array.isArray(s.logHistory)){gameLog=s.logHistory.slice(-80);renderEventLog();}
     const map=new Map(s.tiles.map(t=>[Number(t.id),t]));
     TILES.forEach(t=>{const x=map.get(Number(t.id));if(x){t.owner=x.owner??null;t.houses=x.houses||0;t.hotel=!!x.hotel;t.mortgaged=!!x.mortgaged;}});
@@ -5986,7 +6317,9 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     // Turn-bound dialogs are rendered only for the player whose turn it is.
     // Shared dialogs (auction/game over) are visible to everyone.
     const isTurnBound = s.modalKind==="buy" || s.modalKind==="jail" || s.modalKind==="card" || s.modalKind==="debt";
-    const shouldShowModal = !!s.auction || s.modalKind==="gameover" || (isTurnBound && s.modalOwnerClientId===mp.clientId);
+    if(s.modalKind==="debt"&&s.modalOwnerClientId===mp.clientId&&s.modalData)lastRemoteDebtData={...s.modalData};
+    if(!s.pendingDebt&&s.modalKind!=="debt"){debtDialogDismissed=false;lastRemoteDebtData=null;hideDebtResumeButton();}
+    const shouldShowModal = !!s.auction || s.modalKind==="gameover" || (isTurnBound && s.modalOwnerClientId===mp.clientId&&!(s.modalKind==="debt"&&debtDialogDismissed));
     // Guests build their own game-over screen (their own place, working buttons)
     // instead of copying the host's HTML, whose buttons are not bound here.
     if(!mp.host&&s.modalKind==="gameover"){
@@ -6104,6 +6437,12 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       // nothing on the wire, while #debtGiveUp - which only exists once that
       // confirmation is showing - is the request that actually ends the game.
       root.addEventListener("click",e=>{
+        const close=root.querySelector("#debtClose");
+        if(close&&e.target===close){
+          e.preventDefault();debtDialogDismissed=true;
+          if(authoritativeModalData?.kind==="debt")lastRemoteDebtData={...authoritativeModalData};
+          modalRoot.innerHTML="";modalOpen=false;modalKind=null;updateBadge();showDebtResumeButton();return;
+        }
         const asset=e.target.closest("[data-kind]");
         if(asset){
           e.preventDefault();
@@ -6146,6 +6485,12 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       const d2=override?override[1]:1+Math.floor(Math.random()*6);
       setState(STATES.ROLLING);
       beginTurnRoll(p,false,d1,d2);
+      return;
+    }
+
+    if(a.type==="endTurn"){
+      if(!isTurn||state!==STATES.TURN_END||modalOpen)return;
+      endTurn(p,true);
       return;
     }
 
@@ -6235,12 +6580,12 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       const t=TILES[Number(a.tileId)];
       if(!t||t.owner!==p.id){mpPublishSnapshot(true);return;}
       const kind=String(a.assetKind||"");
-      if(!(kind==="mortgage"||kind==="house"||kind==="hotel"))return;
+      if(!(kind==="mortgage"||kind==="sale"||kind==="house"||kind==="hotel"))return;
       const row=playerLiquidations(p).find(x=>x.t.id===t.id&&x.kind===kind);
       if(!row){mpPublishSnapshot(true);return;}
       applyLiquidation(p,row);
       playSellSfx();
-      log(`${playerLabel(p)} ${kind==="mortgage"?"mortgages":"sells"} on «${tileLabel(t)}» to cover a debt.`);
+      log(`${playerLabel(p)} ${kind==="mortgage"?"mortgages":kind==="sale"?"sells":"sells buildings"} on «${tileLabel(t)}» to cover a debt.`);
       renderTokens();renderPlayers();saveGame();
       // Still short: republish so the guest redraws with the new figures.
       authoritativeModalData={kind:"debt",playerId:p.id,amount:d.amount,creditorId:d.creditorId,reason:d.reason};
@@ -6250,10 +6595,11 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     }
     if(a.type==="propertyAction"){
       const t=TILES[Number(a.tileId)];
-      if(!t||t.owner!==p.id||p.bankrupt||!isTurn||state!==STATES.WAITING_FOR_ROLL)return;
+      if(!t||t.owner!==p.id||p.bankrupt||!isTurn||!(canManageTurn()||(mpPendingDebt&&mpPendingDebt.playerId===p.id)))return;
       if(a.action==="buildHouse"&&p.money>=HOUSE_COST[t.group]&&canBuildHouse(t)){p.money-=HOUSE_COST[t.group];t.houses=(t.houses||0)+1;playBuildSfx();log(`${playerLabel(p)} built a house on "${tileLabel(t)}".`);}
       else if(a.action==="buildHotel"&&p.money>=HOUSE_COST[t.group]&&canBuildHotel(t)){p.money-=HOUSE_COST[t.group];t.houses=0;t.hotel=true;playBuildSfx();log(`${playerLabel(p)} built a hotel on "${tileLabel(t)}".`);}
       else if(a.action==="sellHouse"&&(t.houses>0||t.hotel)){if(t.hotel){t.hotel=false;t.houses=4}else t.houses--;p.money+=HOUSE_COST[t.group]/2;playSellSfx();log(`${playerLabel(p)} sold buildings on "${tileLabel(t)}".`);}
+      else if(a.action==="sellAllBuildings"&&t.type==="prop"&&(t.houses>0||t.hotel)){let sold=0;while(t.hotel||t.houses>0){if(t.hotel){t.hotel=false;t.houses=4;}else t.houses--;p.money+=HOUSE_COST[t.group]/2;sold++;}playSellSfx();log(`${playerLabel(p)} sold ${sold} building${sold===1?"":"s"} on "${tileLabel(t)}".`);}
       else if(a.action==="mortgage"&&canMortgage(t)){t.mortgaged=true;p.money+=Math.round(t.price/2);playMortgageSfx();log(`${playerLabel(p)} mortgaged "${tileLabel(t)}".`);}
       else if(a.action==="unmortgage"&&t.mortgaged){const cost=Math.round(t.price*.55);if(p.money<cost)return;p.money-=cost;t.mortgaged=false;playUnmortgageSfx();log(`${playerLabel(p)} unmortgaged "${tileLabel(t)}".`);}
       else return;
@@ -6476,12 +6822,12 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   /* The special squares are not properties and have no price line, so they get a
      compact label of their own instead of a name squeezed into the property
      layout. Long stock phrases collapse to the one word that identifies them:
-     "FREE PARKING" and "JAIL / JUST VISITING" would otherwise be the two longest
+     "VACATION" and "JAIL / JUST VISITING" would otherwise be the two longest
      labels on the board and would shrink every other tile to match them. */
   const CAP3D_SPECIAL_LABEL={
     chest:{en:["COMMUNITY","CHEST"]},
     chance:{en:["CHANCE"]},
-    parking:{en:["PARKING"]},
+    vacation:{en:["VACATION"]},
     gotojail:{en:["TO","JAIL"]},
     jail:{en:["JAIL"]},
     go:{en:["GO","START"]}
@@ -6657,11 +7003,75 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     }
     entry.tex.needsUpdate=true;
   }
+  /* The rounded die box used by the 3D scene AND by the 2D portrait renderer.
+     One source of truth for the shape, so both views show the same object. */
+  function cap3dDieGeo(size=0.36){
+    const g=new THREE.BoxGeometry(size,size,size,7,7,7);
+    const pos=g.attributes.position,r=size*0.22,h=size/2;
+    for(let i=0;i<pos.count;i++){
+      const ox=pos.getX(i),oy=pos.getY(i),oz=pos.getZ(i);
+      const cx=Math.max(-h+r,Math.min(h-r,ox)),cy=Math.max(-h+r,Math.min(h-r,oy)),cz=Math.max(-h+r,Math.min(h-r,oz));
+      const dx=ox-cx,dy=oy-cy,dz=oz-cz,len=Math.hypot(dx,dy,dz);
+      if(len>r){const k=r/len;pos.setXYZ(i,cx+dx*k,cy+dy*k,cz+dz*k);}
+    }
+    g.computeVertexNormals();
+    return g;
+  }
+  function cap3dDieMaterials(){
+    return [3,4,2,5,1,6].map(cap3dPipTexture).map(function(tx){
+      return new THREE.MeshPhysicalMaterial({color:0xffffff,roughness:0.56,metalness:0,clearcoat:0,clearcoatRoughness:0.8,envMapIntensity:0,emissive:0x000000,map:tx});
+    });
+  }
+  let cap2dLiveDice=null,cap2dDiceResizeBound=false;
+  function cap2dEnsureLiveDice(){
+    if(cap2dLiveDice)return cap2dLiveDice;
+    const T=window.THREE,stage=document.getElementById("diceStage");
+    if(!T||!T.WebGLRenderer||!stage)return null;
+    try{
+      const canvas=document.createElement("canvas");canvas.className="cap-live-dice-canvas";canvas.setAttribute("aria-hidden","true");
+      const renderer=new T.WebGLRenderer({canvas:canvas,alpha:true,antialias:true,preserveDrawingBuffer:false});
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));renderer.setClearColor(0x000000,0);
+      if(T.SRGBColorSpace&&("outputColorSpace" in renderer))renderer.outputColorSpace=T.SRGBColorSpace;else if(T.sRGBEncoding)renderer.outputEncoding=T.sRGBEncoding;
+      const scene=new T.Scene();scene.add(new T.HemisphereLight(0xffffff,0x9aa4b8,1.05));
+      const key=new T.DirectionalLight(0xffffff,1.2);key.position.set(2.5,4,3);scene.add(key);
+      const fill=new T.DirectionalLight(0xdfe8ff,.48);fill.position.set(-3,1,-2);scene.add(fill);
+      const camera=new T.PerspectiveCamera(31,1,.1,30);camera.position.set(.15,2.95,4.05);camera.lookAt(0,0,0);
+      const geo=cap3dDieGeo(1.1),mats=cap3dDieMaterials();
+      const dice=[-1,1].map(function(side,i){const mesh=new T.Mesh(geo,mats);mesh.position.set(side*.75,0,0);mesh.quaternion.copy(cap3dDiceQuat(i?lastDice[1]:lastDice[0],new T.Quaternion(),i?-.78:.78));scene.add(mesh);return mesh;});
+      stage.appendChild(canvas);stage.classList.add("cap-live-3d");
+      cap2dLiveDice={T:T,renderer:renderer,scene:scene,camera:camera,dice:dice,canvas:canvas};
+      const resize=function(){if(!cap2dLiveDice)return;const r=stage.getBoundingClientRect();if(r.width<2||r.height<2)return;renderer.setSize(Math.round(r.width),Math.round(r.height),false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();renderer.render(scene,camera);};
+      cap2dLiveDice.resize=resize;resize();
+      if(window.ResizeObserver){const ro=new ResizeObserver(resize);ro.observe(stage);cap2dLiveDice.ro=ro;}
+      if(!cap2dDiceResizeBound){window.addEventListener("resize",resize,{passive:true});cap2dDiceResizeBound=true;}
+      return cap2dLiveDice;
+    }catch(_){return null;}
+  }
+  function cap2dRenderLiveDice(a,b){const live=cap2dEnsureLiveDice();if(!live)return false;[a,b].forEach(function(v,i){live.dice[i].quaternion.copy(cap3dDiceQuat(v,new live.T.Quaternion(),i?-.78:.78));});live.resize();return true;}
+  function cap2dLoadLiveDice(){if(cap2dLiveDice)return Promise.resolve(cap2dLiveDice);return cap3dEnsureThree().then(function(){return cap2dEnsureLiveDice();}).catch(function(){return null;});}
+  function cap2dRollLiveDice(a,b,duration,onComplete){
+    const live=cap2dEnsureLiveDice();if(!live)return false;
+    const T=live.T,targets=[cap3dDiceQuat(a,new T.Quaternion(),.78),cap3dDiceQuat(b,new T.Quaternion(),-.78)],start=performance.now(),base=live.dice.map(d=>d.quaternion.clone());
+    // Roll continuously from each current pose to its result. Full turns fade
+    // out with the same easing as the orientation change, so there is no phase
+    // boundary where the die can jump, stop, or appear to restart.
+    const turns=[[-3,2,-1],[3,2,1]];
+    const frame=now=>{
+      if(!cap2dLiveDice||cap2dLiveDice!==live)return;
+      const p=Math.min(1,(now-start)/duration),ease=p*p*(3-2*p),fade=1-ease;
+      live.dice.forEach(function(mesh,i){
+        const spin=new T.Quaternion().setFromEuler(new T.Euler(turns[i][0]*Math.PI*2*fade,turns[i][1]*Math.PI*2*fade,turns[i][2]*Math.PI*2*fade));
+        mesh.quaternion.copy(base[i]).slerp(targets[i],ease).multiply(spin);
+      });
+      if(p<1){live.renderer.render(live.scene,live.camera);requestAnimationFrame(frame);}
+      else{live.dice.forEach((mesh,i)=>mesh.quaternion.copy(targets[i]));live.renderer.render(live.scene,live.camera);onComplete?.();}
+    };
+    requestAnimationFrame(frame);return true;
+  }
   function cap3dPipTexture(v){
     const cv=document.createElement("canvas");cv.width=128;cv.height=128;
     const ctx=cv.getContext("2d");
-    // Glossy white die: rounded body, key light from the top left, thin bright
-    // bevel and recessed dark pips with a tiny specular dot.
+    // White die face with solid dark pips, matching the 2D dice.
     ctx.fillStyle="#b9b3a6";ctx.fillRect(0,0,128,128);
     const face=function(){ctx.beginPath();if(ctx.roundRect)ctx.roundRect(6,6,116,116,26);else ctx.rect(6,6,116,116);};
     const body=ctx.createLinearGradient(0,0,128,128);
@@ -6674,11 +7084,12 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     ctx.save();ctx.clip();ctx.translate(3,3);ctx.lineWidth=4;ctx.strokeStyle="rgba(96,101,126,.28)";face();ctx.stroke();ctx.restore();
     const P={1:[[64,64]],2:[[38,38],[90,90]],3:[[38,38],[64,64],[90,90]],4:[[38,38],[90,38],[38,90],[90,90]],5:[[38,38],[90,38],[64,64],[38,90],[90,90]],6:[[38,34],[90,34],[38,64],[90,64],[38,94],[90,94]]}[v]||[[64,64]];
     P.forEach(function(p){
-      const pg=ctx.createRadialGradient(p[0]-3,p[1]-3,1,p[0],p[1],12);
-      pg.addColorStop(0,"#414a5c");pg.addColorStop(1,"#1b1f29");
-      ctx.fillStyle=pg;ctx.beginPath();ctx.arc(p[0],p[1],11,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle="#202938";ctx.beginPath();ctx.arc(p[0],p[1],9,0,Math.PI*2);ctx.fill();
     });
-    const tex=new window.THREE.CanvasTexture(cv);tex.anisotropy=4;tex.encoding=window.THREE.sRGBEncoding;return tex;
+    const tex=new window.THREE.CanvasTexture(cv);tex.anisotropy=4;
+    if(window.THREE.SRGBColorSpace&&("colorSpace" in tex))tex.colorSpace=window.THREE.SRGBColorSpace;
+    else tex.encoding=window.THREE.sRGBEncoding;
+    return tex;
   }
   /* Which value is painted on which face of the die.
      BoxGeometry material order is [+X,-X,+Y,-Y,+Z,-Z], so this maps the pip
@@ -6723,7 +7134,9 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     const renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true});
     renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
     renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-    renderer.outputEncoding=THREE.sRGBEncoding;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
+    if(THREE.SRGBColorSpace&&("outputColorSpace" in renderer))renderer.outputColorSpace=THREE.SRGBColorSpace;
+    else renderer.outputEncoding=THREE.sRGBEncoding;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
     const scene=new THREE.Scene();scene.background=new THREE.Color(0x04070d);scene.fog=new THREE.Fog(0x04070d,70,130);
     /* Orthographic, and that is a deliberate choice rather than a leftover.
 
@@ -6889,23 +7302,12 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     /* Rounded-corner dice matching the 2D face art. three.js r152 does not ship
        RoundedBoxGeometry in the min bundle, so a small vertex pass pulls the
        corners toward a rounded-box surface; normals are recomputed after. */
-    const dieSize=0.36;
-    const diceGeo=(function(){
-      const g=new THREE.BoxGeometry(dieSize,dieSize,dieSize,7,7,7);
-      const pos=g.attributes.position,r=dieSize*0.18,h=dieSize/2,eps=1e-6;
-      for(let i=0;i<pos.count;i++){
-        const ox=pos.getX(i),oy=pos.getY(i),oz=pos.getZ(i);
-        const cx=Math.max(-h+r,Math.min(h-r,ox)),cy=Math.max(-h+r,Math.min(h-r,oy)),cz=Math.max(-h+r,Math.min(h-r,oz));
-        const dx=ox-cx,dy=oy-cy,dz=oz-cz,len=Math.hypot(dx,dy,dz);
-        if(len>r){const k=r/len;pos.setXYZ(i,cx+dx*k+ (Math.abs(dx)<eps?ox-cx:0)*0,cy+dy*k+(Math.abs(dy)<eps?oy-cy:0)*0,cz+dz*k+(Math.abs(dz)<eps?oz-cz:0)*0);}
-      }
-      g.computeVertexNormals();
-      return g;
-    })();
-    const impactGeo=new THREE.RingGeometry(0.3,0.4,40);
+    const dieSize=0.58;
+    const diceGeo=cap3dDieGeo(dieSize);
+    const impactGeo=new THREE.RingGeometry(dieSize*0.78,dieSize*0.98,40);
     for(let d=0;d<2;d++){
       const mats=faceTex.map(function(tx){
-        return new THREE.MeshPhysicalMaterial({color:0xffffff,roughness:0.18,metalness:0,clearcoat:0.85,clearcoatRoughness:0.18,envMapIntensity:1.1,emissive:0x000000,map:tx});
+      return new THREE.MeshPhysicalMaterial({color:0xffffff,roughness:0.56,metalness:0,clearcoat:0,clearcoatRoughness:0.8,envMapIntensity:0,emissive:0x000000,map:tx});
       });
       const m=new THREE.Mesh(diceGeo,mats);
       m.castShadow=true;m.visible=false;scene.add(m);
@@ -6914,11 +7316,11 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       cap3d.dice.push({
         mesh:m,mats:mats,ring:ring,
         target:new THREE.Quaternion(),
-        rest:new THREE.Vector3(d===0?-0.62:0.62,0.18,d===0?-0.3:0.3),
+        rest:new THREE.Vector3(d===0?-0.42:0.42,dieSize/2+0.012,-0.25),
         // throw state
-        mode:"idle",t0:0,wasRolling:false,tumble:new THREE.Vector3(0.4,1,0.25).normalize(),
+        mode:"idle",t0:0,rollDur:1.5,wasRolling:false,tumble:new THREE.Vector3(0.4,1,0.25).normalize(),
         tumbleRate:0,tumbleAng:0,startQ:new THREE.Quaternion(),throwFrom:new THREE.Vector3(),
-        landFrom:new THREE.Vector3(),landQ:new THREE.Quaternion(),landP:0,
+        landFrom:new THREE.Vector3(),landQ:new THREE.Quaternion(),landSettleQ:new THREE.Quaternion(),landSettling:false,landP:0,
         squashT:9,squashS:0,ringT:9,ringS:0,flashT:9,flashS:0
       });
     }
@@ -6930,7 +7332,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
        swings around the board. */
     const digitMat=new THREE.MeshStandardMaterial({color:0xf6d365,roughness:0.24,metalness:0.9,emissive:0xf6d365,emissiveIntensity:0.22});
     const sumGroup=new THREE.Group();
-    sumGroup.position.set(0,1.5,0);
+    sumGroup.position.set(0,2.35,-0.25);
     sumGroup.visible=false;
     scene.add(sumGroup);
     /* No backing plate and no cast shadow behind the total.
@@ -7132,7 +7534,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     };
     canvas.addEventListener("pointerup",up);
     canvas.addEventListener("pointercancel",up);
-    canvas.addEventListener("pointerleave",function(){try{clearHover();}catch(_){}try{if(cap3d.hoverEntry&&cap3d.hoverEntry.entry){cap3d.hoverEntry.entry.group.position.y=0;cap3d.hoverEntry.entry.mesh.material[2].emissive.setHex(0x000000);}}catch(_){}cap3d.hoverEntry=null;cap3d.hovered=-1;});
+    canvas.addEventListener("pointerleave",function(){try{if(cap3d.hoverEntry&&cap3d.hoverEntry.entry){cap3d.hoverEntry.entry.group.position.y=0;cap3d.hoverEntry.entry.mesh.material[2].emissive.setHex(0x000000);}}catch(_){}cap3d.hoverEntry=null;cap3d.hovered=-1;});
     canvas.addEventListener("wheel",function(e){e.preventDefault();cap3d.tHalfH=cap3dClampHalfH(cap3d.tHalfH*(1+e.deltaY*0.001));cap3d.userZoom=true;},{passive:false});
   }
   function cap3dHover(e){
@@ -7142,20 +7544,17 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       cap3d.pointerNDC.set(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);
       cap3d.raycaster.setFromCamera(cap3d.pointerNDC,cap3d.camera);
       const hits=cap3d.raycaster.intersectObjects(cap3d.hitMeshes,false);
-      const id=hits.length?hits[0].object.userData.tileId:-1;
+      const rawId=hits.length?Number(hits[0].object.userData.tileId):-1;
+      const hitTile=Number.isInteger(rawId)?TILES[rawId]:null;
+      const id=hitTile&&["prop","station","util"].includes(hitTile.type)?rawId:-1;
       const prev=cap3d.hoverEntry;
       if(id!==(prev?prev.id:-1)){
         try{if(prev&&prev.entry){prev.entry.group.position.y=0;prev.entry.mesh.material[2].emissive.setHex(0x000000);}}catch(_){}
         cap3d.hoverEntry=null;
         cap3d.hovered=id;
         cap3d.renderer.domElement.style.cursor=id>=0?"pointer":"grab";
-        try{clearHover();}catch(_){}
-        if(id>=0){
-          const entry=cap3d.tiles.get(Number(id));
-          if(entry){try{entry.group.position.y=0.05;entry.mesh.material[2].emissive.setHex(0x22344f);}catch(_){}cap3d.hoverEntry={id:id,entry:entry};}
-          const t=TILES[Number(id)];if(t){try{showTooltip(t,e);}catch(_){}}
-        }
-      }else if(id>=0){try{moveTooltip(e);}catch(_){}}
+        if(id>=0){const entry=cap3d.tiles.get(Number(id));if(entry){try{entry.group.position.y=0.05;entry.mesh.material[2].emissive.setHex(0x22344f);}catch(_){}cap3d.hoverEntry={id:id,entry:entry};}}
+      }
     }catch(_){}
   }
   function cap3dClick(e){
@@ -7168,6 +7567,8 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       if(!hits.length)return;
       const id=Number(hits[0].object.userData.tileId);
       if(!Number.isInteger(id))return;
+      const tile=TILES[id];
+      if(!tile||!["prop","station","util"].includes(tile.type))return;
       openPropertyModal(id);
     }catch(_){}
   }
@@ -7301,7 +7702,10 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
        until a roll has actually resolved. Without that check the standing
        total was built from the placeholder on load and the board opened showing
        a confident "2" that nobody had rolled. */
-    const hasRolled=Number(lastRollTotal)>0;
+    // During the roll, show the pending result on the 3D board so its face-up
+    // settle can happen inside the same shared roll window as the 2D dice.
+    const diceValues=state===STATES.ROLLING&&pendingRoll?[pendingRoll.d1,pendingRoll.d2]:lastDice;
+    const hasRolled=Number(lastRollTotal)>0||!!(state===STATES.ROLLING&&pendingRoll);
     if(!hasRolled){
       cap3d.prevDiceKey=null;cap3d.prevDiceVals=null;
       cap3dDiceSumDraw(true);
@@ -7311,19 +7715,19 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       });
       return;
     }
-    const dk=lastDice[0]+"+"+lastDice[1]+"|"+state;
+    const dk=diceValues[0]+"+"+diceValues[1]+"|"+state;
     if(force||dk!==cap3d.prevDiceKey){
-      const rolled=lastDice[0]+"+"+lastDice[1]!==cap3d.prevDiceVals;
+      const rolled=diceValues[0]+"+"+diceValues[1]!==cap3d.prevDiceVals;
       if(rolled||force){
         cap3d.rollSeq=(cap3d.rollSeq||0)+1;
         cap3dDiceSumDraw(false);
         cap3d.sumT=0;
       }
       cap3d.prevDiceKey=dk;
-      cap3d.prevDiceVals=lastDice[0]+"+"+lastDice[1];
+      cap3d.prevDiceVals=diceValues[0]+"+"+diceValues[1];
       const seq=cap3d.rollSeq||1;
       cap3d.dice.forEach(function(d,i){
-        const v=Math.max(1,Math.min(6,Number(lastDice[i])||1));
+        const v=Math.max(1,Math.min(6,Number(diceValues[i])||1));
         // Golden-ratio spread over the roll number: the two dice never share a
         // pose, and consecutive rolls are not related to each other.
         const yaw=((seq*0.6180339887+i*0.5)%1)*Math.PI*2;
@@ -7502,8 +7906,8 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
      This runs a real trajectory in three beats:
        throw  a hand-off from high and behind, arcing down onto the board
        land   impact, squash, then two bounces with decaying height
-       settle the last bounce resolves onto the exact face-up orientation,
-              with a small overshoot so it snaps rather than slides
+       settle the last bounce resolves smoothly onto the exact face-up
+              orientation without overshooting and snapping back
 
      Impact is where the juice lives, so it is worth naming: a flat ring
      expands on the board, the die squashes and wobbles back with a damped
@@ -7513,6 +7917,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
      Everything is renderer-only and additive. The rolled values, the turn
      state and the game continuation are read, never written. */
   const cap3dDiceThrowDur=0.62,cap3dDiceLandDur=0.95;
+  function capDiceRollDuration(){return isFast()?750:1500;}
   // easeInOutCubic, the same curve the 3D piece walk uses, so a throw and a
   // walk do not read as two different clocks.
   function cap3dDiceEase(t){
@@ -7530,7 +7935,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
      streak cast and the landing flash cannot fight over the same emissive. */
   function cap3dDiceStreakGlow(ts){
     const live=players.some(p=>p&&!p.bankrupt&&(Number(p.doubles)||0)>0);
-    const target=live?0.5:0;
+    const target=live?0.16:0;
     const cur=cap3d.doubleGlow||0;
     const next=cur+(target-cur)*(live?0.25:0.06);
     cap3d.doubleGlow=next;
@@ -7538,6 +7943,8 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   }
   function cap3dDiceTick(ts,dt,reduced,rolling){
     if(!cap3d.scene||!cap3d.dice.length)return;
+    // Keep the actual 3D dice visible on the board while the shared roll control
+    // stays in the upper-left HUD. The smaller HUD dice mirror the board result.
     const show=players.length>0;
     // While a double streak is live the dice hold a gold cast, so the pair
     // reads as "these are matching" from across the board without having to
@@ -7572,7 +7979,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
           // lastP must reset too: impact detection compares it against the
           // crossing, and a stale value from the previous throw would either
           // skip the first impact or fire it late.
-          d.wasRolling=true;d.t0=ts;d.tumbleAng=0;d.mode="throw";d.lastP=undefined;
+          d.wasRolling=true;d.t0=ts;d.rollDur=capDiceRollDuration()/1000;d.tumbleAng=0;d.mode="throw";d.lastP=undefined;d.landInRoll=false;
           d.tumble.set(d===cap3d.dice[0]?0.55:-0.5,1,d.rest.z>0?-0.35:0.4).normalize();
           d.tumbleRate=16+3*i+Math.random()*4;
           d.startQ.copy(d.mesh.quaternion);
@@ -7580,8 +7987,11 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
           d.ring.visible=false;d.ring.material.opacity=0;
         }
         const el=(ts-d.t0)/1000;
-        if(el<cap3dDiceThrowDur){
-          const u=el/cap3dDiceThrowDur;
+        const totalDur=d.rollDur||capDiceRollDuration()/1000;
+        const throwDur=Math.min(cap3dDiceThrowDur,totalDur*0.55);
+        const landDur=Math.max(0.08,Math.min(cap3dDiceLandDur,totalDur-throwDur));
+        if(el<throwDur){
+          const u=el/throwDur;
           const e=cap3dDiceEase(u);
           // Arc: eased horizontally, parabola vertically, so the die accelerates
           // out of the hand and drops the last of the way under gravity.
@@ -7591,17 +8001,15 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
             d.throwFrom.z+(d.rest.z-d.throwFrom.z)*e
           );
         }else{
-          // The result is not known yet, so the die keeps waiting: small hops
-          // over the resting spot that decay toward flat. Without this it
-          // would hang frozen in mid-air for the rest of the roll, and the
-          // throw reads as having finished before the player knows the result.
-          const w=el-cap3dDiceThrowDur;
-          const hop=Math.abs(Math.sin(w*11))*Math.max(0,0.3-w*0.28);
-          d.mesh.position.set(
-            d.rest.x+Math.sin(w*6+i*2)*0.06*hop,
-            d.rest.y+hop,
-            d.rest.z+Math.cos(w*5+i)*0.06*hop
-          );
+          // Spend the remainder of the shared roll window settling onto the
+          // known result, so 2D and 3D finish together without an extra pause.
+          if(!d.landInRoll){
+            d.landInRoll=true;d.landFrom.copy(d.mesh.position);d.landQ.copy(d.mesh.quaternion);
+            d.landTumbleAng=0;d.landSettling=false;d.landP=0;d.squashT=9;d.lastP=undefined;
+          }
+          d.landP=Math.min(1,(el-throwDur)/landDur);
+          cap3dDiceLand(d,dt);
+          return;
         }
         d.tumbleAng+=dt*d.tumbleRate;
         d.mesh.quaternion.setFromAxisAngle(d.tumble,d.tumbleAng).multiply(d.startQ);
@@ -7612,9 +8020,19 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       // Not rolling: land. Captured once, on the frame the roll ends, so the
       // die settles from wherever the throw actually left it.
       if(d.wasRolling){
-        d.wasRolling=false;d.t0=ts;d.landP=0;d.squashT=9;
+        d.wasRolling=false;
+        if(d.landInRoll){
+          d.landInRoll=false;d.mode="idle";d.mesh.position.copy(d.rest);d.mesh.quaternion.copy(d.target);d.mesh.scale.set(1,1,1);
+          return;
+        }
+        d.t0=ts;d.landP=0;d.squashT=9;
         d.landFrom.copy(d.mesh.position);
         d.landQ.copy(d.mesh.quaternion);
+        // Landing continues from the just-rendered pose. Do not carry the
+        // throw's accumulated tumble angle into the local landing spin: adding
+        // it again here doubled the rotation at this handoff.
+        d.landTumbleAng=0;
+        d.landSettling=false;
       }
       if(d.mode==="idle"){
         d.mesh.position.copy(d.rest);
@@ -7652,14 +8070,16 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       d.landFrom.z+(d.rest.z-d.landFrom.z)*Math.min(1,p/0.22)
     );
 
-    // Orientation: the tumble is spun down first, then the die is handed the
-    // exact face-up orientation with a small overshoot before it settles.
+    // Orientation: spin down from the captured landing pose, then interpolate
+    // from one fixed settle pose to the result. Avoid a >1 slerp factor: that
+    // overshot the face-up pose and snapped back on the following idle frame.
     if(p<0.4){
-      d.tumbleAng+=dt*d.tumbleRate*0.5;
-      d.mesh.quaternion.setFromAxisAngle(d.tumble,d.tumbleAng).multiply(d.landQ);
+      d.landTumbleAng+=dt*d.tumbleRate*0.5;
+      d.mesh.quaternion.setFromAxisAngle(d.tumble,d.landTumbleAng).multiply(d.landQ);
     }else{
+      if(!d.landSettling){d.landSettling=true;d.landSettleQ.copy(d.mesh.quaternion);}
       const u=cap3dDiceEase((p-0.4)/0.6);
-      d.mesh.quaternion.slerp(d.target,Math.min(1.06,u*1.06));
+      d.mesh.quaternion.copy(d.landSettleQ).slerp(d.target,u);
     }
 
     // Impact handling.
@@ -7704,8 +8124,8 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
       const u=d.flashT/0.3;
       if(u>=1)d.flashS=0;
       else{
-        const e=(1-u)*(1-u)*d.flashS*0.5;
-        for(let m=0;m<d.mats.length;m++)d.mats[m].emissive.setRGB(Math.min(1,base+e),Math.min(1,base*0.82+e*0.86),Math.min(1,base*0.42+e*0.5));
+        const e=(1-u)*(1-u)*d.flashS*0.28;
+        for(let m=0;m<d.mats.length;m++)d.mats[m].emissive.setRGB(Math.min(0.4,base+e),Math.min(0.4,base*0.82+e*0.86),Math.min(0.4,base*0.42+e*0.5));
       }
     }
 
@@ -8005,9 +8425,8 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   }
   function cap3dShowHud(){
     try{
-      // The dice and the roll button live in the right-hand column while the 3D
-      // board is showing. Keeping them over the canvas is what covered the
-      // properties along the bottom edge of the board.
+      // Keep the shared dice and roll control in the upper-left corner of the
+      // 3D viewport so the player uses the same action in both board modes.
       const slot=document.getElementById("cap3dControls");
       if(slot&&centerEl&&centerEl.parentNode!==slot){slot.appendChild(centerEl);}
     }catch(_){}
@@ -8119,7 +8538,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     const en=lang==="en";
     const rows=(tiles,cash)=>{
       const items=(tiles||[]).map((t,i)=>{
-        // Railroad and utility tiles have no colour group, so the swatch falls
+        // Airport and utility tiles have no colour group, so the swatch falls
         // back to the neutral the board itself uses for them.
         const color=(t&&t.group&&GROUP_COLORS[t.group])||"#8d9aad";
         const label=tileLabel(t);
@@ -8170,7 +8589,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   function openMpTradeModal(){
     const me=mpLocalPlayer();
     if(!me||me.bankrupt){toast("You are not in the game.","warn");return;}
-    if(state!==STATES.WAITING_FOR_ROLL||modalOpen||!mpIsTurnLocal()){toast("Trading is available on your turn before rolling.","warn");return;}
+    if(!canManageTurn()||modalOpen||!mpIsTurnLocal()){toast("Trading is available on your turn before ending it.","warn");return;}
     if(mpPendingTrade){toast("A trade offer is already pending.","warn");return;}
     const others=alive().filter(p=>p&&p.id!==me.id);
     if(!others.length){toast("No players available for trade.","warn");return;}
@@ -8383,28 +8802,29 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
   const modalRoot = document.getElementById("modalRoot");
   const howModalRoot = document.getElementById("howModalRoot");
   const rollBtn = document.getElementById("rollBtn");
+  const endTurnBtn = document.getElementById("endTurnBtn");
 
   const P=(id,name,group,price)=>({id,type:"prop",name,group,price,rent:(CLASSIC_RENT[id]||[0,0,0,0,0,0])[0],owner:null,houses:0,hotel:false,mortgaged:false});
   const S=(id,name)=>({id,type:"station",name,price:200,owner:null,mortgaged:false});
   const U=(id,name)=>({id,type:"util",name,price:150,owner:null,mortgaged:false});
 
   const TILES = [
-    {id:0,type:"go",name:"GO"}, P(1,"Copper Street","brown",60), {id:2,type:"chest",name:"COMMUNITY CHEST"}, P(3,"Potter Street","brown",60),
-    {id:4,type:"tax",name:"Income Tax",amount:200}, S(5,"North Station"), P(6,"Riverfront Avenue","lblue",100), {id:7,type:"chance",name:"CHANCE"}, P(8,"Mill Street","lblue",100), P(9,"Garden Street","lblue",120),
-    {id:10,type:"jail",name:"JAIL / JUST VISITING"}, P(11,"Weaver Lane","pink",140), U(12,"Electric Company"), P(13,"Tailor Lane","pink",140), P(14,"Dyer Lane","pink",160),
-    S(15,"East Station"), P(16,"Market Square","orange",180), {id:17,type:"chest",name:"COMMUNITY CHEST"}, P(18,"Bread Square","orange",180), P(19,"Salt Square","orange",200),
-    {id:20,type:"parking",name:"FREE PARKING"}, P(21,"Merchant Street","red",220), {id:22,type:"chance",name:"CHANCE"}, P(23,"Bank Avenue","red",220), P(24,"Exchange Avenue","red",240),
-    S(25,"South Station"), P(26,"Theatre Boulevard","yellow",260), P(27,"Opera Boulevard","yellow",260), U(28,"Water Works"), P(29,"Concert Boulevard","yellow",280),
-    {id:30,type:"gotojail",name:"GO TO JAIL"}, P(31,"Palace Quay","green",300), P(32,"Cathedral Quay","green",300), {id:33,type:"chest",name:"COMMUNITY CHEST"}, P(34,"Park Promenade","green",320),
-    S(35,"West Station"), {id:36,type:"chance",name:"CHANCE"}, P(37,"Kings Avenue","blue",350), {id:38,type:"tax",name:"Luxury Tax",amount:100}, P(39,"Imperial Square","blue",400)
+    {id:0,type:"go",name:"GO"}, P(1,"Rio","brown",60), {id:2,type:"chest",name:"COMMUNITY CHEST"}, P(3,"São Paulo","brown",60),
+    {id:4,type:"tax",name:"Income Tax",amount:200}, S(5,"San Francisco Airport"), P(6,"Xiva","lblue",100), {id:7,type:"chance",name:"CHANCE"}, P(8,"Bukhara","lblue",100), P(9,"Tashkent","lblue",120),
+    {id:10,type:"jail",name:"JAIL / JUST VISITING"}, P(11,"Istanbul","pink",140), U(12,"Electric Company"), P(13,"Ankara","pink",140), P(14,"Izmir","pink",160),
+    S(15,"Osaka Airport"), P(16,"Dubai","orange",180), {id:17,type:"chest",name:"COMMUNITY CHEST"}, P(18,"Abu Dhabi","orange",180), P(19,"Sharjah","orange",200),
+    {id:20,type:"vacation",name:"VACATION"}, P(21,"Tokyo","red",220), {id:22,type:"chance",name:"CHANCE"}, P(23,"Yokohama","red",220), P(24,"Nagoya","red",240),
+    S(25,"Istanbul Airport"), P(26,"Madrid","yellow",260), P(27,"Barcelona","yellow",260), U(28,"Water Works"), P(29,"Valencia","yellow",280),
+    {id:30,type:"gotojail",name:"GO TO JAIL"}, P(31,"Amsterdam","green",300), P(32,"Rotterdam","green",300), {id:33,type:"chest",name:"COMMUNITY CHEST"}, P(34,"The Hague","green",320),
+    S(35,"Dubai Airport"), {id:36,type:"chance",name:"CHANCE"}, P(37,"San Francisco","blue",350), {id:38,type:"tax",name:"Luxury Tax",amount:100}, P(39,"New York","blue",400)
   ];
 
   const CHANCE_CARDS=[
-    {t:"Advance to GO. Collect $200.",en:"Advance to GO. Collect $200.",moveTo:0},
-    {t:"Advance to Imperial Square.",en:"Advance to Imperial Square.",moveTo:39},
-    {t:"Advance to Exchange Avenue. If you pass GO, collect $200.",en:"Advance to Exchange Avenue. If you pass GO, collect $200.",moveTo:24},
-    {t:"Advance to Weaver Lane. If you pass GO, collect $200.",en:"Advance to Weaver Lane. If you pass GO, collect $200.",moveTo:11},
-    {t:"Advance to the nearest station.",en:"Advance to the nearest station.",moveNearest:"station"},
+    {t:"Advance to GO. Collect $300.",en:"Advance to GO. Collect $300.",moveTo:0},
+    {t:"Advance to New York.",en:"Advance to New York.",moveTo:39},
+    {t:"Advance to Nagoya. If you pass GO, collect $200.",en:"Advance to Nagoya. If you pass GO, collect $200.",moveTo:24},
+    {t:"Advance to Istanbul. If you pass GO, collect $200.",en:"Advance to Istanbul. If you pass GO, collect $200.",moveTo:11},
+    {t:"Advance to the nearest airport.",en:"Advance to the nearest airport.",moveNearest:"station"},
     {t:"Go back 3 spaces.",en:"Go back 3 spaces.",moveBy:-3},
     {t:"Go directly to Jail.",en:"Go directly to Jail.",jail:true},
     {t:"Get Out of Jail Free.",en:"Get Out of Jail Free.",card:"jail_free"},
@@ -8418,7 +8838,7 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
     {t:"Street repairs near your property.",en:"Street repairs near your property.",m:-100}
   ];
   const CHEST_CARDS=[
-    {t:"Advance to GO. Collect $200.",en:"Advance to GO. Collect $200.",moveTo:0},
+    {t:"Advance to GO. Collect $300.",en:"Advance to GO. Collect $300.",moveTo:0},
     {t:"Bank error in your favor.",en:"Bank error in your favor.",m:200},
     {t:"Pay medical bills.",en:"Pay medical bills.",m:-80},
     {t:"You sold your shares.",en:"You sold your shares.",m:120},
@@ -8436,8 +8856,22 @@ html[lang] #gameWrap .board > .tile.corner .corner-label span{
 
   function T(k){return (translations[lang]&&translations[lang][k])||translations.en[k]||k;}
   const BOARD_SHORT_EN={
-  1:"Copper",3:"Potter",4:"Income Tax",5:"North Station",6:"Riverfront",8:"Mill",9:"Garden",10:"Jail",11:"Weaver",12:"Electric",13:"Tailor",14:"Dyer",15:"East Station",16:"Market",17:"Chest",18:"Bread",19:"Salt",20:"Free Parking",21:"Merchant",23:"Bank",24:"Exchange",25:"South Station",26:"Theatre",27:"Opera",28:"Water",29:"Concert",30:"Go To Jail",31:"Palace",32:"Cathedral",33:"Chest",34:"Park",35:"West Station",37:"Kings",38:"Luxury Tax",39:"Imperial"
+  1:"Rio",3:"São Paulo",4:"Income Tax",5:"San Francisco Airport",6:"Xiva",8:"Bukhara",9:"Tashkent",10:"Jail",11:"Istanbul",12:"Electric",13:"Ankara",14:"Izmir",15:"Osaka Airport",16:"Dubai",17:"Chest",18:"Abu Dhabi",19:"Sharjah",20:"Vacation",21:"Tokyo",23:"Yokohama",24:"Nagoya",25:"Istanbul Airport",26:"Madrid",27:"Barcelona",28:"Water Works",29:"Valencia",30:"Go To Jail",31:"Amsterdam",32:"Rotterdam",33:"Chest",34:"The Hague",35:"Dubai Airport",37:"San Francisco",38:"Luxury Tax",39:"New York"
 };
+  const CITY_FLAGS={1:"🇧🇷",3:"🇧🇷",6:"🇺🇿",8:"🇺🇿",9:"🇺🇿",11:"🇹🇷",13:"🇹🇷",14:"🇹🇷",16:"🇦🇪",18:"🇦🇪",19:"🇦🇪",21:"🇯🇵",23:"🇯🇵",24:"🇯🇵",26:"🇪🇸",27:"🇪🇸",29:"🇪🇸",31:"🇳🇱",32:"🇳🇱",34:"🇳🇱",37:"🇺🇸",39:"🇺🇸"};
+  function cityFlag(id){return CITY_FLAGS[Number(id)]||"";}
+  const BOARD_ICON_PATHS={
+    airport:'<path d="M3 12.2 21 5.5c.9-.3 1.6.7 1.1 1.5l-5.5 8.1-1 5.5-2.1 1-1.6-5.1-4.3 2.1-.2 2.9-1.5.7-1.2-3.6-2.9-1.5.6-1.5 3 .2 2.1-4.3-5.1-1.5 1-2.1 5.6-1Z"/>',
+    power:'<path d="M13.2 2 5.5 13h5.8L10.8 22 18.5 11h-5.8L13.2 2Z"/>',
+    water:'<path d="M12 2.5s6.2 7.1 6.2 11.7a6.2 6.2 0 0 1-12.4 0C5.8 9.6 12 2.5 12 2.5Z"/><path d="M8.8 15.2a3.3 3.3 0 0 0 3.2 2.5"/>',
+    tax:'<path d="M6 3.5h12v17l-2.1-1.4-1.9 1.4-2-1.4-2 1.4-2-1.4L6 20.5v-17Z"/><path d="M9 8h6M9 12h2M13.5 15.5h.1"/>',
+    chance:'<path d="m12 2 2.8 6.2 6.8.7-5 4.6 1.4 6.6-6-3.4-6 3.4 1.4-6.6-5-4.6 6.8-.7L12 2Z"/>',
+    chest:'<path d="M3 8h18v12H3zM3 8l2-4h14l2 4M3 13h18M10 12v2h4v-2"/>',
+    jail:'<path d="M5 21V5h14v16M9 5v16m6-16v16M3 21h18"/>',
+    palm:'<path d="M12 11v10m-3 0h6M12 11c-2-4-5-5-8-4 1 3 4 5 8 5m0-1c0-4 2-6 5-7 0 3-1 6-5 8m0-1c2-3 5-3 8-2-1 3-4 4-8 4"/><path d="M5 21c2-1 4-1 7 0 3-1 5-1 7 0"/>'
+  };
+  function boardIconSvg(key){return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${BOARD_ICON_PATHS[key]||""}</svg>`;}
+  function tileIconKey(t){if(!t)return "";if(t.type==="station")return "airport";if(t.type==="util")return Number(t.id)===12?"power":"water";if(t.type==="tax")return "tax";if(t.type==="chance")return "chance";if(t.type==="chest")return "chest";return "";}
 function boardTileLabel(t){
   if(!t)return "";
   const map=BOARD_SHORT_EN;
@@ -8482,17 +8916,18 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
      comes back, the next frame resumes the same walk and, because walks measure
      elapsed time rather than counting frames, it simply continues. */
   const walkTimers=new Set();
-  function scheduleWalkFrame(fn){
+  function scheduleWalkFrame(fn,delayMs){
     const slot={raf:null,timer:null,done:false};
     const fire=()=>{
       if(slot.done)return;
       cancelWalkFrame(slot);
       fn(performance.now());
     };
+    const wait=delayMs!=null?delayMs:(document.hidden?60:250);
     // A tab may become hidden after a frame was requested. The fallback races
     // the frame once, so visibility changes cannot strand a gameplay callback.
     if(!document.hidden)slot.raf=requestAnimationFrame(fire);
-    slot.timer=setTimeout(fire,document.hidden?60:250);
+    slot.timer=setTimeout(fire,wait);
     walkTimers.add(slot);
     return slot;
   }
@@ -9135,7 +9570,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     const msh=document.getElementById("musicSettingsHint");if(msh)msh.textContent=T("musicHint");
     const msc=document.getElementById("musicSettingsClose");if(msc)msc.setAttribute("aria-label",T("close"));
     const msb=document.getElementById("capitalMusicSettingsBtn");if(msb){msb.textContent="🎵";msb.setAttribute("aria-label","Music settings");msb.title="Music settings";}
-    renderBoardText();renderDice();renderPlayers();updateBadge();updateSoundButtons();updateMusicVolumeUI();tutorialLanguageRefresh();renderPauseUI();updateContinueButton();renderSpeedUI();
+    renderBoardText();renderVacationPot();renderDice();renderPlayers();updateBadge();updateSoundButtons();updateMusicVolumeUI();tutorialLanguageRefresh();renderPauseUI();updateContinueButton();renderSpeedUI();
     try{syncActionPanel();setBoardView(boardView);}catch(_){}
     const diceStage=document.getElementById("diceStage");if(diceStage)diceStage.setAttribute("aria-label",T("diceLabel"));
   }
@@ -9143,15 +9578,31 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
   window.setCapitalLanguage=setLanguage;
 
   function gridPos(i){
-    if(i===0)return{r:11,c:11};if(i<=9)return{r:11,c:11-i};if(i===10)return{r:11,c:1};if(i<=19)return{r:11-(i-10),c:1};
-    if(i===20)return{r:1,c:1};if(i<=29)return{r:1,c:(i-20)+1};if(i===30)return{r:1,c:11};return{r:(i-30)+1,c:11};
+    if(i===0)return{r:1,c:1};if(i<=9)return{r:1,c:i+1};if(i===10)return{r:1,c:11};if(i<=19)return{r:i-9,c:11};
+    if(i===20)return{r:11,c:11};if(i<=29)return{r:11,c:31-i};if(i===30)return{r:11,c:1};return{r:41-i,c:1};
   }
   function cornerLabel(t){
-    if(t.type==="go")return `<div class="corner-label corner-go"><strong>${T("go")}</strong><span>+$200 / ${"lap"}</span><em aria-hidden="true">←</em></div>`;
-    if(t.type==="jail")return `<div class="corner-label"><strong>🔒 ${T("jail")}</strong></div>`;
-    if(t.type==="parking")return `<div class="corner-label parking-corner-label"><strong class="parking-mark" aria-hidden="true">P</strong><span>${"Free Parking"}</span></div>`;
-    if(t.type==="gotojail")return `<div class="corner-label corner-gotojail"><strong aria-hidden="true">👮</strong><span>${"Go to Jail"}</span></div>`;
+    if(t.type==="go")return `<div class="corner-label corner-go"><strong>${T("go")}</strong></div>`;
+    if(t.type==="jail")return `<div class="corner-label"><strong aria-hidden="true">${boardIconSvg("jail")}</strong><span>${T("jail")}</span></div>`;
+    if(t.type==="vacation")return `<div class="corner-label corner-vacation"><strong aria-hidden="true">${boardIconSvg("palm")}</strong><span>Vacation</span><small class="vacation-pot-badge" hidden></small></div>`;
+    if(t.type==="gotojail")return `<div class="corner-label corner-gotojail"><strong aria-hidden="true">${boardIconSvg("jail")}</strong><span>${"Go to Jail"}</span></div>`;
     return `<div class="corner-label"><strong>${escapeHtml(tileLabel(t))}</strong></div>`;
+  }
+  function renderVacationPot(){
+    const badge=document.querySelector("#tile-20 .vacation-pot-badge");
+    if(!badge)return;
+    const active=!!gameSettings.freeParkingPot;
+    badge.hidden=!active;
+    badge.textContent=active?`$${Math.round(freeParkingPotAmount).toLocaleString()} on hold`:"";
+    const tile=document.getElementById("tile-20");
+    if(tile)tile.title=active?`Vacation · $${Math.round(freeParkingPotAmount).toLocaleString()} on hold`:tileLabel(TILES[20]);
+  }
+  function addVacationCash(amount){
+    const contribution=Math.max(0,Math.floor(Number(amount)||0));
+    if(!gameSettings.freeParkingPot||!contribution)return 0;
+    freeParkingPotAmount+=contribution;
+    renderVacationPot();
+    return contribution;
   }
   function buildBoard(){
     if(!boardEl)return;
@@ -9160,29 +9611,29 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
       const pos=gridPos(t.id),div=document.createElement("div");
       const isCorner=(pos.r===1||pos.r===11)&&(pos.c===1||pos.c===11);
       const isTop=pos.r===1&&!isCorner, isBottom=pos.r===11&&!isCorner, isLeft=pos.c===1&&!isCorner, isRight=pos.c===11&&!isCorner;
-      div.className="tile"+(isCorner?" corner":"")+(isTop?" tile-top":"")+(isBottom?" tile-bottom":"")+(isLeft?" tile-left":"")+(isRight?" tile-right":"")+(t.type==="prop"?" property":"")+"";
+      div.className="tile tile-type-"+t.type+(isCorner?" corner":"")+(isTop?" tile-top":"")+(isBottom?" tile-bottom":"")+(isLeft?" tile-left":"")+(isRight?" tile-right":"")+(t.type==="prop"?" property":"")+"";
       div.dataset.idx=t.id;div.id="tile-"+t.id;div.style.gridRowStart=pos.r;div.style.gridColumnStart=pos.c;
+      if(t.type==="prop")div.style.setProperty("--group-color",GROUP_COLORS[t.group]);
       div.title=tileLabel(t);
       if(t.type==="prop")div.innerHTML=`<div class="stripe" style="background:${GROUP_COLORS[t.group]}"></div><div class="name">${escapeHtml(boardTileLabel(t))}</div><div class="price">$${t.price}</div>`;
-      else if(t.type==="station")div.innerHTML=`<div class="name">🚆 ${escapeHtml(boardTileLabel(t))}</div><div class="price">$${t.price}</div>`;
-      else if(t.type==="util")div.innerHTML=`<div class="name">💡 ${escapeHtml(boardTileLabel(t))}</div><div class="price">$${t.price}</div>`;
-      else if(t.type==="tax")div.innerHTML=`<div class="name">💰 ${escapeHtml(boardTileLabel(t))}</div><div class="price">$${t.amount}</div>`;
-      else if(t.type==="chance")div.innerHTML=`<div class="name">❓ ${T("chance")}</div>`;
-      else if(t.type==="chest")div.innerHTML=`<div class="name">📦 ${T("chestShort")}</div>`;
+      else if(["station","util","tax","chance","chest"].includes(t.type))div.innerHTML=`<div class="tile-icon tile-icon-${tileIconKey(t)}">${boardIconSvg(tileIconKey(t))}</div><div class="name">${t.type==="chance"?T("chance"):t.type==="chest"?T("chestShort"):escapeHtml(boardTileLabel(t))}</div>${t.type==="chance"||t.type==="chest"?"":`<div class="price">$${t.type==="tax"?t.amount:t.price}</div>`}`;
       else div.innerHTML=cornerLabel(t);
+      if(isLeft||isRight)div.innerHTML=`<div class="tile-side-content">${div.innerHTML}</div>`;
+      const flag=cityFlag(t.id);if(flag)div.insertAdjacentHTML("beforeend",`<span class="city-flag" aria-label="${flag}" title="${escapeHtml(tileLabel(t))}">${flag}</span>`);
       const tok=document.createElement("div");tok.className="tokens";tok.id="tok-"+t.id;div.appendChild(tok);
       if(["prop","station","util"].includes(t.type)){div.style.cursor="pointer";div.addEventListener("click",()=>openPropertyModal(t.id));}
       boardEl.appendChild(div);
     });
+    renderVacationPot();
     boardEl.appendChild(centerEl);bindHover();renderTokens();
     if(boardView==="3d"){try{const slot=document.getElementById("cap3dControls");if(slot&&gameWrap&&gameWrap.style.display!=="none"){slot.appendChild(centerEl);cap3dApplyVisibility();}}catch(_){}}
   }
   function renderBoardText(){
     TILES.forEach(t=>{const el=document.getElementById("tile-"+t.id);if(!el)return;const n=el.querySelector(".name"),p=el.querySelector(".price");
       if(t.type==="prop"){if(n)n.textContent=boardTileLabel(t);if(p)p.textContent="$"+t.price;}
-      else if(t.type==="station"||t.type==="util"||t.type==="tax"){if(n)n.textContent=(t.type==="station"?"🚆 ":t.type==="util"?"💡 ":"💰 ")+boardTileLabel(t);if(p)p.textContent=t.type==="tax"?"$"+t.amount:"$"+t.price;}
-      else if(t.type==="chance"){if(n)n.textContent="❓ "+T("chance");}
-      else if(t.type==="chest"){if(n)n.textContent="📦 "+T("chestShort");}
+      else if(t.type==="station"||t.type==="util"||t.type==="tax"){if(n)n.textContent=boardTileLabel(t);if(p)p.textContent=t.type==="tax"?"$"+t.amount:"$"+t.price;}
+      else if(t.type==="chance"){if(n)n.textContent=T("chance");}
+      else if(t.type==="chest"){if(n)n.textContent=T("chestShort");}
       else{const c=el.querySelector(".corner-label");if(c)c.outerHTML=cornerLabel(t);}
       el.title=tileLabel(t);
     });
@@ -9190,6 +9641,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
 
   const DIE_FACE_VALUES={front:1,back:6,right:3,left:4,top:2,bottom:5};
   function makeDieFace(value){
+    const v=Math.max(1,Math.min(6,Number(value)||1));
     const face=document.createElement("div");
     face.className="die-pips";
     const on=DICE_FACES[Math.max(1,Math.min(6,Number(value)||1))]||DICE_FACES[1];
@@ -9201,9 +9653,16 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     const value=Math.max(1,Math.min(6,Number(n)||1));
     el.dataset.value=String(value);
     el.replaceChildren(makeDieFace(value));
+    // Portrait mode turns off the flat container styling: the rendered die
+    // already carries its own body, bevel and contact shadow.
+    el.classList.toggle("die3d-mode",!!el.querySelector(".die3d-img"));
     el.setAttribute("aria-label",`${T("dieLabel")}: ${value}`);
   }
-  function renderDice(){setDie(document.getElementById("d1"),lastDice[0]);setDie(document.getElementById("d2"),lastDice[1]);}
+  function renderDice(syncLive=true){
+    setDie(document.getElementById("d1"),lastDice[0]);
+    setDie(document.getElementById("d2"),lastDice[1]);
+    if(syncLive&&!cap2dRenderLiveDice(lastDice[0],lastDice[1]))cap2dLoadLiveDice().then(()=>cap2dRenderLiveDice(lastDice[0],lastDice[1]));
+  }
 
   function renderTokens(){
     boardVisualDirty=true;
@@ -9221,9 +9680,6 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     const occupied=new Map();
     players.filter(p=>p&&!p.bankrupt).forEach(p=>{
       if(movingPlayerId!=null && String(p.id)===String(movingPlayerId))return;
-      // The GO corner is intentionally kept clean: player figures there make
-      // the compact corner tile unreadable and overlap the GO artwork.
-      if(Number(p.pos)===0)return;
       const e=document.getElementById("tok-"+p.pos);
       if(!e)return;
       const index=occupied.get(p.pos)||0;
@@ -9264,7 +9720,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
   }
   function propertyGroupLabel(t){
     if(!t)return "Property";
-    if(t.type==="station")return "Railroad";
+    if(t.type==="station")return "Airport";
     if(t.type==="util")return "Utility";
     const groups={
       brown:"Brown",
@@ -9292,7 +9748,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
       : houses>0
         ? `🏠 ${houses} ${(houses===1?"house":"houses")}`
         : ("None");
-    const kind=t?.type==="station"?("Railroad")
+    const kind=t?.type==="station"?("Airport")
       :t?.type==="util"?("Utility")
       :("Property");
     const rentValue=t?.type==="prop"?`$${rent}`:(t?.type==="station"||t?.type==="util"?`$${rent||0}`:"—");
@@ -9326,11 +9782,31 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
       else if(["prop","station","util"].includes(ct.type))x.classList.add("cap-hover-dim");
     });
   }
+  function highlightPlayerProperties(pid){
+    inventoryHoverPlayerId=Number(pid);
+    let first=true;
+    document.querySelectorAll("#gameWrap .board > .tile").forEach(cell=>{
+      cell.classList.remove("cap-hover-main","cap-hover-group","cap-hover-dim");
+      const t=TILES[Number(cell.dataset.idx)];
+      if(!t||!["prop","station","util"].includes(t.type))return;
+      if(t.owner!=null&&Number(t.owner)===inventoryHoverPlayerId){
+        cell.classList.add(first?"cap-hover-main":"cap-hover-group");
+        first=false;
+      }else cell.classList.add("cap-hover-dim");
+    });
+    if(cap3d.ready){
+      TILES.forEach(t=>{
+        const entry=cap3d.tiles.get(Number(t.id));if(!entry)return;
+        const owned=["prop","station","util"].includes(t.type)&&t.owner!=null&&Number(t.owner)===inventoryHoverPlayerId;
+        const hovered=cap3d.hoverEntry&&cap3d.hoverEntry.id===Number(t.id);
+        try{entry.group.position.y=owned||hovered?0.05:0;entry.mesh.material[2].emissive.setHex(owned||hovered?0x22344f:0x000000);}catch(_){}
+      });
+    }
+  }
   function attachInventoryChipTooltip(chip,t){
-    chip.addEventListener("mouseenter",e=>{highlightInventoryProperty(t);showInventoryTooltip(t,e);});
-    chip.addEventListener("mousemove",moveTooltip);
+    chip.addEventListener("mouseenter",()=>highlightInventoryProperty(t));
     chip.addEventListener("mouseleave",clearHover);
-    chip.addEventListener("focus",e=>{highlightInventoryProperty(t);showInventoryTooltip(t,e);});
+    chip.addEventListener("focus",()=>highlightInventoryProperty(t));
     chip.addEventListener("blur",clearHover);
   }
   function ruCount(n,one,few,many){
@@ -9390,6 +9866,11 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
           :"";
         c.top.innerHTML=`<div class="player-mini-piece" style="--piece-color:${p.color}"><span class="mini-head"></span><span class="mini-body"></span></div><div class="pname"><div class="pr-name"><span class="pr-name-text">${escapeHtml(playerLabel(p))}</span>${tags}${streak}</div><div class="pr-sub">${!p.human?`<span class="capital-personality">${escapeHtml(personalityLabel(p))}</span>`:""}<span>${playerPropertySummary(p,props,houses,hotels)}</span></div></div><div class="pmoney"></div>`;
         c.money=c.top.querySelector(".pmoney");
+        const miniPiece=c.top.querySelector(".player-mini-piece");
+        miniPiece?.addEventListener("mouseenter",()=>highlightPlayerProperties(p.id));
+        miniPiece?.addEventListener("mouseleave",clearHover);
+        miniPiece?.addEventListener("focus",()=>highlightPlayerProperties(p.id));
+        miniPiece?.addEventListener("blur",clearHover);
         row.className=rowCls;
         c.topSig=topSig;
       }
@@ -9447,7 +9928,16 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
       if(state===STATES.GAME_OVER){badge.textContent="🏆 "+T("gameOver").toUpperCase();badge.style.fontWeight="900";badge.style.letterSpacing=".02em";}
       else{badge.textContent=p?T("turn")+": "+playerLabel(p)+((mp.active?mpIsLocalPlayer(p):p.human)?T("yourTurn"):""):"—";badge.style.fontWeight="";badge.style.letterSpacing="";}
     }
-    if(rollBtn){rollBtn.disabled=!p||state!==STATES.WAITING_FOR_ROLL||!(mp.active?mpIsLocalPlayer(p):p.human)||p.bankrupt||modalOpen;rollBtn.classList.toggle("capital-action-ready",!rollBtn.disabled);}
+    if(rollBtn&&endTurnBtn){
+      // Keep the two action labels typographically identical after either
+      // button is moved into the 3D HUD (where its inherited font can differ).
+      const rollStyle=getComputedStyle(rollBtn);
+      ["font-family","font-size","font-weight","font-style","font-stretch","font-variant","line-height","letter-spacing","text-transform","font-kerning","font-feature-settings"].forEach(prop=>endTurnBtn.style.setProperty(prop,rollStyle.getPropertyValue(prop),"important"));
+    }
+    const mine=!!p&&!p.bankrupt&&(mp.active?mpIsLocalPlayer(p):p.human);
+    const waitingForEnd=mine&&state===STATES.TURN_END&&!modalOpen;
+    if(rollBtn){rollBtn.style.display=mine&&state===STATES.TURN_END&&!modalOpen?"none":"";rollBtn.disabled=!p||state!==STATES.WAITING_FOR_ROLL||!mine||p.bankrupt||modalOpen;rollBtn.classList.toggle("capital-action-ready",!rollBtn.disabled);}
+    if(endTurnBtn)endTurnBtn.style.display=waitingForEnd?"":"none";
     try{syncActionPanel();}catch(_){}
     updateTurnHint();
   }
@@ -9456,18 +9946,18 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     const el=document.getElementById("turnHint");if(!el)return;
     const p=currentPlayer();
     const mine=!!p&&!p.bankrupt&&(mp.active?mpIsLocalPlayer(p):!!p.human);
-    let html="";
+    let tip="";
     if(mine&&state===STATES.WAITING_FOR_ROLL&&!modalOpen){
       const groups=[...new Set(TILES.filter(t=>t.type==="prop"&&t.owner===p.id&&(canBuildHouse(t)||canBuildHotel(t))&&p.money>=HOUSE_COST[t.group]).map(t=>t.group))];
-      if(p.inJail)html="🔒 You're in Jail — press Roll to choose: roll a double, pay $50 or use a card.";
+      if(p.inJail)tip="🔒 You're in Jail — press Roll to choose: roll a double, pay $50 or use a card.";
       else if(groups.length){
         const names=groups.map(g=>propertyGroupLabel(TILES.find(t=>t.group===g))).join(", ");
-        html=`🏗 You can build on ${escapeHtml(names)} — click one of those properties.`;
+        tip=`🏗 You can build on ${escapeHtml(names)} — click one of those properties.`;
       }
       // Keyboard tip only where there is a keyboard (not on touch screens).
-      else if(!window.matchMedia?.("(hover: none)").matches)html="Press <kbd>Space</kbd> to roll";
+      else if(!window.matchMedia?.("(hover: none)").matches)tip="Press <kbd>Space</kbd> to roll";
     }
-    if(el.innerHTML!==html)el.innerHTML=html;
+    if(el.innerHTML!==tip)el.innerHTML=tip;
   }
   function toast(message,kind=""){
     if(!toastStack){toastStack=document.createElement("div");toastStack.className="capital-toast-stack";document.body.appendChild(toastStack);}
@@ -9660,7 +10150,21 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
      snapshot - a local would be reset by the rebuild and the confirmation would
      never survive a repaint. Cleared by whoever ends the debt. */
   let debtConfirmOpen=false;
+  let localDebtSession=null,debtDialogDismissed=false,lastRemoteDebtData=null;
   const debtMoney=n=>"$"+Math.max(0,Math.floor(n)).toLocaleString(lang==="ru"?"ru-RU":"en-US");
+  function hideDebtResumeButton(){document.getElementById("debtResumeButton")?.remove();}
+  function showDebtResumeButton(){
+    let button=document.getElementById("debtResumeButton");
+    if(!button){button=document.createElement("button");button.id="debtResumeButton";button.type="button";button.className="capital-debt-resume";button.textContent="Payment due · Resume";document.body.appendChild(button);}
+    button.onclick=()=>{
+      if(localDebtSession){localDebtSession.resume();return;}
+      if(mp.active&&lastRemoteDebtData){
+        debtDialogDismissed=false;const data={...lastRemoteDebtData};authoritativeModalData=data;
+        modalRoot.innerHTML=mpRenderModal(data);modalOpen=true;modalKind="debt";mp.lastModalSig=mpModalSig(data);mpBindRemoteModalActions();updateBadge();
+        hideDebtResumeButton();
+      }
+    };
+  }
 
   /* The bankruptcy step. Rendered instead of the main dialog rather than as a
      confirm() call: a native dialog cannot be styled, cannot name the creditor,
@@ -9712,13 +10216,12 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
        never land on an asset by accident while reading the list. */
     const assetHtml=rows.length?rows.map(x=>{
       const name=tileLabel(x.t);
-      const kind=x.kind==="mortgage"
-        ?(x.t.type==="station"?("Station"):x.t.type==="util"?("Utility"):("Property"))
+      const kind=(x.kind==="mortgage"||x.kind==="sale")
+        ?(x.t.type==="station"?("Airport"):x.t.type==="util"?("Utility"):("Property"))
         :(x.kind==="hotel"?("Hotel"):("House"));
-      const act=x.kind==="mortgage"
-        ?("Mortgage")
+      const act=x.kind==="mortgage"?("Mortgage"):x.kind==="sale"?("Sell property")
         :(x.kind==="hotel"?("Sell hotel"):("Sell house"));
-      const action=x.kind==="mortgage"?`${"Mortgage"} ${name}`:`${"Sell"} ${kind.toLowerCase()} on ${name}`;
+      const action=x.kind==="mortgage"?`${"Mortgage"} ${name}`:x.kind==="sale"?`${"Sell"} ${kind.toLowerCase()} ${name}`:`${"Sell"} ${kind.toLowerCase()} on ${name}`;
       return `<div class="capital-debt-row">
         <div class="capital-debt-row-name"><b title="${escapeHtml(name)}">${escapeHtml(name)}</b><i>${escapeHtml(kind)}</i></div>
         <span class="capital-debt-row-amt">+${debtMoney(x.amount)}</span>
@@ -9749,7 +10252,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
       </div>
       <div class="capital-debt-assets-head">
         <h4>${"Raise funds"}</h4>
-        <span>${"Mortgage eligible properties to cover your debt."}</span>
+        <span>${"Sell buildings or property to cover your debt."}</span>
       </div>
       <div class="capital-debt-list">${assetHtml}</div>
       <div class="capital-debt-foot">
@@ -9760,6 +10263,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
           <button class="btn yes" id="debtPay" ${canPay?"":"disabled"}>${`Pay ${debtMoney(owed)}`}</button>
           <button class="btn no capital-debt-give" id="debtAskBankrupt">${"Declare bankruptcy"}</button>
         </div>
+        <button type="button" class="btn no" id="debtClose" style="width:100%;margin-top:9px">${"Close and manage properties"}</button>
       </div>
     </div></div>`;
   }
@@ -9772,18 +10276,19 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     });
     // Cheapest first: covering a debt should cost the player as little as
     // possible, and the property they part with should be the one they mind least.
-    // With mortgages off, debt relief can only come from selling buildings.
-    const props=gameSettings.mortgageEnabled
-      ?TILES.filter(t=>t.owner===p.id&&!t.mortgaged&&["prop","station","util"].includes(t.type)&&!groupHasBuildings(t))
-        .sort((a,b)=>(a.price||0)-(b.price||0))
-        .map(t=>({t,kind:"mortgage",amount:Math.round((t.price||0)/2)}))
-      :[];
+    // When mortgages are disabled for the room, allow a player to sell a clear
+    // deed to the bank at half price rather than force bankruptcy while they
+    // still own cities. Built groups must first sell their buildings.
+    const props=TILES.filter(t=>t.owner===p.id&&!t.mortgaged&&["prop","station","util"].includes(t.type)&&!groupHasBuildings(t))
+      .sort((a,b)=>(a.price||0)-(b.price||0))
+      .map(t=>({t,kind:gameSettings.mortgageEnabled?"mortgage":"sale",amount:Math.round((t.price||0)/2)}));
     return [...buildings,...props];
   }
   function applyLiquidation(p,entry){
     const t=entry.t;
     if(entry.kind==="hotel"){t.hotel=false;t.houses=4;}
     else if(entry.kind==="house"){t.houses=Math.max(0,(t.houses||0)-1);}
+    else if(entry.kind==="sale"){t.owner=null;t.houses=0;t.hotel=false;t.mortgaged=false;}
     else t.mortgaged=true;
     p.money=Math.max(0,p.money+entry.amount);
   }
@@ -9797,10 +10302,11 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
   let debtBusy=false;
   function openDebtDialog(p,amount,creditorId,reason,onDone){
     let done=false;
-    debtConfirmOpen=false;
+    debtConfirmOpen=false;debtDialogDismissed=false;
     const finish=(settled)=>{
       if(done)return;
       done=true;debtConfirmOpen=false;
+      localDebtSession=null;debtDialogDismissed=false;lastRemoteDebtData=null;hideDebtResumeButton();
       try{clearModal();}catch(_){}
       onDone&&onDone(settled);
     };
@@ -9814,6 +10320,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
       clearModal();
       const bg=openModal(debtDialogHtml(p,amount,creditorId,reason),"debt");
       if(!bg)return;
+      localDebtSession={p,amount,creditorId,reason,resume:render};hideDebtResumeButton();
       bg.addEventListener("click",e=>{
         const b=e.target.closest("[data-kind]");
         if(b&&!b.disabled){
@@ -9870,7 +10377,10 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
         finally{debtBusy=false;}
         finish(false);
       };
+      const close=bg.querySelector("#debtClose");
+      if(close)close.onclick=()=>{clearModal();showDebtResumeButton();};
     };
+    localDebtSession={p,amount,creditorId,reason,resume:render};
     render();
   }
   /* The host's side of the debt dialog. The host parks the turn, publishes the
@@ -9984,15 +10494,24 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     // eject reloading players and strand the turn on them.
     if(!gone.length){if(mp.absentCounts)mp.absentCounts.clear();return;}
     const counts=mp.absentCounts||(mp.absentCounts=new Map());
-    const confirmed=gone.filter(p=>{const id=String(p.mpClientId);const n=(counts.get(id)||0)+1;counts.set(id,n);return n>=2;});
-    gone.forEach(p=>counts.delete(String(p.mpClientId)+"#keep"));
-    gone.forEach(p=>{const id=String(p.mpClientId);if(!confirmed.includes(p))counts.set(id,counts.get(id)||1);});
-    gone.forEach(p=>counts.delete(String(p.mpClientId)+"#"));
-    [...present].forEach(id=>counts.delete(id));
-    const confirmedIds=confirmed.map(p=>String(p.mpClientId));
-    gone.forEach(p=>{if(!confirmedIds.includes(String(p.mpClientId)))return;});
+    // Only consecutive absences count. A client that reappears resets its
+    // counter, while each still-absent client advances once per roster sweep.
+    present.forEach(id=>counts.delete(id));
+    const confirmed=[];
+    gone.forEach(p=>{
+      const id=String(p.mpClientId);
+      const n=(counts.get(id)||0)+1;
+      counts.set(id,n);
+      if(n>=2)confirmed.push(p);
+    });
     confirmed.forEach(p=>mpDropLeaverNow(p.mpClientId));
-    if(!confirmed.length)return;
+    confirmed.forEach(p=>counts.delete(String(p.mpClientId)));
+    if(!confirmed.length){
+      // The first sweep runs after the grace delay. Keep checking while any
+      // client is still absent so the second consecutive sample can confirm it.
+      if(gone.length)mpScheduleRosterCheck();
+      return;
+    }
     renderTokens();renderPlayers();
     // Publish before deciding the winner: the snapshot is what tells the
     // remaining clients the player is gone, and it carries the turn the winner
@@ -10122,6 +10641,11 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     state=next;updateBadge();
   }
   function validTurn(p){return !!p&&players[turn]===p&&!p.bankrupt&&!p.left;}
+  function canManageTurn(){
+    if(state===STATES.WAITING_FOR_ROLL||state===STATES.TURN_END||!!localDebtSession)return true;
+    if(debtDialogDismissed&&mp.active&&mpPendingDebt){const debtor=players.find(x=>x&&x.id===Number(mpPendingDebt.playerId));return !!debtor&&mpIsLocalPlayer(debtor);}
+    return false;
+  }
 
   function animateDice(a,b,onDone){
     const localRun=runId;
@@ -10130,8 +10654,8 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     if(!d1||!d2){onDone?.(a,b);return;}
     const finalA=Math.max(1,Math.min(6,Number(a)||1));
     const finalB=Math.max(1,Math.min(6,Number(b)||1));
-    const start=performance.now(),duration=isFast()?500:1000;
-    let nextSwap=0,finished=false;
+    const duration=capDiceRollDuration();
+    let finished=false;
     const finish=()=>{
       if(finished)return;finished=true;
       if(!validRun(localRun))return;
@@ -10139,26 +10663,14 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
       d1.classList.remove("rolling");d2.classList.remove("rolling");
       if(stage)stage.classList.remove("rolling");
       lastDice=[finalA,finalB];
-      renderDice();
+      renderDice(false);
       if(onDone)setTimeout(()=>{if(validRun(localRun))onDone(finalA,finalB);},40);
     };
-    if(stage){stage.classList.remove("rolling");void stage.offsetWidth;stage.classList.add("rolling");}
+    if(stage){stage.style.setProperty("--dice-roll-duration",duration+"ms");stage.classList.remove("rolling");void stage.offsetWidth;stage.classList.add("rolling");}
     playDiceSfx();
+    if(!cap2dRollLiveDice(finalA,finalB,duration,finish))setTimeout(finish,duration+100);
     d1.classList.remove("rolling");d2.classList.remove("rolling");void d1.offsetWidth;
     d1.classList.add("rolling");d2.classList.add("rolling");
-    const frame=ts=>{
-      if(finished||!validRun(localRun))return;
-      const elapsed=ts-start;
-      if(elapsed>=nextSwap){
-        setDie(d1,1+Math.floor(Math.random()*6));
-        setDie(d2,1+Math.floor(Math.random()*6));
-        nextSwap+=60;
-      }
-      if(elapsed<duration){scheduleWalkFrame(frame);return;}
-      finish();
-    };
-    scheduleWalkFrame(frame);
-    setTimeout(finish,duration+200);
   }
 
   function clearMovingPiece(){
@@ -10174,6 +10686,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     d.className="player-piece moving-piece";
     d.dataset.playerId=p.id;
     d.style.setProperty("--piece-color",p.color);
+    d.style.transformOrigin="50% 50%";
     d.setAttribute("aria-label",playerLabel(p));
     d.title=playerLabel(p);
     d.innerHTML=`<span class="piece-shadow"></span><span class="piece-base"></span><span class="piece-body"><span class="piece-tie"></span></span><span class="piece-head"><span class="piece-eye left"></span><span class="piece-eye right"></span></span>`;
@@ -10189,19 +10702,25 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
      and measured up front for the whole board so a roll never pays the cost
      mid-animation. The board border is read from offsetWidth instead of a
      computed style, which does not trigger layout. */
-  const TOKEN_W=27,TOKEN_H=31;
+  let TOKEN_W=27,TOKEN_H=27; /* round token: diameter is 3.77% of the board width, same as --tok in board-2d-photo.css, set in measureTokenPoints */
   let tokenPts=null,tokenPtsStamp=0;
+  function tokenNudge(tile){
+    /* keep in sync with the board CSS: resting tokens sit 1.2% of the board width toward the outer edge */
+    const o=boardEl.clientWidth*0.012,c=tile.classList;
+    return c.contains("tile-type-go")?{x:0,y:o}:c.contains("tile-top")?{x:0,y:-o}:c.contains("tile-bottom")?{x:0,y:o}:c.contains("tile-left")?{x:-o,y:0}:c.contains("tile-right")?{x:o,y:0}:{x:0,y:0};
+  }
   function measureTokenPoints(){
     if(!boardEl)return null;
     const br=boardEl.getBoundingClientRect();
     const border=boardEl.offsetWidth-boardEl.clientWidth;
+    TOKEN_W=TOKEN_H=Math.max(14,Math.round(boardEl.clientWidth*0.0377*10)/10);
     const pts=new Map();
     for(let i=0;i<TILES.length;i++){
       const tile=document.getElementById("tile-"+i);if(!tile)continue;
       const tr=tile.getBoundingClientRect();
       pts.set(i,{
-        x:tr.left-br.left-border+(tr.width/2)-(TOKEN_W/2),
-        y:tr.bottom-br.top-border-3-TOKEN_H
+        x:tr.left-br.left-border+(tr.width/2)-(TOKEN_W/2)+tokenNudge(tile).x,
+        y:tr.top-br.top-border+(tr.height/2)-(TOKEN_H/2)+tokenNudge(tile).y
       });
     }
     tokenPts=pts;tokenPtsStamp=Date.now();
@@ -10248,7 +10767,11 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     const segLen=Math.max(1e-6,path.cum[si+1]-path.cum[si]);
     const f=Math.min(1,Math.max(0,(d-path.cum[si])/segLen));
     const a=path.nodes[si],b=path.nodes[si+1];
-    return {x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f};
+    // The round board token has a forward-facing pair of eyes. Keep that
+    // facing aligned with the segment it is walking instead of snapping back
+    // to its default direction while the position is animated.
+    const angle=Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI;
+    return {x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f,angle};
   }
   // One duration for every 2D move, local or remote, so a piece never arrives
   // early or late depending on who is animating it.
@@ -10286,7 +10809,10 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     const path=tokenWalkPath(fromPos,steps,fromX,fromY);
     if(!path){done?.();return;}
     const last=path.last,L=path.length;
-    if(!(L>0.5)){movingPieceEl.style.setProperty("transform",`translate3d(${last.x}px,${last.y}px,0)`,"important");movingPieceEl.dataset.x=String(last.x);movingPieceEl.dataset.y=String(last.y);done?.();return;}
+    const startFacing=tokenWalkAt(path,0).angle;
+    const finalFacing=tokenWalkAt(path,L).angle;
+    movingPieceEl.style.setProperty("transform",`translate3d(${fromX}px,${fromY}px,0) rotate(${startFacing}deg)`,"important");
+    if(!(L>0.5)){movingPieceEl.style.setProperty("transform",`translate3d(${last.x}px,${last.y}px,0) rotate(${finalFacing}deg)`,"important");movingPieceEl.dataset.x=String(last.x);movingPieceEl.dataset.y=String(last.y);done?.();return;}
 
     // Same curve as cap3dAnimateMove3D, so both views move at the same pace.
     const duration=tokenWalkDuration(steps);
@@ -10297,9 +10823,9 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
       if(!movingPieceEl||!movingPieceEl.isConnected){done?.();return;}
       const t=Math.min(1,(ts-t0)/duration);
       const pt=tokenWalkAt(path,ease(t)*L);
-      movingPieceEl.style.setProperty("transform",`translate3d(${pt.x}px,${pt.y}px,0)`,"important");
+      movingPieceEl.style.setProperty("transform",`translate3d(${pt.x}px,${pt.y}px,0) rotate(${pt.angle}deg)`,"important");
       if(t<1){localWalkFrame=scheduleWalkFrame(frame);return;}
-      movingPieceEl.style.setProperty("transform",`translate3d(${last.x}px,${last.y}px,0)`,"important");
+      movingPieceEl.style.setProperty("transform",`translate3d(${last.x}px,${last.y}px,0) rotate(${finalFacing}deg)`,"important");
       movingPieceEl.dataset.x=String(last.x);movingPieceEl.dataset.y=String(last.y);
       done?.();
     };
@@ -10327,7 +10853,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     const startPoint=tokenPoint(fromPos),targetPoint=tokenPoint(finalPos);
     if(!startPoint||!targetPoint){
       p.pos=finalPos;
-      if(moveSteps>0&&fromPos+moveSteps>=40)p.money+=gameSettings.goBonus;
+      if(moveSteps>0&&fromPos+moveSteps>=40)awardGoReward(p,finalPos===0);
       mpAuthoritativeMovement=null;clearMovingPiece();renderTokens();renderPlayers();onDone?.();return;
     }
     // The walk path is rebuilt from the tile the piece left, so remember it.
@@ -10350,10 +10876,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
       p.pos=finalPos;
       const passedGo=moveSteps>0 && fromPos+moveSteps>=40;
       if(passedGo){
-        p.money+=gameSettings.goBonus;SFX.income();
-        log(`${playerLabel(p)} passes GO and collects $${gameSettings.goBonus}.`);
-        toast(`💰 ${playerLabel(p)} +$${gameSettings.goBonus}`,'good');
-        showActionEvent("go",p,{titleEn:"PASSED GO",detailEn:"Salary collected for completing a lap",amount:200,icon:"➜",tone:"green",duration:1350});
+        awardGoReward(p,finalPos===0);
       }
       mpAuthoritativeMovement=null;
       clearMovingPiece();
@@ -10372,6 +10895,19 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     else animatePieceTo(finalPos,finish);
   }
   window.animateMove=animateMove;
+
+  function awardGoReward(p,landedExactly){
+    const amount=landedExactly?300:gameSettings.goBonus;
+    p.money+=amount;SFX.income();
+    const message=landedExactly?`lands on GO and collects $${amount}`:`passes GO and collects $${amount}`;
+    log(`${playerLabel(p)} ${message}.`);
+    toast(`💰 ${playerLabel(p)} +$${amount}`,'good');
+    showActionEvent("go",p,{
+      titleEn:landedExactly?"LANDED ON GO":"PASSED GO",
+      detailEn:landedExactly?"Bonus for landing exactly on GO":"Salary collected for completing a lap",
+      amount,icon:landedExactly?"★":"➜",tone:"green",duration:1350
+    });
+  }
 
   function beginTurnRoll(p,jailRoll=false,forcedA=null,forcedB=null){
     if(!validTurn(p)||modalOpen)return;
@@ -10400,7 +10936,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     log(`${playerLabel(p)} rolled ${d1} + ${d2} = ${total}${isDouble?" — double, another turn!":"."}`);tutorialAfterRoll();
     if(jailRoll){
       if(isDouble){p.inJail=false;p.jailAttempts=0;p.doubles=0;extraTurnPending=false;log(`${playerLabel(p)} rolled a double (${d1} + ${d2}) and leaves Jail.`);showActionEvent("jailfree",p,{titleEn:"OUT OF JAIL",detailEn:`Double ${d1} + ${d2}`,icon:"🔓",tone:"green",duration:1350});SFX.coin();}
-      else{p.jailAttempts=(p.jailAttempts||0)+1;if(p.jailAttempts>=3){const fineAmt=jailFineAmount();p.money-=fineAmt;SFX.penalty();p.inJail=false;p.jailAttempts=0;log(`${playerLabel(p)} failed to roll a double three times and pays $${fineAmt} to leave Jail.`);showActionEvent("jailfee",p,{titleEn:"JAIL FEE PAID",detailEn:"Three failed double rolls",amount:-fineAmt,icon:"🔓",tone:"red",duration:1450});renderPlayers();if(checkBankrupt(p,null)){endTurn(p);return;}}else{log(`${playerLabel(p)} failed the Jail roll (${d1} + ${d2}) and stays in Jail.`);endTurn(p);return;}}
+      else{p.jailAttempts=(p.jailAttempts||0)+1;if(p.jailAttempts>=3){const fineAmt=jailFineAmount();requirePayment(p,fineAmt,null,"Jail fine · three failed double rolls",settled=>{if(settled){SFX.penalty();p.inJail=false;p.jailAttempts=0;log(`${playerLabel(p)} failed to roll a double three times and pays $${fineAmt} to leave Jail.`);showActionEvent("jailfee",p,{titleEn:"JAIL FEE PAID",detailEn:"Three failed double rolls",amount:-fineAmt,icon:"🔓",tone:"red",duration:1450});}renderPlayers();endTurn(p);});return;}else{log(`${playerLabel(p)} failed the Jail roll (${d1} + ${d2}) and stays in Jail.`);endTurn(p);return;}}
     }else{
       p.doubles=isDouble?(p.doubles||0)+1:0;
       if(isDouble&&p.doubles>=3){p.doubles=0;extraTurnPending=false;sendToJail(p);endTurn(p);return;}
@@ -10489,18 +11025,17 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
       // cash); Luxury Tax always stays at its printed amount.
       const owed=(t.id===4&&gameSettings.incomeTaxMode==="percent")?Math.max(0,Math.floor(p.money*gameSettings.incomeTaxPercent/100)):t.amount;
       requirePayment(p,owed,null,`Income tax · ${tileLabel(t)}`,settled=>{
-        if(settled){playTaxSfx();log(`${playerLabel(p)} pays $${owed} tax.`);toast(`💸 ${playerLabel(p)} −$${owed}`,'warn');showActionEvent("tax",p,{titleEn:"TAX PAID",detailEn:`${tileLabel(t)} · mandatory payment`,amount:-owed,icon:"💸",tone:"red",duration:1550});if(gameSettings.freeParkingPot)freeParkingPotAmount+=owed;}
+        if(settled){playTaxSfx();log(`${playerLabel(p)} pays $${owed} tax.`);const pooled=addVacationCash(owed);if(pooled)log(`$${pooled} added to the Vacation Cash fund.`);toast(`💸 ${playerLabel(p)} −$${owed}`,'warn');showActionEvent("tax",p,{titleEn:"TAX PAID",detailEn:`${tileLabel(t)} · mandatory payment`,amount:-owed,icon:"💸",tone:"red",duration:1550});}
         renderPlayers();
         completeTileAction(p);
       });
       return;
     }
-    // The Free Parking pot only exists when the room turns it on, and it only
-    // ever holds taxes and jail fines collected earlier in the same match.
+    // Vacation can collect taxes and jail fines in the optional room pot.
     if(t.id===20&&gameSettings.freeParkingPot&&freeParkingPotAmount>0){
-      const pot=freeParkingPotAmount;freeParkingPotAmount=0;p.money+=pot;SFX.income();
-      log(`${playerLabel(p)} lands on Free Parking and collects the $${pot} pot.`);
-      showActionEvent("freeparking",p,{titleEn:"FREE PARKING",detailEn:"Collected the pot",amount:pot,icon:"🅿️",tone:"green",duration:1600});
+      const pot=freeParkingPotAmount;freeParkingPotAmount=0;p.money+=pot;renderVacationPot();SFX.income();
+      log(`${playerLabel(p)} lands on Vacation and collects the $${pot} pot.`);
+      showActionEvent("vacation",p,{titleEn:"VACATION",detailEn:"Collected the vacation pot",amount:pot,icon:"🏝️",tone:"green",duration:1600});
       renderPlayers();
     }
     if(t.type==="gotojail"){sendToJail(p);completeTileAction(p);return;}
@@ -10540,12 +11075,16 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     if(p?.bankrupt){finishBankruptTurn(p);return;}
     if(!validTurn(p)||state!==STATES.TILE_ACTION||modalOpen)return;setState(STATES.TURN_END);renderTokens();renderPlayers();saveGame();
     if(maybeEndGame())return;
-    if(extraTurnPending&&!p.bankrupt){extraTurnPending=false;setState(STATES.WAITING_FOR_ROLL);updateBadge();saveGame();if(mp.active&&mp.host)mpCommitState("extra-turn",true);if(!p.human)scheduleBotAction(p,()=>beginTurnRoll(p,false),350);return;}
-    extraTurnPending=false;nextTurn();
+    if(extraTurnPending&&!p.bankrupt){if(!p.human)extraTurnPending=false;setState(STATES.WAITING_FOR_ROLL);updateBadge();saveGame();if(mp.active&&mp.host)mpCommitState("extra-turn",true);if(!p.human)scheduleBotAction(p,()=>beginTurnRoll(p,false),350);return;}
+    extraTurnPending=false;
+    if(p.human){if(mp.active&&mp.host)mpCommitState("turn-end",true);return;}
+    nextTurn();
   }
-  function endTurn(p){
+  function endTurn(p,confirmed=false){
     if(p?.bankrupt){finishBankruptTurn(p);return;}
-    if(!validTurn(p))return;setState(STATES.TURN_END);renderTokens();renderPlayers();saveGame();if(maybeEndGame())return;extraTurnPending=false;nextTurn();
+    if(!validTurn(p))return;setState(STATES.TURN_END);renderTokens();renderPlayers();saveGame();if(maybeEndGame())return;extraTurnPending=false;
+    if(p.human&&!confirmed){if(mp.active&&mp.host)mpCommitState("turn-end",true);return;}
+    nextTurn();
   }
   function nextTurn(){
     if(state===STATES.GAME_OVER||!players.length||modalOpen)return;
@@ -10727,6 +11266,43 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
   function openModal(html,kind,root=modalRoot){
     if(root===modalRoot&&modalOpen)return null;if(root===modalRoot)authoritativeModalData=null;root.innerHTML=html;if(root===modalRoot){modalOpen=true;modalKind=kind;updateBadge();}return root.querySelector(".modal-bg");
   }
+  function positionPropertyCard(bg,tid){
+    if(!bg)return;
+    if(bg.classList.contains("capital-property-modal-bg-2d")){
+      // This is a floating information card; never dim or blur the board behind it.
+      bg.style.setProperty("background","transparent","important");
+      bg.style.setProperty("backdrop-filter","none","important");
+      bg.style.setProperty("-webkit-backdrop-filter","none","important");
+    }
+    const card=bg.querySelector(".capital-property-modal-2d");if(!card)return;
+    const grid=gridPos(Number(tid)),isSide=(grid.c===1||grid.c===11)&&grid.r>1&&grid.r<11;
+    card.classList.toggle("capital-property-side-card",isSide);
+    const cr=card.getBoundingClientRect();
+    if(boardView==="3d"&&cap3d.ready&&cap3d.renderer&&cap3d.camera&&cap3d.tiles.has(Number(tid))){
+      const rect=cap3d.renderer.domElement.getBoundingClientRect(),entry=cap3d.tiles.get(Number(tid)),point=cap3d.tmpV;
+      point.set(entry.group.position.x,.3,entry.group.position.z).project(cap3d.camera);
+      const ax=rect.left+(point.x+1)*.5*rect.width,ay=rect.top+(1-point.y)*.5*rect.height;
+      const left=Math.max(8,Math.min(innerWidth-cr.width-8,ax+(ax<innerWidth*.5?18:-cr.width-18)));
+      const top=Math.max(8,Math.min(innerHeight-cr.height-8,ay-cr.height*.5));
+      card.style.left=Math.round(left)+"px";card.style.top=Math.round(top)+"px";return;
+    }
+    const tile=document.getElementById("tile-"+tid),board=document.getElementById("board");
+    if(!tile||!board)return;
+    const br=board.getBoundingClientRect(),tr=tile.getBoundingClientRect();
+    if(isSide){
+      const preferredLeft=grid.c===1?tr.right+12:tr.left-cr.width-12;
+      const left=Math.max(8,Math.min(innerWidth-cr.width-8,preferredLeft));
+      const top=Math.max(8,Math.min(innerHeight-cr.height-8,tr.top+tr.height/2-cr.height/2));
+      card.style.left=Math.round(left)+"px";card.style.top=Math.round(top)+"px";return;
+    }
+    const leftMin=Math.max(8,br.left+10),leftMax=Math.max(leftMin,Math.min(innerWidth-cr.width-8,br.right-cr.width-10));
+    const left=Math.max(leftMin,Math.min(leftMax,tr.left+tr.width/2-cr.width/2));
+    let top=tr.bottom+12;
+    if(top+cr.height>Math.min(innerHeight,br.bottom)-10)top=tr.top-cr.height-12;
+    const topMin=Math.max(8,br.top+10),topMax=Math.max(topMin,Math.min(innerHeight-cr.height-8,br.bottom-cr.height-10));
+    top=Math.max(topMin,Math.min(topMax,top));
+    card.style.left=Math.round(left)+"px";card.style.top=Math.round(top)+"px";
+  }
   function closeHumanAction(p,action){
     if(!validTurn(p)||state!==STATES.TILE_ACTION)return;clearModal();if(typeof action==="function")action();else completeTileAction(p);
   }
@@ -10763,6 +11339,24 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     const values=[ladder[0],ladder[0]*2,ladder[1],ladder[2],ladder[3],ladder[4],ladder[5]];
     const current=t.hotel?6:(t.houses>0?1+t.houses:(hasMonopoly(t.owner,t.group)?1:0));
     return `<div class="capital-rent-ladder capital-rent-ladder-7">${labels.map((label,i)=>`<div class="capital-rent-step ${i===current?'active':''}"><span>${escapeHtml(label)}</span><strong>$${values[i]}</strong></div>`).join("")}</div>`;
+  }
+  function propertyRentTableHtml(t){
+    if(!t)return "";
+    let labels=[],values=[],current=-1;
+    if(t.type==="prop"){
+      labels=["with rent","with one house","with two houses","with three houses","with four houses","with a hotel"];
+      values=rentLadder(t);current=t.hotel?5:Math.max(0,Math.min(4,Number(t.houses)||0));
+    }else if(t.type==="station"){
+      const label=tileLabel(t).toLowerCase().includes("airport")?"airport":"station";
+      labels=[`one ${label} is owned`,`2 ${label}s are owned`,`3 ${label}s are owned`,`4 ${label}s are owned`];
+      values=[25,50,100,200].map(n=>`$${n}`);
+      if(t.owner!=null){const owned=TILES.filter(x=>x.type==="station"&&x.owner===t.owner&&!x.mortgaged).length;if(owned)current=Math.min(3,owned-1);}
+    }else if(t.type==="util"){
+      labels=["one company is owned","both companies are owned"];
+      values=["4 × dice roll","10 × dice roll"];
+      if(t.owner!=null){const owned=TILES.filter(x=>x.type==="util"&&x.owner===t.owner&&!x.mortgaged).length;if(owned)current=Math.min(1,owned-1);}
+    }else return "";
+    return `<div class="capital-property-2d-table"><div class="capital-property-2d-table-head"><span>when</span><span>get</span></div>${labels.map((label,i)=>`<div class="capital-property-2d-rent-row${i===current?" is-current":""}"><span>${label}</span><strong>${t.type==="prop"?`$${values[i]}`:values[i]}</strong></div>`).join("")}</div>`;
   }
   const actionEventQueue=[];let actionEventBusy=false,actionEventTimer=null;
   function actionEventAvatar(p){
@@ -10856,28 +11450,9 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
       const localRun=runId;
       setTimeout(()=>{if(validRun(localRun)&&validTurn(p)&&state===STATES.TILE_ACTION&&!modalOpen)completeTileAction(p);},isFast()?300:700);
     };
-    /* The dialog offers exactly two decisions: buy, or skip to auction. A Close
-       button used to sit beside them, and it was a third way out that decided
-       nothing the player could see - the property silently stayed with the bank
-       and the turn ended without an auction or a purchase. It is gone.
-
-       dismissBuy survives for the backdrop only. */
-    // Dismissing still has to END THE TILE ACTION. Roll Dice requires
-    // WAITING_FOR_ROLL and this dialog only ever appears during TILE_ACTION, so
-    // clearing the dialog on its own parked the turn in TILE_ACTION with nothing
-    // left to act on: the roll button stayed disabled and the game looked dead
-    // until the page was reloaded.
-    const dismissBuy=()=>{
-      if(remoteTurn)return;
-      clearModal();
-      toast("Left the property with the bank. You can buy it if you land on it again.","info");
-      const localRun=runId;
-      setTimeout(()=>{if(validRun(localRun)&&validTurn(p)&&state===STATES.TILE_ACTION&&!modalOpen)completeTileAction(p);},isFast()?300:700);
-    };
-    // Clicking outside the dialog dismisses it: the property stays with the bank and
-    // landing on it again offers the purchase again. It used to start the auction,
-    // so a stray click next to the buttons put the property up for sale.
-    bg.onclick=e=>{if(e.target===bg)dismissBuy();};
+    // Keep the purchase decision open when the player clicks empty board space.
+    // Only the explicit Buy or Skip/Auction buttons should resolve this turn action.
+    bg.onclick=e=>{if(e.target===bg){e.preventDefault();e.stopPropagation();}};
   }
 
   /* ---------- AI Personality Engine ---------- */
@@ -11796,10 +12371,12 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     bg.querySelector("#cardOk").focus();
     bg.onclick=e=>{if(!remoteTurn&&e.target===bg){clearModal();applyCard(p,card);}};
   }
-  // Movement cards: "advance to", "nearest station" and "go back".
+  // Movement cards: "advance to", "nearest airport" and "go back".
   function moveByCard(p,card){
     if(card.moveBy){
+      const fromPos=((Number(p.pos)||0)%40+40)%40;
       p.pos=((p.pos+card.moveBy)%40+40)%40;
+      if(fromPos!==0&&p.pos===0)awardGoReward(p,true);
       renderTokens();renderPlayers();
       log(`${playerLabel(p)} landed on "${tileLabel(TILES[p.pos])}".`);
       onTileLand(p);
@@ -11817,16 +12394,26 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     if(card.moveTo!=null||card.moveNearest||card.moveBy){playCardSfx();moveByCard(p,card);return;}
     if(card.repairs){
       const {houses,hotels}=buildingCounts(p);const cost=houses*card.repairs[0]+hotels*card.repairs[1];
-      if(cost>0){p.money-=cost;SFX.penalty();log(`${playerLabel(p)} pays $${cost}.`);showActionEvent("cardmoney",p,{titleEn:"REPAIRS",detailEn:cardLabel(card),detailRu:cardLabel(card),amount:-cost,icon:"🛠",tone:"red",duration:1450});}
-      renderPlayers();
+      if(cost>0){requirePayment(p,cost,null,cardLabel(card),settled=>{if(settled){SFX.penalty();log(`${playerLabel(p)} pays $${cost}.`);showActionEvent("cardmoney",p,{titleEn:"REPAIRS",detailEn:cardLabel(card),detailRu:cardLabel(card),amount:-cost,icon:"🛠",tone:"red",duration:1450});}renderPlayers();completeTileAction(p);});return;}
+      renderPlayers();completeTileAction(p);return;
     }
     if(card.payEach||card.collectEach){
       const others=alive().filter(o=>o!==p);
-      if(card.payEach){const total=card.payEach*others.length;p.money-=total;others.forEach(o=>{o.money+=card.payEach;});SFX.penalty();log(`${playerLabel(p)} pays $${total}.`);showActionEvent("cardmoney",p,{titleEn:"CARD PAYMENT",detailEn:cardLabel(card),detailRu:cardLabel(card),amount:-total,icon:"🃏",tone:"red",duration:1450});}
-      else{let total=0;others.forEach(o=>{o.money-=card.collectEach;p.money+=card.collectEach;total+=card.collectEach;checkBankrupt(o,p.id);});SFX.coin();log(`${playerLabel(p)} receives $${total}.`);showActionEvent("cardmoney",p,{titleEn:"CARD REWARD",detailEn:cardLabel(card),detailRu:cardLabel(card),amount:total,icon:"🎁",tone:"green",duration:1450});}
-      renderPlayers();
+      const before=p.money;
+      const settleNext=i=>{
+        if(i>=others.length){
+          const delta=p.money-before;
+          if(delta){const paying=!!card.payEach;log(paying?`${playerLabel(p)} pays $${Math.abs(delta)}.`:`${playerLabel(p)} receives $${delta}.`);showActionEvent("cardmoney",p,{titleEn:paying?"CARD PAYMENT":"CARD REWARD",detailEn:cardLabel(card),detailRu:cardLabel(card),amount:paying?-Math.abs(delta):delta,icon:"🃏",tone:paying?"red":"green",duration:1450});}
+          renderPlayers();completeTileAction(p);return;
+        }
+        const other=others[i],amount=card.payEach||card.collectEach;
+        const debtor=card.payEach?p:other,creditorId=card.payEach?other.id:p.id;
+        requirePayment(debtor,amount,creditorId,cardLabel(card),()=>settleNext(i+1));
+      };
+      settleNext(0);return;
     }
-    if(card.m){playCardSfx();p.money+=card.m;if(card.m>0)SFX.coin();else SFX.penalty();log(card.m>0?`${playerLabel(p)} receives $${card.m}.`:`${playerLabel(p)} pays $${Math.abs(card.m)}.`);showActionEvent("cardmoney",p,{titleEn:card.m>0?"CARD REWARD":"CARD PAYMENT",detailEn:cardLabel(card),detailRu:cardLabel(card),amount:card.m,icon:"🃏",tone:card.m>0?"green":"red",duration:1450});renderPlayers();}
+    if(card.m<0){const cost=Math.abs(card.m);requirePayment(p,cost,null,cardLabel(card),settled=>{playCardSfx();if(settled){SFX.penalty();log(`${playerLabel(p)} pays $${cost}.`);showActionEvent("cardmoney",p,{titleEn:"CARD PAYMENT",detailEn:cardLabel(card),detailRu:cardLabel(card),amount:-cost,icon:"🃏",tone:"red",duration:1450});}renderPlayers();completeTileAction(p);});return;}
+    if(card.m>0){playCardSfx();p.money+=card.m;SFX.coin();log(`${playerLabel(p)} receives $${card.m}.`);showActionEvent("cardmoney",p,{titleEn:"CARD REWARD",detailEn:cardLabel(card),detailRu:cardLabel(card),amount:card.m,icon:"🃏",tone:"green",duration:1450});renderPlayers();}
     checkBankrupt(p,null);completeTileAction(p);
   }
 
@@ -11854,8 +12441,14 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     return bg;
   }
   function openPropertyModalInner(tid){
-    if(state!==STATES.WAITING_FOR_ROLL||modalOpen||!players.length)return null;
-    const t=TILES[tid];if(!t)return null;
+    if(!canManageTurn()||!players.length)return null;
+    const tileId=Number(tid),t=TILES[tileId];if(!t||!["prop","station","util"].includes(t.type))return null;
+    if(modalOpen){
+      if(modalKind!=="property")return null;
+      const openCard=modalRoot.querySelector(".capital-property-modal-bg[data-tile-id]");
+      if(openCard&&Number(openCard.dataset.tileId)===tileId){clearModal();return null;}
+      clearModal();
+    }
     const owner=t.owner!=null?players[t.owner]:null,me=mp.active?mpLocalPlayer():(players.find(x=>x.human)||players[0]);
     const isProp=t.type==="prop", color=GROUP_UI[t.group]||"#6d7cff", glow=color+"55";
     const progress=isProp&&owner?propertyGroupProgress(t,owner.id):{owned:0,total:isProp?groupTiles(t).length:0,complete:false};
@@ -11864,23 +12457,52 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     const ownerName=owner?escapeHtml(playerLabel(owner)):("Available");
     const ownerColor=owner?.color||color;
     const groupBlock=isProp?`<div class="capital-monopoly-card"><div class="capital-monopoly-head"><span>${"GROUP OWNERSHIP"}</span><strong>${progress.owned} / ${progress.total}</strong></div><div class="capital-monopoly-track"><div class="capital-monopoly-fill" style="--property-color:${color};--property-glow:${glow};width:${progress.total?Math.round(progress.owned/progress.total*100):0}%"></div></div><div style="margin-top:7px;color:#7f8da0;font-size:10px">${progress.complete?("✓ Full group — monopoly rent unlocked"):("Collect every property in this color group to unlock building")}</div></div>${propertyRentLadderHtml(t)}`:"";
-    let actions="";
+    let actions="",buildingActions="";
+    const buildUpIcon=`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg>`;
+    const sellDownIcon=`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14m-6-6 6 6 6-6"/></svg>`;
+    const sellAllIcon=`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"/></svg>`;
     // In multiplayer, property management happens on your own turn (the host validates it too).
-    const canManage=t.owner===me?.id&&!me?.bankrupt&&(!mp.active||mpIsTurnLocal());
+    const canManage=t.owner===me?.id&&!me?.bankrupt&&(mp.active?mpIsTurnLocal():currentPlayer()===me);
     if(canManage){
-      if(isProp&&canBuildHouse(t)&&me.money>=HOUSE_COST[t.group])actions+=`<button class="btn yes" id="mBuildHouse">🏠 ${T("buildHouse")} <span style="opacity:.7">$${HOUSE_COST[t.group]}</span></button>`;
-      if(isProp&&canBuildHotel(t)&&me.money>=HOUSE_COST[t.group])actions+=`<button class="btn yes" id="mBuildHotel">🏨 ${T("buildHotel")} <span style="opacity:.7">$${HOUSE_COST[t.group]}</span></button>`;
-      if(isProp&&(t.houses>0||t.hotel))actions+=`<button class="btn no" id="mSellHouse">↩️ ${T("sellHouse")} <span style="opacity:.7">+$${HOUSE_COST[t.group]/2}</span></button>`;
+      if(isProp&&canBuildHouse(t)&&me.money>=HOUSE_COST[t.group])buildingActions+=`<button type="button" class="btn yes capital-build-control" id="mBuildHouse" title="Build house · $${HOUSE_COST[t.group]}" aria-label="Build house for $${HOUSE_COST[t.group]}">${buildUpIcon}</button>`;
+      if(isProp&&canBuildHotel(t)&&me.money>=HOUSE_COST[t.group])buildingActions+=`<button type="button" class="btn yes capital-build-control" id="mBuildHotel" title="Build hotel · $${HOUSE_COST[t.group]}" aria-label="Build hotel for $${HOUSE_COST[t.group]}">${buildUpIcon}</button>`;
+      if(isProp&&(t.houses>0||t.hotel)){
+        buildingActions+=`<button type="button" class="btn no capital-build-control sell-one" id="mSellHouse" title="Sell one building · +$${HOUSE_COST[t.group]/2}" aria-label="Sell one building for $${HOUSE_COST[t.group]/2}">${sellDownIcon}</button>`;
+        buildingActions+=`<button type="button" class="btn no capital-build-control sell-all" id="mSellAllBuildings" title="Sell all buildings on this city" aria-label="Sell all buildings on this city">${sellAllIcon}</button>`;
+      }
       if(canMortgage(t))actions+=`<button class="btn no" id="mMortgage">🏦 ${T("mortgageBtn")} <span style="opacity:.7">+$${Math.round(t.price/2)}</span></button>`;
       if(["prop","station","util"].includes(t.type)&&t.mortgaged)actions+=`<button class="btn yes" id="mUnmortgage">🔓 ${T("unmortgage")} <span style="opacity:.7">-$${Math.round(t.price*.55)}</span></button>`;
     }
-    if(canManage&&isProp&&!canBuildHouse(t)&&!canBuildHotel(t)&&!actions){
+    if(canManage&&isProp&&!canBuildHouse(t)&&!canBuildHotel(t)&&!buildingActions&&!actions){
       const why=!hasMonopoly(t.owner,t.group)?("Complete the color group to build."):t.hotel?("Hotel already built."):(t.mortgaged||groupHasMortgage(t))?("Remove every mortgage in this group before building."):"";
       if(why)actions+=`<div style="grid-column:1/-1;padding:10px 12px;border-radius:11px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06);color:#8491a3;font-size:11px;text-align:center">${escapeHtml(why)}</div>`;
     }
-    if(!actions)actions=`<div style="grid-column:1/-1;padding:10px 12px;border-radius:11px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06);color:#8491a3;font-size:11px;text-align:center">${owner&&owner.id!==me?.id?("This property belongs to another player."):("No actions available right now.")}</div>`;
-    const bg=openModal(`<div class="modal-bg capital-property-modal-bg" data-tile-id="${t.id}"><div class="modal capital-property-modal" style="--property-color:${color};--property-glow:${glow}"><div class="capital-property-hero"><div class="capital-property-kicker"><span class="capital-property-swatch" style="background:${color}"></span>${escapeHtml(propertyGroupLabel(t))}</div><div class="capital-property-title">${escapeHtml(tileLabel(t))}</div><div class="capital-property-price">$${t.price||0}</div><div class="capital-property-owner"><span class="capital-property-owner-dot" style="background:${ownerColor}"></span>${ownerName}${t.mortgaged?` · 🔒 ${T("mortgage")}`:""}</div></div><div class="capital-property-body"><div class="capital-property-stats"><div class="capital-property-stat"><span>${"Purchase"}</span><strong>$${t.price||0}</strong></div><div class="capital-property-stat"><span>${"Current rent"}</span><strong>$${currentRent}</strong></div><div class="capital-property-stat"><span>${"Buildings"}</span><strong>${escapeHtml(buildings)}</strong></div></div>${groupBlock}<div class="capital-property-actions">${actions}<button class="btn no" id="mClose" style="grid-column:1/-1">✕ ${T("close")}</button></div></div></div></div>` ,"property");
+    if(!actions&&!buildingActions)actions=`<div style="grid-column:1/-1;padding:10px 12px;border-radius:11px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06);color:#8491a3;font-size:11px;text-align:center">${owner&&owner.id!==me?.id?("This property belongs to another player."):("No actions available right now.")}</div>`;
+    const usesRichPropertyCard=["prop","station","util"].includes(t.type);
+    const actionPlaceholder=actions.includes("No actions available right now.")||actions.includes("This property belongs to another player.");
+    const propertyActions=actionPlaceholder?"":`${buildingActions?`<div class="capital-building-controls">${buildingActions}</div>`:""}${actions?`<div class="capital-property-other-actions">${actions}</div>`:""}`;
+    const houseCost=isProp?(HOUSE_COST[t.group]||0):0;
+    const houseIcon=`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-7h6v7"/></svg>`;
+    const hotelIcon=`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4h14v17M3 21h18M9 8h1m4 0h1M9 12h1m4 0h1M10 21v-4h4v4M10 2h4"/></svg>`;
+    const propertySymbol=t.type==="station"||t.type==="util"?boardIconSvg(tileIconKey(t)):"";
+    const ownerDetails=owner?`<div class="capital-property-owner"><span class="capital-property-owner-dot" style="background:${ownerColor}"></span>${ownerName}${t.mortgaged?` · 🔒 ${T("mortgage")}`:""}</div>`:"";
+    const costsMarkup=isProp
+      ? `<div class="capital-property-2d-costs"><div class="capital-property-2d-cost"><span>Price</span><strong>$${t.price||0}</strong></div><div class="capital-property-2d-cost" aria-label="House cost"><span>${houseIcon}</span><strong>$${houseCost}</strong></div><div class="capital-property-2d-cost" aria-label="Hotel cost"><span>${hotelIcon}</span><strong>$${houseCost}</strong></div></div>`
+      : `<div class="capital-property-2d-costs capital-property-2d-costs-single"><div class="capital-property-2d-cost"><span>Price</span><strong>$${t.price||0}</strong></div></div>`;
+    const propertyDialog=usesRichPropertyCard
+      ? `<div class="modal-bg capital-property-modal-bg capital-property-modal-bg-2d" data-tile-id="${t.id}"><div class="modal capital-property-modal capital-property-modal-2d" role="dialog" aria-label="${escapeHtml(tileLabel(t))}" style="--property-color:${color};--property-glow:${glow}"><div class="capital-property-hero"><button type="button" class="capital-property-card-close" aria-label="Close property details">×</button>${propertySymbol?`<div class="capital-property-symbol" aria-hidden="true">${propertySymbol}</div>`:""}<div class="capital-property-2d-kicker"><i aria-hidden="true"></i>${escapeHtml(propertyGroupLabel(t))}</div><div class="capital-property-title">${escapeHtml(tileLabel(t))}</div>${ownerDetails}</div><div class="capital-property-body">${propertyRentTableHtml(t)}${costsMarkup}${propertyActions?`<div class="capital-property-actions">${propertyActions}</div>`:""}</div></div></div>`
+      : `<div class="modal-bg capital-property-modal-bg" data-tile-id="${t.id}"><div class="modal capital-property-modal" style="--property-color:${color};--property-glow:${glow}"><div class="capital-property-hero"><div class="capital-property-kicker"><span class="capital-property-swatch" style="background:${color}"></span>${escapeHtml(propertyGroupLabel(t))}</div><div class="capital-property-title">${escapeHtml(tileLabel(t))}</div><div class="capital-property-price">$${t.price||0}</div><div class="capital-property-owner"><span class="capital-property-owner-dot" style="background:${ownerColor}"></span>${ownerName}${t.mortgaged?` · 🔒 ${T("mortgage")}`:""}</div></div><div class="capital-property-body"><div class="capital-property-stats"><div class="capital-property-stat"><span>${"Purchase"}</span><strong>$${t.price||0}</strong></div><div class="capital-property-stat"><span>${"Current rent"}</span><strong>$${currentRent}</strong></div><div class="capital-property-stat"><span>${"Buildings"}</span><strong>${escapeHtml(buildings)}</strong></div></div>${groupBlock}<div class="capital-property-actions">${actions}<button class="btn no" id="mClose" style="grid-column:1/-1">✕ ${T("close")}</button></div></div></div></div>`;
+    const bg=openModal(propertyDialog,"property");
     if(!bg)return null;
+    if(usesRichPropertyCard){
+      positionPropertyCard(bg,t.id);
+      const title=bg.querySelector(".capital-property-title"),flag=cityFlag(t.id);
+      if(title&&flag){title.classList.add("has-city-flag");title.insertAdjacentHTML("afterbegin",`<span class="capital-property-city-flag" aria-label="${flag}">${flag}</span>`);}
+    }
+    if(usesRichPropertyCard){
+      const closeCard=bg.querySelector(".capital-property-card-close");
+      if(closeCard)closeCard.onclick=e=>{e.preventDefault();e.stopPropagation();clearModal();};
+    }
     /* Reopen after an action so the player sees the result. clearModal() instead
        of a bare `modalOpen=false`: it drops the flag, the kind and the stale
        markup together, so the reopen cannot land on a dialog whose handlers are
@@ -11890,19 +12512,21 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
         clearModal();
         openPropertyModal(tid);
         renderTokens();renderPlayers();saveGame();
+        if(mp.active&&mp.host)mpPublishSnapshot(true);
       }catch(err){try{console.warn("CAPITAL property action refresh failed",err);}catch(_){}try{clearModal();}catch(_){}}
     };
     const close=bg.querySelector("#mClose");if(close)close.onclick=()=>clearModal();
     // Guests ask the host to perform the action; the result arrives in the next snapshot.
     if(mp.active&&!mp.host){
       const proxy=action=>()=>{mpProxyAction({type:"propertyAction",tileId:t.id,action});clearModal();};
-      [["#mBuildHouse","buildHouse"],["#mBuildHotel","buildHotel"],["#mSellHouse","sellHouse"],["#mMortgage","mortgage"],["#mUnmortgage","unmortgage"]].forEach(([sel,action])=>{const b=bg.querySelector(sel);if(b)b.onclick=proxy(action);});
+      [["#mBuildHouse","buildHouse"],["#mBuildHotel","buildHotel"],["#mSellHouse","sellHouse"],["#mSellAllBuildings","sellAllBuildings"],["#mMortgage","mortgage"],["#mUnmortgage","unmortgage"]].forEach(([sel,action])=>{const b=bg.querySelector(sel);if(b)b.onclick=proxy(action);});
       bg.onclick=e=>{if(e.target===bg)clearModal();};
       return;
     }
     const bh=bg.querySelector("#mBuildHouse");if(bh)bh.onclick=()=>{if(me&&me.money>=HOUSE_COST[t.group]&&canBuildHouse(t)){me.money-=HOUSE_COST[t.group];t.houses=(t.houses||0)+1;playBuildSfx();log(`${playerLabel(me)} built a house on "${tileLabel(t)}".`);showActionEvent("house",me,{titleEn:"HOUSE BUILT",detailEn:tileLabel(t),detailRu:tileLabel(t),amount:-HOUSE_COST[t.group],icon:"🏠",tone:"gold",duration:1300});refresh();}};
     const bht=bg.querySelector("#mBuildHotel");if(bht)bht.onclick=()=>{if(me&&me.money>=HOUSE_COST[t.group]&&canBuildHotel(t)){me.money-=HOUSE_COST[t.group];t.houses=0;t.hotel=true;playBuildSfx();log(`${playerLabel(me)} built a hotel on "${tileLabel(t)}".`);showActionEvent("hotel",me,{titleEn:"HOTEL BUILT",detailEn:tileLabel(t),detailRu:tileLabel(t),amount:-HOUSE_COST[t.group],icon:"🏨",tone:"gold",duration:1350});refresh();}};
     const sh=bg.querySelector("#mSellHouse");if(sh)sh.onclick=()=>{if(!me)return;if(t.hotel){t.hotel=false;t.houses=4}else if(t.houses>0)t.houses--;else return;me.money+=HOUSE_COST[t.group]/2;playSellSfx();log(`${playerLabel(me)} sold buildings on "${tileLabel(t)}".`);showActionEvent("sellbuild",me,{titleEn:"BUILDING SOLD",detailEn:tileLabel(t),detailRu:tileLabel(t),amount:HOUSE_COST[t.group]/2,icon:"↩",tone:"green",duration:1300});refresh();};
+    const sa=bg.querySelector("#mSellAllBuildings");if(sa)sa.onclick=()=>{if(!me||t.type!=="prop")return;let sold=0;while(t.hotel||t.houses>0){if(t.hotel){t.hotel=false;t.houses=4}else t.houses--;me.money+=HOUSE_COST[t.group]/2;sold++;}if(!sold)return;playSellSfx();log(`${playerLabel(me)} sold ${sold} buildings on "${tileLabel(t)}".`);showActionEvent("sellbuild",me,{titleEn:"BUILDINGS SOLD",detailEn:tileLabel(t),detailRu:tileLabel(t),amount:sold*(HOUSE_COST[t.group]/2),icon:"▤",tone:"green",duration:1350});refresh();};
     const mo=bg.querySelector("#mMortgage");if(mo)mo.onclick=()=>{if(!canMortgage(t))return;t.mortgaged=true;me.money+=Math.round(t.price/2);playMortgageSfx();log(`${playerLabel(me)} mortgaged "${tileLabel(t)}".`);showActionEvent("mortgage",me,{titleEn:"PROPERTY MORTGAGED",detailEn:tileLabel(t),detailRu:tileLabel(t),amount:Math.round(t.price/2),icon:"🏦",tone:"blue",duration:1350});refresh();};
     const um=bg.querySelector("#mUnmortgage");if(um)um.onclick=()=>{const cost=Math.round(t.price*.55);if(me&&me.money>=cost){me.money-=cost;t.mortgaged=false;playUnmortgageSfx();log(`${playerLabel(me)} unmortgaged "${tileLabel(t)}".`);showActionEvent("unmortgage",me,{titleEn:"MORTGAGE CLEARED",detailEn:tileLabel(t),detailRu:tileLabel(t),amount:-cost,icon:"🔓",tone:"blue",duration:1300});refresh();}};
     bg.onclick=e=>{if(e.target===bg)clearModal();};
@@ -11931,7 +12555,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
   }
   function openTradeModal(){
     if(mp.active){openMpTradeModal();return;}
-    if(state!==STATES.WAITING_FOR_ROLL||modalOpen||!players[0]?.human||players[0].bankrupt)return;
+    if(!canManageTurn()||modalOpen||!players[0]?.human||currentPlayer()!==players[0]||players[0].bankrupt)return;
     const me=players[0],bots=alive().filter(p=>!p.human);
     if(!bots.length){toast(T("noBotProps"),"warn");return;}
     const en=lang==="en";
@@ -12101,7 +12725,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
       players:players.map(p=>({...p})),
       tiles:TILES.filter(t=>["prop","station","util"].includes(t.type)).map(t=>({id:t.id,owner:t.owner??null,houses:t.houses||0,hotel:!!t.hotel,mortgaged:!!t.mortgaged})),
       turn,lastDice:[...lastDice],lastRollTotal,completedRounds,totalTurns,fastPace,
-      startingMoney:selectedStartingMoney,gameLog:gameLog.slice(-80),
+      startingMoney:selectedStartingMoney,freeParkingPot:freeParkingPotAmount,gameLog:gameLog.slice(-80),
       decks:{chance:[...cardDecks.chance],chest:[...cardDecks.chest]}
     };
     try{localStorage.setItem(SAVE_KEY,JSON.stringify(data));return true;}catch(e){return false;}
@@ -12126,11 +12750,12 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
     turn=d.turn;state=STATES.WAITING_FOR_ROLL;extraTurnPending=false;
     lastDice=Array.isArray(d.lastDice)?d.lastDice.slice(0,2):[1,1];lastRollTotal=Number(d.lastRollTotal)||0;
     completedRounds=Number(d.completedRounds)||0;totalTurns=Number(d.totalTurns)||0;fastPace=!!d.fastPace;
+    freeParkingPotAmount=Math.max(0,Math.round(Number(d.freeParkingPot)||0));
     gameLog=Array.isArray(d.gameLog)?d.gameLog.map(String).slice(-80):[];
     cardDecks.chance=validDeck(d.decks?.chance,CHANCE_CARDS)||shuffledCardIndices("chance");
     cardDecks.chest=validDeck(d.decks?.chest,CHEST_CARDS)||shuffledCardIndices("chest");
     menuScreen.style.display="none";setupScreen.style.display="none";gameWrap.style.display="block";
-    toggleMusicSettings(false);installSoundButton();startMusic();buildBoard();renderDice();renderTokens();renderPlayers();renderEventLog();updateBadge();refreshDevPlayers();renderPauseUI();
+    toggleMusicSettings(false);installSoundButton();startMusic();buildBoard();renderVacationPot();renderDice();renderTokens();renderPlayers();renderEventLog();updateBadge();refreshDevPlayers();renderPauseUI();
     log("Saved game restored.");
     const p=currentPlayer();
     if(p&&p.bankrupt){nextTurn();}
@@ -12162,7 +12787,7 @@ function tileLabel(t){return tileEN[t.id]||t.name;}
   window.saveGame=saveGame;window.loadGame=loadGame;
 
   function resetState(){
-    pausedSteps.length=0;clearMovingPiece();dropRemoteMovement();mpPendingDebt=null;debtConfirmOpen=false;
+    pausedSteps.length=0;clearMovingPiece();dropRemoteMovement();mpPendingDebt=null;localDebtSession=null;debtDialogDismissed=false;lastRemoteDebtData=null;hideDebtResumeButton();debtConfirmOpen=false;
     document.querySelectorAll(".capital-float-amount").forEach(el=>el.remove());
     cap3d.tokens.forEach(slot=>{slot.animating=false;slot.vis.init=false;});
     for(const f of cap3dFx.floaters){f.spr.parent?.remove(f.spr);f.tex.dispose();f.mat.dispose();}
@@ -12400,13 +13025,13 @@ document.addEventListener("keydown",e=>{
   function bindHover(){
     document.querySelectorAll("#gameWrap .board > .tile").forEach(cell=>{
       if(cell.dataset.hoverBound)return;cell.dataset.hoverBound="1";const t=TILES[Number(cell.dataset.idx)];if(!t||!["prop","station","util"].includes(t.type))return;
-      cell.addEventListener("mouseenter",e=>{const all=[...document.querySelectorAll("#gameWrap .board > .tile")];all.forEach(x=>x.classList.remove("cap-hover-main","cap-hover-group","cap-hover-dim"));all.forEach(x=>{const ct=TILES[Number(x.dataset.idx)];if(!ct)return;if(t.type==="prop"&&ct.type==="prop"&&ct.group===t.group)x.classList.add(ct.id===t.id?"cap-hover-main":"cap-hover-group");else if(x!==cell)x.classList.add("cap-hover-dim");});showTooltip(t,e);});
-      cell.addEventListener("mousemove",moveTooltip);cell.addEventListener("mouseleave",clearHover);
+      cell.addEventListener("mouseenter",()=>{const all=[...document.querySelectorAll("#gameWrap .board > .tile")];all.forEach(x=>x.classList.remove("cap-hover-main","cap-hover-group","cap-hover-dim"));all.forEach(x=>{const ct=TILES[Number(x.dataset.idx)];if(!ct)return;if(t.type==="prop"&&ct.type==="prop"&&ct.group===t.group)x.classList.add(ct.id===t.id?"cap-hover-main":"cap-hover-group");else if(x!==cell)x.classList.add("cap-hover-dim");});});
+      cell.addEventListener("mouseleave",clearHover);
     });
   }
   function ensureTooltip(){if(!tooltip){tooltip=document.createElement("div");tooltip.className="capital-tooltip";document.body.appendChild(tooltip);}return tooltip;}
   function showTooltip(t,e){
-    const tt=ensureTooltip(),kind=t.type==="prop"?"Property":t.type==="station"?"Railroad":"Utility";
+    const tt=ensureTooltip(),kind=t.type==="prop"?"Property":t.type==="station"?"Airport":"Utility";
     let rows=`<span>${"Group"}</span><span>${escapeHtml(propertyGroupLabel(t))}</span><span>${"Purchase"}</span><span>$${t.price||0}</span>`;
     if(t.type==="prop"){
       rows+=`<span>${"Base rent"}</span><span>$${t.rent||0}</span><span>${"Buildings"}</span><span>${t.hotel?("🏨 Hotel"):(t.houses?`🏠 ${t.houses}`:("None"))}</span>`;
@@ -12423,9 +13048,19 @@ document.addEventListener("keydown",e=>{
     moveTooltip(e);
   }
   function moveTooltip(e){if(!tooltip?.classList.contains("show"))return;const pad=12,r=tooltip.getBoundingClientRect();let x=e.clientX+15,y=e.clientY+15;if(x+r.width>innerWidth-pad)x=e.clientX-r.width-15;if(y+r.height>innerHeight-pad)y=e.clientY-r.height-15;tooltip.style.left=Math.max(pad,x)+"px";tooltip.style.top=Math.max(pad,y)+"px";}
-  function clearHover(){document.querySelectorAll("#gameWrap .cap-hover-main,#gameWrap .cap-hover-group,#gameWrap .cap-hover-dim").forEach(e=>e.classList.remove("cap-hover-main","cap-hover-group","cap-hover-dim"));if(tooltip)tooltip.classList.remove("show");}
+  function clearHover(){
+    document.querySelectorAll("#gameWrap .cap-hover-main,#gameWrap .cap-hover-group,#gameWrap .cap-hover-dim").forEach(e=>e.classList.remove("cap-hover-main","cap-hover-group","cap-hover-dim"));
+    if(inventoryHoverPlayerId!=null&&cap3d.ready)TILES.forEach(t=>{const entry=cap3d.tiles.get(Number(t.id));if(!entry)return;const hovered=cap3d.hoverEntry&&cap3d.hoverEntry.id===Number(t.id);try{entry.group.position.y=hovered?0.05:0;entry.mesh.material[2].emissive.setHex(hovered?0x22344f:0x000000);}catch(_){}});
+    inventoryHoverPlayerId=null;if(tooltip)tooltip.classList.remove("show");
+  }
 
   rollBtn?.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();window.rollDice();});
+  endTurnBtn?.addEventListener("click",e=>{
+    e.preventDefault();e.stopPropagation();
+    const p=currentPlayer();if(!p||state!==STATES.TURN_END||modalOpen)return;
+    if(mp.active&&!mp.host){mpSend({kind:"action",playerId:mp.clientId,action:{type:"endTurn"}});return;}
+    endTurn(p,true);
+  });
   [document.getElementById("d1"),document.getElementById("d2")].forEach(d=>d?.addEventListener("click",e=>{
     e.preventDefault();e.stopPropagation();
     if(!rollBtn?.disabled)window.rollDice();
@@ -12442,7 +13077,7 @@ document.addEventListener("keydown",e=>{
       ["🎲","Your turn","Roll two dice and move. Doubles give you another roll, but three doubles in a row send you to Jail. Pass GO to collect $200."],
       ["🏠","Buying","Land on a free property to buy it. If you skip it, it goes to a live auction where every bid resets the 10-second timer."],
       ["🏗","Building","Own a whole color group to double its rent and build houses (evenly), then a hotel. Click any of your properties — on the board or the colored chips in the Players panel — to build, sell or mortgage."],
-      ["💸","Rent & debt","Rent grows with buildings; stations pay more the more you own. If you can't pay, buildings are sold and property mortgaged automatically before you go bankrupt."],
+      ["💸","Rent & debt","Rent grows with buildings; airports pay more the more you own. If you can't pay, buildings are sold and property mortgaged automatically before you go bankrupt."],
       ["📈","Classic values","Prices, rents, house costs and jail rules are the classic Monopoly ones, so a $60 street really does charge $2 and a Boardwalk hotel $2000. The catch-up rule adds 25% to all rent once total cash drops below 45% of the starting total."],
       ["🃏","Cards","Chance and Community Chest can move you, pay you, fine you or send you to Jail. Keep a Get Out of Jail Free card for later."],
       ["🔒","Jail","Roll a double, pay $50, or use a card to get out. After three failed tries you pay $50 and move."],
@@ -12613,6 +13248,7 @@ document.addEventListener("keydown",e=>{
 
 <div id="capitalV15Status" role="status" aria-live="polite"></div>
 
+<script src="board-2d-photo.js" defer></script>
 </body>
 
 </html>

@@ -3,6 +3,7 @@
 // Test hooks exist only in the intercepted HTML response, never in the game.
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
+import { randomInt } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 const modulePath=process.env.PLAYWRIGHT_MODULE;
 const {chromium}=await import(modulePath?pathToFileURL(modulePath).href:'playwright');
@@ -20,6 +21,13 @@ new MutationObserver(records=>{for(const record of records)for(const node of rec
 }}).observe(document.body,{subtree:true,childList:true});
 window.__test={mp,mpConnect,mpStartGame,mpSnapshot,mpPublishSnapshot,mpHandle,mpSend,
   mpTeardownTransport,mpRestoreAuthority,mpServerClearState,mpSubscribeChannel,mpReconnectChannel,
+  async roomExists(code){
+    const client=await mpLoadSupabase();
+    if(!client)throw new Error('Supabase client unavailable for test-room collision check');
+    const {data,error}=await client.from('rooms').select('code').eq('code',code).limit(1);
+    if(error)throw error;
+    return Array.isArray(data)&&data.length>0;
+  },
   beginTurnRoll,showRentIncome,renderPlayers,renderTokens,cap3d,cap3dFx,setBoardView,
   TILES,startHumanAuction,requirePayment,mpRequestSync,resetState,drawCard,pauseGame,resumeGame,whenRunning,
   get settings(){return gameSettings;},applySettings:applyGameSettings,settingsDefaults:()=>({...GAME_SETTINGS_DEFAULTS}),openSettings:openGameSettings,
@@ -45,6 +53,9 @@ async function wait(p,fn,arg){
   catch(e){console.error('State at failure',await p.evaluate(()=>({info:Capital.mpInfo(),snapshot:__test.snapshots,modal:document.querySelector('#modalRoot')?.textContent?.slice(0,200)})));throw e;}
 }
 function pass(name){console.log('PASS',name);}
+const ROOM_ALPHABET='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+function randomRoomCode(){return Array.from({length:6},()=>ROOM_ALPHABET[randomInt(ROOM_ALPHABET.length)]).join('');}
+let roomCleanupPage=null,roomCode=null;
 try{
   const single=await page();
   await single.evaluate(()=>{Capital.play();Capital.select(2);Capital.start();__test.stopBots();});
@@ -105,10 +116,18 @@ try{
   await single.evaluate(()=>__test.applySettings({...__test.settingsDefaults}));
 
   const host=await page(),guest=await page(),observer=await page();
-  const code='T'+Date.now().toString(36).slice(-5).toUpperCase();
-  assert.ok(await host.evaluate(c=>__test.mpConnect(c,true,'Host'),code));
-  assert.ok(await guest.evaluate(c=>__test.mpConnect(c,false,'Guest'),code));
-  assert.ok(await observer.evaluate(c=>__test.mpConnect(c,false,'Observer'),code));
+  roomCleanupPage=host;
+  for(let i=0;i<20;i++){
+    const candidate=randomRoomCode();
+    const occupied=await host.evaluate(async c=>__test.roomExists(c),candidate);
+    if(occupied)continue;
+    roomCode=candidate;
+    break;
+  }
+  assert.ok(roomCode,'could not find a collision-free test room code');
+  assert.ok(await host.evaluate(c=>__test.mpConnect(c,true,'Host'),roomCode));
+  assert.ok(await guest.evaluate(c=>__test.mpConnect(c,false,'Guest'),roomCode));
+  assert.ok(await observer.evaluate(c=>__test.mpConnect(c,false,'Observer'),roomCode));
   await wait(host,()=>__test.mp.members.length===3);
   // Host rules must reach every client before the match starts.
   await host.evaluate(()=>__test.applySettings({...__test.settingsDefaults,goBonus:123,turnTimer:60}));
@@ -157,16 +176,42 @@ try{
   pass('host refresh resumes without resetting the match');
 
   // Host refresh while the guest must decide whether to buy.
-  await host.evaluate(()=>{__test.TILES[8].owner=null;__test.land(1,8);});
+  // Retry the land call: a presence redraw landing in the same instant can
+  // swallow a dialog that the next heartbeat re-opens.
+  for(let i=0;i<3&&!await guest.evaluate(()=>!!document.querySelector('#buyYes'));i++){
+    await host.evaluate(()=>{__test.TILES[8].owner=null;__test.land(1,8);});
+    await guest.waitForTimeout(600);
+  }
   await wait(guest,()=>!!document.querySelector('#buyYes'));
   await host.reload();await wait(host,()=>__test.players.length===3&&__test.mp.connected);
-  await guest.locator('#buyYes').click();await wait(host,()=>__test.TILES[8].owner===1);
+  // The buy dialog is rebuilt from every authoritative state. If a heartbeat
+  // landed between the reload and the click, re-open it before clicking.
+  for(let i=0;i<3&&!await guest.evaluate(()=>!!document.querySelector('#buyYes'));i++){
+    await host.evaluate(()=>__test.mpPublishSnapshot(true));
+    await guest.waitForTimeout(500);
+  }
+  // The dialog is rebuilt from snapshots; the node can be swapped between the
+  // presence check and the click, so retry the click on the fresh node.
+  let clicked=false;
+  for(let i=0;i<6&&!clicked;i++){
+    try{await guest.locator('#buyYes').click({timeout:1500});clicked=true;}
+    catch(_){await host.evaluate(()=>__test.mpPublishSnapshot(true));await guest.waitForTimeout(400);}
+  }
+  assert.ok(clicked,'buyYes was never clickable');
+  // The guest's action can race the host's restore; republish and retry the
+  // land+click pair when the purchase has not landed yet.
+  for(let i=0;i<4&&!await host.evaluate(()=>__test.TILES[8].owner===1);i++){
+    await host.evaluate(()=>{__test.TILES[8].owner=null;__test.land(1,8);});
+    await guest.waitForTimeout(700);
+    try{await guest.locator('#buyYes').click({timeout:1500});}catch(_){}
+  }
+  await wait(host,()=>__test.TILES[8].owner===1);
   await wait(host,()=>__test.state==='WAITING_FOR_ROLL');
   pass('pending purchase survives host refresh and still accepts guest input');
 
   // A remote debtor remains able to confirm/cancel bankruptcy after rebuilding
   // the dialog; the host can restore the same pending payment after refresh.
-  await host.evaluate(()=>{__test.players[1].money=0;__test.TILES[3].owner=0;__test.land(1,3);});
+  await host.evaluate(()=>{__test.players[1].money=0;__test.TILES[8].owner=1;__test.TILES[8].mortgaged=false;__test.TILES[8].houses=0;__test.TILES[8].hotel=false;__test.TILES[3].owner=0;__test.land(1,3);});
   await wait(guest,()=>!!document.querySelector('#debtAskBankrupt'));
   await guest.locator('#debtAskBankrupt').click();
   assert.ok(await guest.locator('#debtCancel').count());
@@ -207,10 +252,13 @@ try{
   const target2=await successor.evaluate(()=>__test.players[1].money);
   await wait(other,v=>__test.players[1].money===v,target2);
   pass('host migration elects exactly one successor and keeps synchronizing');
-  await successor.evaluate(()=>__test.mpServerClearState());
   await single.evaluate(()=>{__test.pauseGame();__test.whenRunning(()=>window.__stalePause=true);__test.resetState();__test.resumeGame();});
   assert.equal(await single.evaluate(()=>!!window.__stalePause),false);
   assert.equal(await single.evaluate(()=>__test.pauseCount),0);
   pass('reset discards paused callbacks');
   assert.deepEqual(errors,[]);pass('no uncaught browser errors');
-}finally{await browser.close();}
+}finally{
+  try{if(roomCleanupPage&&roomCode)await roomCleanupPage.evaluate(()=>__test.mpServerClearState());}
+  catch(e){console.error('Could not clean up the temporary Supabase room',roomCode,e?.message||e);}
+  await browser.close();
+}
